@@ -1,54 +1,117 @@
 class TranslationService {
   constructor() {
-    this.cache = new Map();
+    this.apiKey = null; // You can add Google Translate API key here if needed
   }
 
-  async translateText(text, targetLanguage, sourceLanguage = 'en') {
-    const cacheKey = `${text}_${sourceLanguage}_${targetLanguage}`;
-    
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey);
-    }
-
+  async translateText(text, targetLanguage) {
     try {
-      // MyMemory API (free tier)
-      const response = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLanguage}|${targetLanguage}`
-      );
+      console.log(`🌐 Translating "${text}" to ${targetLanguage}`);
       
-      const data = await response.json();
+      // For now, we'll use a simple mock translation
+      // You can replace this with actual Google Translate API calls later
+      const mockTranslations = {
+        'es': {
+          'cup': 'taza',
+          'cell phone': 'teléfono móvil',
+          'book': 'libro',
+          'chair': 'silla',
+          'bottle': 'botella',
+          'laptop': 'portátil',
+          'car': 'coche',
+          'cat': 'gato',
+          'dog': 'perro',
+          'table': 'mesa'
+        },
+        'fr': {
+          'cup': 'tasse',
+          'cell phone': 'téléphone portable',
+          'book': 'livre',
+          'chair': 'chaise',
+          'bottle': 'bouteille',
+          'laptop': 'ordinateur portable',
+          'car': 'voiture',
+          'cat': 'chat',
+          'dog': 'chien',
+          'table': 'table'
+        },
+        'de': {
+          'cup': 'Tasse',
+          'cell phone': 'Handy',
+          'book': 'Buch',
+          'chair': 'Stuhl',
+          'bottle': 'Flasche',
+          'laptop': 'Laptop',
+          'car': 'Auto',
+          'cat': 'Katze',
+          'dog': 'Hund',
+          'table': 'Tisch'
+        }
+      };
+
+      const translation = mockTranslations[targetLanguage]?.[text.toLowerCase()] || text;
+      console.log(`✅ Translation: ${text} → ${translation}`);
+      return translation;
       
-      if (data.responseStatus === 200) {
-        const translation = data.responseData.translatedText;
-        this.cache.set(cacheKey, translation);
-        return translation;
-      }
-      
-      return text; // Return original if translation fails
     } catch (error) {
       console.error('Translation error:', error);
-      return text;
+      return text; // Return original text if translation fails
     }
   }
 
   async getExampleSentence(word, targetLanguage) {
-    const examples = {
-      en: `I can see a ${word} in the picture.`,
-      es: `Puedo ver un ${word} en la imagen.`,
-      fr: `Je peux voir un ${word} dans l'image.`,
-      de: `Ich kann ein ${word} im Bild sehen.`,
-      it: `Posso vedere un ${word} nell'immagine.`,
-    };
+    try {
+      console.log(`📝 Getting example sentence for "${word}" in ${targetLanguage}`);
+      
+      // Mock example sentences
+      const examples = {
+        'es': {
+          english: `I can see a ${word}.`,
+          translated: `Puedo ver un/una ${await this.translateText(word, targetLanguage)}.`
+        },
+        'fr': {
+          english: `I can see a ${word}.`,
+          translated: `Je peux voir un/une ${await this.translateText(word, targetLanguage)}.`
+        },
+        'de': {
+          english: `I can see a ${word}.`,
+          translated: `Ich kann einen/eine ${await this.translateText(word, targetLanguage)} sehen.`
+        }
+      };
 
-    const englishSentence = examples.en;
-    const translatedSentence = examples[targetLanguage] || 
-      await this.translateText(englishSentence, targetLanguage);
+      const example = examples[targetLanguage] || {
+        english: `I can see a ${word}.`,
+        translated: `I can see a ${word}.`
+      };
 
-    return {
-      english: englishSentence,
-      translated: translatedSentence,
-      source: 'template'
-    };
+      console.log(`✅ Example: ${example.english} → ${example.translated}`);
+      return example;
+      
+    } catch (error) {
+      console.error('Example sentence error:', error);
+      return {
+        english: `I can see a ${word}.`,
+        translated: `I can see a ${word}.`
+      };
+    }
+  }
+
+  // You can add more translation methods here
+  async detectLanguage(text) {
+    // Mock language detection - returns 'en' for English
+    return 'en';
+  }
+
+  getSupportedLanguages() {
+    return [
+      { code: 'es', name: 'Spanish' },
+      { code: 'fr', name: 'French' },
+      { code: 'de', name: 'German' },
+      { code: 'it', name: 'Italian' },
+      { code: 'pt', name: 'Portuguese' },
+      { code: 'ru', name: 'Russian' },
+      { code: 'ja', name: 'Japanese' },
+      { code: 'zh-CN', name: 'Chinese (Simplified)' }
+    ];
   }
 }
 

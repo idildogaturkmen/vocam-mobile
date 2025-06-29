@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
@@ -16,7 +15,7 @@ import {
   View
 } from 'react-native';
 import DatabaseService from '../../src/services/DatabaseService';
-import ObjectDetectionService from '../../src/services/ObjectDetectionService'; // Updated to use Google Vision
+import ObjectDetectionService from '../../src/services/ObjectDetectionService';
 import TranslationService from '../../src/services/TranslationService';
 
 const { width } = Dimensions.get('window');
@@ -512,11 +511,12 @@ export default function EnhancedCameraScreen() {
                     ]}
                     onPress={() => toggleWordSelection(index)}
                   >
-                    <Ionicons 
-                      name={selectedWords.has(index) ? "checkmark-circle" : "ellipse-outline"} 
-                      size={20} 
-                      color={selectedWords.has(index) ? "#fff" : "#3498db"} 
-                    />
+                    <Text style={{ 
+                      color: selectedWords.has(index) ? "#fff" : "#3498db",
+                      fontSize: 20 
+                    }}>
+                      {selectedWords.has(index) ? "✅" : "⭕"}
+                    </Text>
                     <Text style={[
                       styles.selectButtonText,
                       selectedWords.has(index) && styles.selectButtonTextActive
@@ -534,7 +534,7 @@ export default function EnhancedCameraScreen() {
                       style={styles.exampleAudioButton}
                       onPress={() => speakWord(detection.example || detection.exampleEnglish || '', targetLanguage)}
                     >
-                      <Ionicons name="play" size={16} color="#3498db" />
+                      <Text style={{ color: '#3498db', fontSize: 16 }}>▶️</Text>
                       <Text style={styles.exampleAudioText}>Play Example</Text>
                     </TouchableOpacity>
                   </View>
@@ -544,7 +544,7 @@ export default function EnhancedCameraScreen() {
             
             <View style={styles.actionButtons}>
               <TouchableOpacity style={styles.saveButton} onPress={saveSelectedWords}>
-                <Ionicons name="save" size={20} color="#fff" />
+                <Text style={{ color: 'white', fontSize: 20 }}>💾</Text>
                 <Text style={styles.saveButtonText}>
                   Save Selected ({selectedWords.size})
                 </Text>
@@ -559,7 +559,7 @@ export default function EnhancedCameraScreen() {
                   setProcessingStats(null);
                 }}
               >
-                <Ionicons name="camera" size={20} color="#fff" />
+                <Text style={{ color: 'white', fontSize: 20 }}>📷</Text>
                 <Text style={styles.retakeButtonText}>Take Another</Text>
               </TouchableOpacity>
             </View>
@@ -594,7 +594,7 @@ export default function EnhancedCameraScreen() {
       <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.button} onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}>
-            <Ionicons name="camera-reverse" size={24} color="white" />
+            <Text style={{ color: 'white', fontSize: 24 }}>🔄</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -605,14 +605,14 @@ export default function EnhancedCameraScreen() {
             onPress={takePicture}
             disabled={modelStatus !== 'ready'}
           >
-            <Ionicons name="camera" size={32} color="white" />
+            <Text style={{ color: 'white', fontSize: 32 }}>📷</Text>
             {modelStatus === 'loading' && (
               <ActivityIndicator size="small" color="white" style={styles.captureLoader} />
             )}
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.button} onPress={() => setShowManualInput(true)}>
-            <Ionicons name="create" size={24} color="white" />
+            <Text style={{ color: 'white', fontSize: 24 }}>✏️</Text>
           </TouchableOpacity>
         </View>
       </CameraView>
@@ -623,7 +623,7 @@ export default function EnhancedCameraScreen() {
           style={styles.languageButton} 
           onPress={() => setShowLanguageModal(true)}
         >
-          <Ionicons name="language" size={20} color="#3498db" />
+          <Text style={{ color: '#3498db', fontSize: 20 }}>🌍</Text>
           <Text style={styles.languageButtonText}>
             Learning: {getCurrentLanguageName()}
           </Text>
@@ -691,7 +691,7 @@ export default function EnhancedCameraScreen() {
                     {name}
                   </Text>
                   {targetLanguage === code && (
-                    <Ionicons name="checkmark" size={20} color="#3498db" />
+                    <Text style={{ color: '#3498db', fontSize: 20 }}>✓</Text>
                   )}
                 </TouchableOpacity>
               ))}

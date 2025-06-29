@@ -314,19 +314,19 @@ export default function EnhancedCameraScreen() {
 
   if (!permission) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.message}>Requesting camera permission...</Text>
+      <View style={styles.permissionContainer}>
         <ActivityIndicator size="large" color="#3498db" style={{ marginTop: 20 }} />
+        <Text style={styles.permissionMessage}>Requesting camera permission...</Text>
       </View>
     );
   }
 
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.message}>🔒 Camera permission required for object detection</Text>
-        <TouchableOpacity style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Grant Camera Permission</Text>
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionMessage}>🔒 Camera permission required for object detection</Text>
+        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+          <Text style={styles.permissionButtonText}>Grant Camera Permission</Text>
         </TouchableOpacity>
       </View>
     );
@@ -708,6 +708,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  permissionContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  permissionMessage: {
+    fontSize: 18,
+    color: '#2c3e50',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 24,
+  },
+  permissionButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 25,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  permissionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
   camera: {
     flex: 1,
   },
@@ -715,17 +746,19 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     backgroundColor: 'transparent',
-    margin: 64,
+    margin: 20,
     justifyContent: 'space-between',
     alignItems: 'flex-end',
+    paddingBottom: 50,
   },
   button: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 5,
   },
   captureButton: {
     width: 80,
@@ -734,17 +767,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#3498db',
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 8,
   },
   captureButtonDisabled: {
     backgroundColor: '#7f8c8d',
   },
   captureLoader: {
     position: 'absolute',
-    top: -30,
+    top: -35,
   },
   sessionContainer: {
     backgroundColor: 'rgba(255,255,255,0.95)',
-    padding: 10,
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ecf0f1',
   },
   sessionActive: {
     flexDirection: 'row',
@@ -755,20 +791,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#2c3e50',
     fontWeight: '500',
+    flex: 1,
   },
   startSessionButton: {
     backgroundColor: '#27ae60',
-    padding: 12,
+    padding: 15,
     borderRadius: 8,
     alignItems: 'center',
   },
   startSessionButtonText: {
     color: 'white',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   endSessionButton: {
     backgroundColor: '#e74c3c',
-    padding: 8,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
     borderRadius: 6,
   },
   endSessionButtonText: {
@@ -779,6 +818,8 @@ const styles = StyleSheet.create({
   languageContainer: {
     backgroundColor: 'rgba(255,255,255,0.95)',
     padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ecf0f1',
   },
   languageButton: {
     flexDirection: 'row',
@@ -800,6 +841,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#2c3e50',
     fontWeight: '500',
+    textAlign: 'center',
   },
   photoContainer: {
     position: 'relative',
@@ -827,7 +869,7 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     backgroundColor: 'rgba(52, 152, 219, 0.9)',
-    padding: 10,
+    padding: 15,
   },
   statsTitle: {
     color: 'white',
@@ -859,6 +901,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderLeftWidth: 4,
     borderLeftColor: '#3498db',
+    elevation: 2,
   },
   detectionHeader: {
     flexDirection: 'row',
@@ -867,6 +910,7 @@ const styles = StyleSheet.create({
   },
   detectionInfo: {
     flex: 1,
+    marginRight: 10,
   },
   detectionLabel: {
     fontSize: 18,
@@ -894,6 +938,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#3498db',
+    elevation: 1,
   },
   selectButtonActive: {
     backgroundColor: '#3498db',
@@ -912,6 +957,7 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: 'white',
     borderRadius: 8,
+    elevation: 1,
   },
   exampleEnglish: {
     fontSize: 14,
@@ -939,16 +985,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 20,
+    paddingHorizontal: 5,
   },
   saveButton: {
     backgroundColor: '#27ae60',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 15,
     borderRadius: 25,
     flex: 0.48,
     justifyContent: 'center',
+    elevation: 3,
   },
   saveButtonText: {
     color: 'white',
@@ -961,10 +1009,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 15,
     borderRadius: 25,
     flex: 0.48,
     justifyContent: 'center',
+    elevation: 3,
   },
   retakeButtonText: {
     color: 'white',
@@ -977,13 +1026,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
     backgroundColor: 'white',
     borderRadius: 15,
     padding: 20,
-    width: width * 0.9,
+    width: '100%',
+    maxWidth: 400,
     maxHeight: '80%',
+    elevation: 10,
   },
   modalTitle: {
     fontSize: 20,
@@ -999,6 +1051,7 @@ const styles = StyleSheet.create({
     padding: 15,
     fontSize: 16,
     marginBottom: 20,
+    backgroundColor: '#f8f9fa',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1010,6 +1063,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     flex: 0.48,
+    elevation: 2,
   },
   modalButtonSecondary: {
     backgroundColor: '#95a5a6',
@@ -1018,11 +1072,13 @@ const styles = StyleSheet.create({
     color: 'white',
     textAlign: 'center',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   modalButtonTextSecondary: {
     color: 'white',
     textAlign: 'center',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   languageList: {
     maxHeight: 300,
@@ -1046,16 +1102,5 @@ const styles = StyleSheet.create({
   languageOptionTextActive: {
     color: '#3498db',
     fontWeight: '600',
-  },
-  message: {
-    textAlign: 'center',
-    paddingBottom: 10,
-    color: 'white',
-    fontSize: 16,
-  },
-  buttonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
   },
 });

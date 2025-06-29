@@ -1,29 +1,45 @@
 {
-  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": false,
-    "jsx": "react-jsx",
+    "target": "esnext",
+    "lib": [
+      "dom",
+      "esnext"
+    ],
     "allowJs": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
+    "strict": false,
+    "forceConsistentCasingInFileNames": true,
     "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
     "isolatedModules": true,
+    "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "expo-router/typescript"
-      }
-    ]
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@/components/*": [
+        "./components/*"
+      ],
+      "@/services/*": [
+        "./src/services/*"
+      ]
+    }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     "**/*.js",
-    "**/*.jsx"
+    "**/*.jsx",
+    "types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

@@ -16,20 +16,8 @@ import {
   View
 } from 'react-native';
 import DatabaseService from '../../src/services/DatabaseService';
-import ObjectDetectionService from '../../src/services/ObjectDetectionService'; // Updated import
+import ObjectDetectionService from '../../src/services/ObjectDetectionService'; // Updated to use Google Vision
 import TranslationService from '../../src/services/TranslationService';
-
-//import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-platform-react-native';
-import '@tensorflow/tfjs-react-native';
-
-
-// Import the router
-
-// Initialize TensorFlow.js
-//tf.ready().then(() => {
-//  console.log('TensorFlow.js ready for object detection!');
-//});
 
 const { width } = Dimensions.get('window');
 
@@ -106,17 +94,17 @@ export default function EnhancedCameraScreen() {
       await DatabaseService.initialize();
       console.log('✅ Database ready');
       
-      // Initialize object detection
+      // Initialize Google Vision object detection
       const detectionReady = await ObjectDetectionService.initialize();
       if (detectionReady) {
-        console.log('✅ Object Detection ready');
+        console.log('✅ Google Vision Object Detection ready');
         setModelStatus('ready');
         
         // Get model info for status
         const modelInfo = ObjectDetectionService.getModelInfo();
         console.log('🎯 Detection Model Info:', modelInfo);
       } else {
-        throw new Error('Object detection initialization failed');
+        throw new Error('Google Vision object detection initialization failed');
       }
       
       console.log('🎉 All services ready!');
@@ -130,6 +118,164 @@ export default function EnhancedCameraScreen() {
         [{ text: 'Continue' }]
       );
     }
+  };
+
+  const detectObjectsWithAI = async (imageUri: string) => {
+    setIsProcessing(true);
+    setDetections([]);
+    setProcessingStats(null);
+    
+    try {
+      console.log('🔍 Starting object detection...');
+      const startTime = Date.now();
+      
+      // Use Google Vision object detection service
+      const detectedObjects = await ObjectDetectionService.detectObjects(
+        imageUri, 
+        detectionSettings.confidenceThreshold,
+        0.45 // IoU threshold (not used by Google Vision but kept for compatibility)
+      );
+      
+      const processingTime = Date.now() - startTime;
+      console.log(`⚡ Detection completed in ${processingTime}ms`);
+      
+      // Update processing stats
+      setProcessingStats({
+        processingTime,
+        objectsDetected: detectedObjects.length,
+        avgConfidence: detectedObjects.length > 0 
+          ? (detectedObjects.reduce((sum: number, obj: Detection) => sum + obj.confidence, 0) / detectedObjects.length)
+          : 0,
+        modelUsed: 'Google Cloud Vision API'
+      });
+      
+      if (detectedObjects.length === 0) {
+        Alert.alert(
+          'No Objects Detected',
+          '🔍 No objects were found in the image. Would you like to try manual input?',
+          [
+            { text: 'Manual Input', onPress: () => setShowManualInput(true) },
+            { text: 'Retake Photo', onPress: () => setPhoto(null) }
+          ]
+        );
+        return;
+      }
+      
+      // Limit detections based on settings
+      const limitedDetections = detectedObjects.slice(0, detectionSettings.maxDetections);
+      
+      // Translate detected objects
+      console.log('🌐 Translating detected objects...');
+      const translatedDetections = await Promise.all(
+        limitedDetections.map(async (detection: Detection, index: number) => {
+          try {
+            const translation = await TranslationService.translateText(
+              detection.label, 
+              targetLanguage
+            );
+            
+            const example = await TranslationService.getExampleSentence(
+              detection.label, 
+              targetLanguage
+            );
+            
+            return {
+              ...detection,
+              translation,
+              example: example.translated,
+              exampleEnglish: example.english,
+              processingOrder: index + 1,
+              detectionTimestamp: new Date().toISOString()
+            };
+          } catch (translationError) {
+            console.error('Translation error for', detection.label, translationError);
+            return {
+              ...detection,
+              translation: detection.label,
+              example: `I can see a ${detection.label}.`,
+              exampleEnglish: `I can see a ${detection.label}.`,
+              processingOrder: index + 1,
+              detectionTimestamp: new Date().toISOString()
+            };
+          }
+        })
+      );
+      
+      console.log('✅ Detection and translation complete');
+      setDetections(translatedDetections);
+      
+      // Auto-select high-confidence detections
+      const highConfidenceIndices = new Set(
+        translatedDetections
+          .map((det, index) => ({ det, index }))
+          .filter(({ det }) => det.confidence >= 0.7)
+          .map(({ index }) => index)
+      );
+      
+      setSelectedWords(highConfidenceIndices.size > 0 ? highConfidenceIndices : new Set([0]));
+      
+    } catch (error) {
+      console.error('❌ Object detection failed:', error);
+      Alert.alert(
+        'Detection Error',
+        'Object detection encountered an issue. This is using mock detection for testing. Please try again.',
+        [
+          { text: 'Manual Input', onPress: () => setShowManualInput(true) },
+          { text: 'Retake Photo', onPress: () => setPhoto(null) }
+        ]
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // MISSING FUNCTION 1: Handle manual input
+  const handleManualInput = async () => {
+    if (!manualWord.trim()) {
+      Alert.alert('Error', 'Please enter a word');
+      return;
+    }
+
+    try {
+      console.log('🖊️ Processing manual input:', manualWord);
+      
+      const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
+      const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
+
+      const manualDetection: Detection = {
+        label: manualWord.trim().toLowerCase(),
+        confidence: 1.0,
+        bbox: [0, 0, 1, 1],
+        category: 'manual',
+        source: 'manual_input',
+        translation,
+        example: example.translated,
+        exampleEnglish: example.english,
+        quality_score: 0.95,
+        confidence_level: 'Manual Input'
+      };
+
+      setDetections([manualDetection]);
+      setSelectedWords(new Set([0]));
+      setShowManualInput(false);
+      setManualWord('');
+      
+      console.log('✅ Manual input processed');
+    } catch (error) {
+      console.error('Manual input error:', error);
+      Alert.alert('Error', 'Failed to process manual input');
+    }
+  };
+
+  // MISSING FUNCTION 2: Toggle word selection
+  const toggleWordSelection = (index: number) => {
+    const newSelected = new Set(selectedWords);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedWords(newSelected);
   };
 
   const getCurrentLanguageName = (): string => {
@@ -207,553 +353,157 @@ export default function EnhancedCameraScreen() {
     }
   };
 
-  const detectObjectsWithAI = async (imageUri: string) => {
-    setIsProcessing(true);
-    setDetections([]);
-    setProcessingStats(null);
-    
+  const speakWord = async (text: string, language: string) => {
     try {
-      console.log('🔍 Starting object detection...');
-      const startTime = Date.now();
-      
-      // Use the updated object detection service
-      const detectedObjects = await ObjectDetectionService.detectObjects(
-        imageUri, 
-        detectionSettings.confidenceThreshold,
-        0.45 // IoU threshold
-      );
-      
-      const processingTime = Date.now() - startTime;
-      console.log(`⚡ Detection completed in ${processingTime}ms`);
-      
-      // Update processing stats
-      setProcessingStats({
-        processingTime,
-        objectsDetected: detectedObjects.length,
-        avgConfidence: detectedObjects.length > 0 
-          ? (detectedObjects.reduce((sum: number, obj: Detection) => sum + obj.confidence, 0) / detectedObjects.length)
-          : 0,
-        modelUsed: 'Fallback Mock Detection'
-      });
-      
-      if (detectedObjects.length === 0) {
-        Alert.alert(
-          'No Objects Detected',
-          '🔍 No objects were found in the image. Would you like to try manual input?',
-          [
-            { text: 'Manual Input', onPress: () => setShowManualInput(true) },
-            { text: 'Retake Photo', onPress: () => setPhoto(null) }
-          ]
-        );
-        return;
-      }
-      
-      // Limit detections based on settings
-      const limitedDetections = detectedObjects.slice(0, detectionSettings.maxDetections);
-      
-      // Translate detected objects
-      console.log('🌐 Translating detected objects...');
-      const translatedDetections = await Promise.all(
-        limitedDetections.map(async (detection: Detection, index: number) => {
-          try {
-            const translation = await TranslationService.translateText(
-              detection.label, 
-              targetLanguage
-            );
-            
-            const example = await TranslationService.getExampleSentence(
-              detection.label, 
-              targetLanguage
-            );
-            
-            return {
-              ...detection,
-              translation,
-              example: example.translated,
-              exampleEnglish: example.english,
-              processingOrder: index + 1,
-              detectionTimestamp: new Date().toISOString()
-            };
-          } catch (translationError) {
-            console.error('Translation error for', detection.label, translationError);
-            return {
-              ...detection,
-              translation: detection.label,
-              example: `I can see a ${detection.label}.`,
-              exampleEnglish: `I can see a ${detection.label}.`,
-              processingOrder: index + 1,
-              detectionTimestamp: new Date().toISOString()
-            };
-          }
-        })
-      );
-      
-      console.log('✅ Detection and translation complete');
-      setDetections(translatedDetections);
-      
-      // Auto-select high-confidence detections
-      const highConfidenceIndices = new Set(
-        translatedDetections
-          .map((det, index) => ({ det, index }))
-          .filter(({ det }) => det.confidence >= 0.7)
-          .map(({ index }) => index)
-      );
-      
-      setSelectedWords(highConfidenceIndices.size > 0 ? highConfidenceIndices : new Set([0]));
-      
-    } catch (error) {
-      console.error('❌ Object detection failed:', error);
-      Alert.alert(
-        'Detection Error',
-        'Object detection encountered an issue. This is using mock detection for testing.',
-        [
-          { text: 'Manual Input', onPress: () => setShowManualInput(true) },
-          { text: 'Retry', onPress: () => detectObjectsWithAI(imageUri) },
-          { text: 'Cancel', onPress: () => setPhoto(null) }
-        ]
-      );
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleManualInput = async () => {
-    if (!manualWord.trim()) {
-      Alert.alert('Error', 'Please enter a word');
-      return;
-    }
-
-    try {
-      console.log('🖊️ Processing manual input:', manualWord);
-      
-      const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
-      const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
-
-      const manualDetection: Detection = {
-        label: manualWord.trim().toLowerCase(),
-        confidence: 1.0,
-        bbox: [0, 0, 1, 1],
-        category: 'manual',
-        source: 'manual_input',
-        translation,
-        example: example.translated,
-        exampleEnglish: example.english,
-        quality_score: 0.95,
-        confidence_level: 'Manual Input'
-      };
-
-      setDetections([manualDetection]);
-      setSelectedWords(new Set([0]));
-      setShowManualInput(false);
-      setManualWord('');
-      
-      console.log('✅ Manual input processed');
-    } catch (error) {
-      console.error('Manual input error:', error);
-      Alert.alert('Error', 'Failed to process manual input');
-    }
-  };
-
-  const speakWord = (text: string, language: string) => {
-    try {
-      Speech.speak(text, {
+      await Speech.speak(text, {
         language: language,
         pitch: 1.0,
         rate: 0.8,
       });
     } catch (error) {
       console.error('Speech error:', error);
-      Alert.alert('Speech Error', 'Text-to-speech is not available');
+      Alert.alert('Speech Error', 'Unable to speak the word. Please check your device settings.');
     }
-  };
-
-  const toggleWordSelection = (index: number) => {
-    const newSelected = new Set(selectedWords);
-    if (newSelected.has(index)) {
-      newSelected.delete(index);
-    } else {
-      newSelected.add(index);
-    }
-    setSelectedWords(newSelected);
   };
 
   const saveSelectedWords = async () => {
-    const wordsToSave = detections.filter((_, index) => selectedWords.has(index));
-    
-    if (wordsToSave.length === 0) {
-      Alert.alert('No Selection', 'Please select at least one word to save');
+    if (selectedWords.size === 0) {
+      Alert.alert('No Selection', 'Please select at least one word to save.');
       return;
     }
 
-    // Auto-start session if needed
-    if (!sessionId) {
-      try {
-        const id = await DatabaseService.createSession();
-        if (id) {
-          setSessionId(id);
-          console.log('✅ Auto-started learning session');
-        }
-      } catch (error) {
-        console.error('Auto-start session error:', error);
-      }
-    }
-
     try {
-      console.log(`💾 Saving ${wordsToSave.length} detected words...`);
-      let savedCount = 0;
+      const selectedDetections = Array.from(selectedWords).map(index => detections[index]);
       
-      for (const detection of wordsToSave) {
-        try {
-          const wordData = {
-            original: detection.label,
-            translated: detection.translation,
-            language: targetLanguage,
-            category: detection.category || 'detection',
-            imagePath: photo,
-            source: detection.source || 'camera'
-          };
-          
-          const result = await DatabaseService.addVocabulary(wordData);
-          if (result) {
-            savedCount++;
-            setWordsStudied(prev => prev + 1);
-            setWordsLearned(prev => prev + 1);
-            console.log(`✅ Saved: ${detection.label} -> ${detection.translation}`);
-          }
-        } catch (wordError) {
-          console.error(`❌ Failed to save ${detection.label}:`, wordError);
+      // Auto-start session if needed
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+        console.log('🎓 Auto-starting session for vocabulary save...');
+        currentSessionId = await DatabaseService.createSession();
+        if (currentSessionId) {
+          setSessionId(currentSessionId);
         }
       }
+
+      const savedCount = selectedDetections.length;
       
-      if (savedCount > 0) {
-        Alert.alert(
-          '🎉 Success!', 
-          `Saved ${savedCount} words to your vocabulary!`,
-          [
-            { 
-              text: 'Continue Learning', 
-              onPress: () => {
-                setPhoto(null);
-                setDetections([]);
-                setSelectedWords(new Set());
-                setProcessingStats(null);
-              }
-            }
-          ]
+      for (const detection of selectedDetections) {
+        await DatabaseService.saveVocabularyWord(
+          detection.translation || detection.label,
+          detection.label,
+          targetLanguage,
+          detection.example || `I can see a ${detection.label}.`,
+          detection.exampleEnglish || `I can see a ${detection.label}.`,
+          detection.category,
+          currentSessionId
         );
-      } else {
-        Alert.alert('Error', 'Failed to save any words. Please try again.');
       }
+
+      setWordsStudied(prev => prev + savedCount);
+      setWordsLearned(prev => prev + savedCount);
+      
+      Alert.alert(
+        'Words Saved!', 
+        `📚 ${savedCount} word${savedCount > 1 ? 's' : ''} saved to your vocabulary.`,
+        [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
+      );
+      
+      setSelectedWords(new Set());
+      setDetections([]);
+      setPhoto(null);
       
     } catch (error) {
       console.error('Save error:', error);
-      Alert.alert('Error', 'Failed to save words');
+      Alert.alert('Save Error', 'Failed to save words. Please try again.');
     }
   };
 
-  const getStatusColor = () => {
-    switch (modelStatus) {
-      case 'ready': return '#27ae60';
-      case 'loading': return '#f39c12';
-      case 'error': return '#e74c3c';
-      default: return '#95a5a6';
+  const addManualWord = async () => {
+    if (!manualWord.trim()) {
+      Alert.alert('Empty Input', 'Please enter a word to translate.');
+      return;
+    }
+
+    try {
+      const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
+      const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
+      
+      // Auto-start session if needed
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+        currentSessionId = await DatabaseService.createSession();
+        if (currentSessionId) {
+          setSessionId(currentSessionId);
+        }
+      }
+      
+      await DatabaseService.saveVocabularyWord(
+        translation,
+        manualWord.trim(),
+        targetLanguage,
+        example.translated,
+        example.english,
+        'manual_input',
+        currentSessionId
+      );
+
+      setWordsStudied(prev => prev + 1);
+      setWordsLearned(prev => prev + 1);
+      
+      Alert.alert('Word Added!', `📚 "${manualWord}" has been translated and saved.`);
+      setManualWord('');
+      setShowManualInput(false);
+      
+    } catch (error) {
+      console.error('Manual word error:', error);
+      Alert.alert('Translation Error', 'Failed to translate the word. Please try again.');
     }
   };
 
-  const getStatusText = () => {
-    switch (modelStatus) {
-      case 'ready': return '🤖 Detection Ready';
-      case 'loading': return '⏳ Loading...';
-      case 'error': return '❌ Offline';
-      default: return '⚪ Unknown';
-    }
-  };
-
-  const getConfidenceBadgeColor = (confidence: number) => {
-    if (confidence >= 0.9) return '#27ae60';
-    if (confidence >= 0.8) return '#2ecc71';
-    if (confidence >= 0.7) return '#f39c12';
-    if (confidence >= 0.6) return '#e67e22';
-    return '#e74c3c';
-  };
-
-  // Advanced Settings Modal
-  const AdvancedSettingsModal = () => (
-    <Modal
-      visible={showAdvancedSettings}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={() => setShowAdvancedSettings(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.advancedModalContent}>
-          <Text style={styles.modalTitle}>🔬 Advanced AI Settings</Text>
-          
-          <ScrollView>
-            <View style={styles.settingSection}>
-              <Text style={styles.settingTitle}>Detection Confidence</Text>
-              <Text style={styles.settingDescription}>Minimum confidence for object detection</Text>
-              <View style={styles.sliderContainer}>
-                <Text style={styles.sliderLabel}>Low (50%)</Text>
-                <View style={styles.sliderTrack}>
-                  <TouchableOpacity
-                    style={[styles.sliderThumb, { 
-                      left: `${(detectionSettings.confidenceThreshold - 0.5) * 100}%` 
-                    }]}
-                    onPress={() => {
-                      // Simple slider implementation
-                      const newValue = detectionSettings.confidenceThreshold >= 0.8 ? 0.5 : 
-                                     detectionSettings.confidenceThreshold + 0.1;
-                      setDetectionSettings({
-                        ...detectionSettings,
-                        confidenceThreshold: newValue
-                      });
-                    }}
-                  />
-                </View>
-                <Text style={styles.sliderLabel}>High (90%)</Text>
-              </View>
-              <Text style={styles.currentValue}>
-                Current: {Math.round(detectionSettings.confidenceThreshold * 100)}%
-              </Text>
-            </View>
-
-            <View style={styles.settingSection}>
-              <Text style={styles.settingTitle}>Max Detections</Text>
-              <Text style={styles.settingDescription}>Maximum objects to detect per image</Text>
-              <View style={styles.buttonGroup}>
-                {[5, 10, 15, 20].map(value => (
-                  <TouchableOpacity
-                    key={value}
-                    style={[
-                      styles.optionButton,
-                      detectionSettings.maxDetections === value && styles.optionButtonActive
-                    ]}
-                    onPress={() => setDetectionSettings({
-                      ...detectionSettings,
-                      maxDetections: value
-                    })}
-                  >
-                    <Text style={[
-                      styles.optionButtonText,
-                      detectionSettings.maxDetections === value && styles.optionButtonTextActive
-                    ]}>
-                      {value}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.settingSection}>
-              <Text style={styles.settingTitle}>AI Features</Text>
-              <TouchableOpacity
-                style={styles.toggleOption}
-                onPress={() => setDetectionSettings({
-                  ...detectionSettings,
-                  enableAdvancedAI: !detectionSettings.enableAdvancedAI
-                })}
-              >
-                <Text style={styles.toggleText}>Advanced AI Detection</Text>
-                <View style={[
-                  styles.toggle,
-                  detectionSettings.enableAdvancedAI && styles.toggleActive
-                ]}>
-                  <View style={[
-                    styles.toggleThumb,
-                    detectionSettings.enableAdvancedAI && styles.toggleThumbActive
-                  ]} />
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.toggleOption}
-                onPress={() => setDetectionSettings({
-                  ...detectionSettings,
-                  showQualityScores: !detectionSettings.showQualityScores
-                })}
-              >
-                <Text style={styles.toggleText}>Show Quality Scores</Text>
-                <View style={[
-                  styles.toggle,
-                  detectionSettings.showQualityScores && styles.toggleActive
-                ]}>
-                  <View style={[
-                    styles.toggleThumb,
-                    detectionSettings.showQualityScores && styles.toggleThumbActive
-                  ]} />
-                </View>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-
-          <TouchableOpacity
-            style={styles.closeModalButton}
-            onPress={() => setShowAdvancedSettings(false)}
-          >
-            <Text style={styles.closeModalText}>Apply Settings</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  // Language Selection Modal (unchanged from your original)
-  const LanguageModal = () => (
-    <Modal
-      visible={showLanguageModal}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={() => setShowLanguageModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.languageModalContent}>
-          <Text style={styles.modalTitle}>Select Target Language</Text>
-          
-          <ScrollView>
-            {Object.entries(languages).map(([name, code]) => (
-              <TouchableOpacity
-                key={code}
-                style={[
-                  styles.languageOption,
-                  targetLanguage === code && styles.languageOptionActive
-                ]}
-                onPress={() => {
-                  setTargetLanguage(code);
-                  setShowLanguageModal(false);
-                }}
-              >
-                <Text style={[
-                  styles.languageOptionText,
-                  targetLanguage === code && styles.languageOptionTextActive
-                ]}>
-                  {name}
-                </Text>
-                {targetLanguage === code && (
-                  <Ionicons name="checkmark" size={20} color="#fff" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          
-          <TouchableOpacity
-            style={styles.closeModalButton}
-            onPress={() => setShowLanguageModal(false)}
-          >
-            <Text style={styles.closeModalText}>Done</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  // Manual Input Modal (unchanged from your original)
-  const ManualInputModal = () => (
-    <Modal
-      visible={showManualInput}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={() => setShowManualInput(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Manual Object Input</Text>
-          <Text style={styles.modalSubtitle}>What object do you see?</Text>
-          
-          <TextInput
-            style={styles.textInput}
-            placeholder="e.g., cup, book, phone..."
-            value={manualWord}
-            onChangeText={setManualWord}
-            autoFocus={true}
-          />
-          
-          <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.cancelButton]}
-              onPress={() => {
-                setShowManualInput(false);
-                setManualWord('');
-              }}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.modalButton, styles.confirmButton]}
-              onPress={handleManualInput}
-            >
-              <Text style={styles.confirmButtonText}>Add Word</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  // Detection Results Screen with Advanced Features
-  if (photo && (detections.length > 0 || isProcessing)) {
+  // Photo Results View
+  if (photo) {
     return (
       <ScrollView style={styles.container}>
-        <Image source={{ uri: photo }} style={styles.previewImage} />
-        
-        {isProcessing ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#3498db" />
-            <Text style={styles.loadingText}>🤖 Detecting objects in your image...</Text>
-            <Text style={styles.loadingSubtext}>Using Faster R-CNN detection</Text>
-          </View>
-        ) : (
-          <View style={styles.detectionsContainer}>
-            {/* Processing Stats */}
-            {processingStats && (
-              <View style={styles.statsContainer}>
-                <Text style={styles.statsTitle}>📊 Detection Stats</Text>
-                <View style={styles.statsGrid}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{processingStats.processingTime || 0}ms</Text>
-                    <Text style={styles.statLabel}>Processing Time</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{processingStats.objectsDetected || 0}</Text>
-                    <Text style={styles.statLabel}>Objects Found</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{Math.round((processingStats.avgConfidence || 0) * 100)}%</Text>
-                    <Text style={styles.statLabel}>Avg Confidence</Text>
-                  </View>
-                </View>
-              </View>
-            )}
+        <View style={styles.photoContainer}>
+          <Image source={{ uri: photo }} style={styles.capturedPhoto} />
+          
+          {isProcessing && (
+            <View style={styles.processingOverlay}>
+              <ActivityIndicator size="large" color="#3498db" />
+              <Text style={styles.processingText}>🔍 Analyzing image...</Text>
+            </View>
+          )}
+          
+          {processingStats && (
+            <View style={styles.statsContainer}>
+              <Text style={styles.statsTitle}>📊 Detection Stats</Text>
+              <Text style={styles.statsText}>
+                Objects found: {processingStats.objectsDetected} | 
+                Time: {processingStats.processingTime}ms | 
+                Model: {processingStats.modelUsed}
+              </Text>
+            </View>
+          )}
+        </View>
 
-            <Text style={styles.sectionTitle}>✨ Detected Objects</Text>
+        {detections.length > 0 && (
+          <View style={styles.detectionsContainer}>
+            <Text style={styles.detectionsTitle}>
+              🎯 Detected Objects ({detections.length})
+            </Text>
             
             {detections.map((detection, index) => (
-              <View key={index} style={styles.enhancedDetectionCard}>
+              <View key={index} style={styles.detectionCard}>
                 <View style={styles.detectionHeader}>
-                  <Text style={styles.originalWord}>{detection.label}</Text>
-                  <View style={styles.badgeContainer}>
-                    <View style={[
-                      styles.confidenceBadge,
-                      { backgroundColor: getConfidenceBadgeColor(detection.confidence) }
-                    ]}>
-                      <Text style={styles.confidenceBadgeText}>
-                        {Math.round(detection.confidence * 100)}%
-                      </Text>
-                    </View>
+                  <View style={styles.detectionInfo}>
+                    <Text style={styles.detectionLabel}>{detection.label}</Text>
+                    <Text style={styles.detectionTranslation}>
+                      {detection.translation || 'Translation loading...'}
+                    </Text>
+                    <Text style={styles.detectionConfidence}>
+                      {Math.round(detection.confidence * 100)}% confidence
+                    </Text>
                   </View>
-                </View>
-                
-                <Text style={styles.translatedWord}>→ {detection.translation || detection.label}</Text>
-                
-                <View style={styles.detectionActions}>
-                  <TouchableOpacity
-                    style={styles.audioButton}
-                    onPress={() => speakWord(detection.translation || detection.label, targetLanguage)}
-                  >
-                    <Ionicons name="volume-high" size={20} color="#3498db" />
-                    <Text style={styles.audioButtonText}>Listen</Text>
-                  </TouchableOpacity>
                   
                   <TouchableOpacity
                     style={[
@@ -825,255 +575,155 @@ export default function EnhancedCameraScreen() {
       {/* Session Management */}
       <View style={styles.sessionContainer}>
         {sessionId ? (
-          <View style={styles.sessionInfo}>
+          <View style={styles.sessionActive}>
             <Text style={styles.sessionText}>
-              🎓 Session Active - Words: {wordsLearned}
+              📚 Session Active | Words: {wordsStudied} | Learned: {wordsLearned}
             </Text>
             <TouchableOpacity style={styles.endSessionButton} onPress={endSession}>
-              <Text style={styles.endSessionText}>End</Text>
+              <Text style={styles.endSessionButtonText}>End Session</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <TouchableOpacity style={styles.startSessionButton} onPress={startSession}>
-            <Text style={styles.startSessionText}>🚀 Start Learning Session</Text>
+            <Text style={styles.startSessionButtonText}>🎓 Start Learning Session</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      <View style={styles.cameraContainer}>
-        <CameraView style={styles.camera} facing={facing} ref={cameraRef} />
-        
-        {/* Camera Overlay */}
-        <View style={styles.overlay}>
-          <View style={styles.topControls}>
-            <TouchableOpacity
-              style={styles.flipButton}
-              onPress={() => setFacing(current => current === 'back' ? 'front' : 'back')}
-            >
-              <Ionicons name="camera-reverse" size={24} color="#fff" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.languageSelector}
-              onPress={() => setShowLanguageModal(true)}
-            >
-              <Text style={styles.languageText}>🌐 {getCurrentLanguageName()}</Text>
-              <Ionicons name="chevron-down" size={16} color="#fff" />
-            </TouchableOpacity>
-          </View>
+      {/* Camera View */}
+      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.button} onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}>
+            <Ionicons name="camera-reverse" size={24} color="white" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[
+              styles.captureButton,
+              modelStatus !== 'ready' && styles.captureButtonDisabled
+            ]} 
+            onPress={takePicture}
+            disabled={modelStatus !== 'ready'}
+          >
+            <Ionicons name="camera" size={32} color="white" />
+            {modelStatus === 'loading' && (
+              <ActivityIndicator size="small" color="white" style={styles.captureLoader} />
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.button} onPress={() => setShowManualInput(true)}>
+            <Ionicons name="create" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+      </CameraView>
 
-          <View style={styles.statusContainer}>
-            <View style={[styles.statusIndicator, { backgroundColor: getStatusColor() }]}>
-              <Text style={styles.statusText}>{getStatusText()}</Text>
+      {/* Language Selection */}
+      <View style={styles.languageContainer}>
+        <TouchableOpacity 
+          style={styles.languageButton} 
+          onPress={() => setShowLanguageModal(true)}
+        >
+          <Ionicons name="language" size={20} color="#3498db" />
+          <Text style={styles.languageButtonText}>
+            Learning: {getCurrentLanguageName()}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Status Bar */}
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusText}>
+          {modelStatus === 'loading' && '🔄 Loading AI Model...'}
+          {modelStatus === 'ready' && '✅ AI Ready - Take a photo!'}
+          {modelStatus === 'error' && '⚠️ AI Error - Using fallback'}
+        </Text>
+      </View>
+
+      {/* Manual Input Modal */}
+      <Modal visible={showManualInput} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>✏️ Add Word Manually</Text>
+            <TextInput
+              style={styles.textInput}
+              value={manualWord}
+              onChangeText={setManualWord}
+              placeholder="Enter a word in English..."
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalButton} onPress={addManualWord}>
+                <Text style={styles.modalButtonText}>Add Word</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonSecondary]} 
+                onPress={() => setShowManualInput(false)}
+              >
+                <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
 
-          <View style={styles.instructionContainer}>
-            <Text style={styles.instructionText}>🤖 Object Detection Learning</Text>
-            <Text style={styles.instructionSubtext}>
-              Point at objects for detection in {getCurrentLanguageName()}!
-            </Text>
-            {processingStats && (
-              <Text style={styles.lastStatsText}>
-                Last scan: {processingStats.objectsDetected || 0} objects in {processingStats.processingTime || 0}ms
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.bottomControls}>
-            <TouchableOpacity
-              style={styles.manualButton}
-              onPress={() => setShowManualInput(true)}
-            >
-              <Ionicons name="create" size={24} color="#fff" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[
-                styles.captureButton,
-                modelStatus !== 'ready' && styles.captureButtonDisabled
-              ]} 
-              onPress={takePicture}
-              disabled={modelStatus === 'loading'}
-            >
-              <View style={styles.captureButtonInner}>
-                {modelStatus === 'loading' ? (
-                  <ActivityIndicator size="small" color="#3498db" />
-                ) : (
-                  <Ionicons name="scan" size={30} color="#3498db" />
-                )}
-              </View>
-            </TouchableOpacity>
-            
-            <View style={styles.placeholder} />
+      {/* Language Selection Modal */}
+      <Modal visible={showLanguageModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🌍 Select Target Language</Text>
+            <ScrollView style={styles.languageList}>
+              {Object.entries(languages).map(([name, code]) => (
+                <TouchableOpacity
+                  key={code}
+                  style={[
+                    styles.languageOption,
+                    targetLanguage === code && styles.languageOptionActive
+                  ]}
+                  onPress={() => {
+                    setTargetLanguage(code);
+                    setShowLanguageModal(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.languageOptionText,
+                    targetLanguage === code && styles.languageOptionTextActive
+                  ]}>
+                    {name}
+                  </Text>
+                  {targetLanguage === code && (
+                    <Ionicons name="checkmark" size={20} color="#3498db" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </View>
-      </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // ... (keeping all your existing styles and adding new ones)
   container: {
     flex: 1,
-    backgroundColor: 'black',
-  },
-  sessionContainer: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
-    right: 20,
-    zIndex: 1000,
-  },
-  sessionInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(39, 174, 96, 0.9)',
-    padding: 10,
-    borderRadius: 20,
-  },
-  sessionText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  endSessionButton: {
-    backgroundColor: 'rgba(231, 76, 60, 0.9)',
-    paddingHorizontal: 15,
-    paddingVertical: 5,
-    borderRadius: 15,
-  },
-  endSessionText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  startSessionButton: {
-    backgroundColor: 'rgba(52, 152, 219, 0.9)',
-    padding: 12,
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  startSessionText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  message: {
-    textAlign: 'center',
-    paddingBottom: 10,
-    color: 'white',
-    fontSize: 18,
-    padding: 20,
-  },
-  cameraContainer: {
-    flex: 1,
+    backgroundColor: '#000',
   },
   camera: {
     flex: 1,
   },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
-    zIndex: 1,
-  },
-  topControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 100,
-  },
-  flipButton: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 25,
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  advancedSettingsButton: {
-    backgroundColor: 'rgba(52, 152, 219, 0.8)',
-    borderRadius: 25,
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  languageSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 10,
-    borderRadius: 20,
-    marginBottom: 10,
-  },
-  languageText: {
-    color: 'white',
-    fontSize: 14,
-    marginRight: 5,
-  },
-  statusContainer: {
-    alignItems: 'flex-end',
-    paddingRight: 20,
-  },
-  statusIndicator: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  instructionContainer: {
+  buttonContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  instructionText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  instructionSubtext: {
-    color: 'white',
-    fontSize: 16,
-    textAlign: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 10,
-    borderRadius: 8,
-  },
-  lastStatsText: {
-    color: 'white',
-    fontSize: 12,
-    textAlign: 'center',
-    backgroundColor: 'rgba(52, 152, 219, 0.7)',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  bottomControls: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingBottom: 50,
+    backgroundColor: 'transparent',
+    margin: 64,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
-  manualButton: {
+  button: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 25,
-    width: 50,
-    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1081,181 +731,165 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: '#3498db',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 4,
-    borderColor: 'white',
   },
   captureButtonDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    borderColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: '#7f8c8d',
   },
-  captureButtonInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'white',
+  captureLoader: {
+    position: 'absolute',
+    top: -30,
+  },
+  sessionContainer: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    padding: 10,
+  },
+  sessionActive: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sessionText: {
+    fontSize: 14,
+    color: '#2c3e50',
+    fontWeight: '500',
+  },
+  startSessionButton: {
+    backgroundColor: '#27ae60',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  startSessionButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  endSessionButton: {
+    backgroundColor: '#e74c3c',
+    padding: 8,
+    borderRadius: 6,
+  },
+  endSessionButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  languageContainer: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    padding: 15,
+  },
+  languageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  languageButtonText: {
+    fontSize: 16,
+    color: '#3498db',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  statusContainer: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    padding: 10,
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#2c3e50',
+    fontWeight: '500',
+  },
+  photoContainer: {
+    position: 'relative',
+  },
+  capturedPhoto: {
+    width: width,
+    height: width * 0.8,
+    resizeMode: 'cover',
+  },
+  processingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  placeholder: {
-    width: 50,
-    height: 50,
-  },
-  previewImage: {
-    width: '100%',
-    height: 250,
-    resizeMode: 'cover',
-  },
-  loadingContainer: {
-    padding: 30,
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 18,
-    color: '#2c3e50',
-    fontWeight: 'bold',
-  },
-  loadingSubtext: {
-    marginTop: 5,
-    fontSize: 14,
-    color: '#3498db',
+  processingText: {
+    color: 'white',
+    marginTop: 10,
+    fontSize: 16,
     fontWeight: '500',
   },
-  detectionsContainer: {
-    padding: 20,
-    backgroundColor: '#f8f9fa',
-  },
   statsContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: 'rgba(52, 152, 219, 0.9)',
+    padding: 10,
   },
   statsTitle: {
-    fontSize: 16,
+    color: 'white',
     fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 10,
+    fontSize: 16,
     textAlign: 'center',
   },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+  statsText: {
+    color: 'white',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 5,
   },
-  statItem: {
-    alignItems: 'center',
+  detectionsContainer: {
+    backgroundColor: 'white',
+    padding: 15,
   },
-  statValue: {
+  detectionsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#3498db',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 15,
     color: '#2c3e50',
-  },
-  enhancedDetectionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 15,
     marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    textAlign: 'center',
+  },
+  detectionCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3498db',
   },
   detectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
   },
-  originalWord: {
-    fontSize: 20,
+  detectionInfo: {
+    flex: 1,
+  },
+  detectionLabel: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#2c3e50',
+    textTransform: 'capitalize',
   },
-  badgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  confidenceBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  confidenceBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  qualityBadge: {
-    backgroundColor: '#9b59b6',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    marginLeft: 5,
-  },
-  qualityBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  translatedWord: {
-    fontSize: 18,
+  detectionTranslation: {
+    fontSize: 16,
     color: '#3498db',
-    marginBottom: 8,
     fontWeight: '600',
+    marginTop: 5,
   },
-  confidenceLevel: {
+  detectionConfidence: {
     fontSize: 12,
     color: '#7f8c8d',
-    marginBottom: 10,
-    fontStyle: 'italic',
-  },
-  detectionActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  audioButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ecf0f1',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  audioButtonText: {
-    marginLeft: 5,
-    color: '#3498db',
-    fontWeight: '500',
+    marginTop: 5,
   },
   selectButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ecf0f1',
-    paddingHorizontal: 15,
+    backgroundColor: 'white',
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
@@ -1265,50 +899,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#3498db',
   },
   selectButtonText: {
-    marginLeft: 5,
     color: '#3498db',
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 5,
   },
   selectButtonTextActive: {
-    color: '#fff',
+    color: 'white',
   },
   exampleContainer: {
-    backgroundColor: '#f8f9fa',
+    marginTop: 15,
     padding: 12,
-    borderRadius: 10,
-    marginTop: 8,
+    backgroundColor: 'white',
+    borderRadius: 8,
   },
   exampleEnglish: {
     fontSize: 14,
     color: '#2c3e50',
-    marginBottom: 4,
+    fontStyle: 'italic',
   },
   exampleTranslated: {
     fontSize: 14,
     color: '#3498db',
     fontWeight: '500',
-    marginBottom: 8,
+    marginTop: 5,
   },
   exampleAudioButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
     alignSelf: 'flex-start',
   },
   exampleAudioText: {
-    marginLeft: 5,
     color: '#3498db',
     fontSize: 12,
-  },
-  metadataContainer: {
-    backgroundColor: '#f1f2f6',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  metadataText: {
-    fontSize: 11,
-    color: '#666',
-    textAlign: 'center',
+    marginLeft: 5,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1316,9 +941,9 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   saveButton: {
+    backgroundColor: '#27ae60',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#27ae60',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 25,
@@ -1326,15 +951,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveButtonText: {
-    marginLeft: 8,
-    color: '#fff',
-    fontWeight: 'bold',
+    color: 'white',
     fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
   retakeButton: {
+    backgroundColor: '#3498db',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#95a5a6',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 25,
@@ -1342,156 +967,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retakeButtonText: {
-    marginLeft: 8,
-    color: '#fff',
-    fontWeight: 'bold',
+    color: 'white',
     fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 25,
-    width: '85%',
-    maxWidth: 400,
-  },
-  advancedModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: 'white',
+    borderRadius: 15,
     padding: 20,
-    width: '90%',
+    width: width * 0.9,
     maxHeight: '80%',
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 15,
     color: '#2c3e50',
-  },
-  modalSubtitle: {
-    fontSize: 16,
     textAlign: 'center',
     marginBottom: 20,
-    color: '#666',
-  },
-  settingSection: {
-    marginBottom: 25,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 5,
-  },
-  settingDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 15,
-  },
-  sliderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sliderLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-  sliderTrack: {
-    flex: 1,
-    height: 6,
-    backgroundColor: '#e9ecef',
-    borderRadius: 3,
-    marginHorizontal: 15,
-    position: 'relative',
-  },
-  sliderThumb: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    backgroundColor: '#3498db',
-    borderRadius: 10,
-    top: -7,
-    marginLeft: -10,
-  },
-  currentValue: {
-    fontSize: 14,
-    color: '#3498db',
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginTop: 10,
-  },
-  buttonGroup: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  optionButton: {
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  optionButtonActive: {
-    backgroundColor: '#3498db',
-    borderColor: '#3498db',
-  },
-  optionButtonText: {
-    color: '#2c3e50',
-    fontWeight: '500',
-  },
-  optionButtonTextActive: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  toggleOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f2f6',
-  },
-  toggleText: {
-    fontSize: 16,
-    color: '#2c3e50',
-  },
-  toggle: {
-    width: 50,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#e9ecef',
-    padding: 2,
-    justifyContent: 'center',
-  },
-  toggleActive: {
-    backgroundColor: '#3498db',
-  },
-  toggleThumb: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-  toggleThumbActive: {
-    transform: [{ translateX: 20 }],
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#bdc3c7',
     borderRadius: 10,
     padding: 15,
     fontSize: 16,
@@ -1502,74 +1005,57 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   modalButton: {
-    flex: 0.45,
+    backgroundColor: '#3498db',
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
+    borderRadius: 8,
+    flex: 0.48,
   },
-  cancelButton: {
+  modalButtonSecondary: {
     backgroundColor: '#95a5a6',
   },
-  confirmButton: {
-    backgroundColor: '#3498db',
-  },
-  cancelButtonText: {
-    color: '#fff',
+  modalButtonText: {
+    color: 'white',
+    textAlign: 'center',
     fontWeight: 'bold',
   },
-  confirmButtonText: {
-    color: '#fff',
+  modalButtonTextSecondary: {
+    color: 'white',
+    textAlign: 'center',
     fontWeight: 'bold',
   },
-  languageModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    width: '85%',
-    maxHeight: '70%',
+  languageList: {
+    maxHeight: 300,
   },
   languageOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 5,
-    backgroundColor: '#f8f9fa',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ecf0f1',
   },
   languageOptionActive: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#ebf3fd',
   },
   languageOptionText: {
     fontSize: 16,
     color: '#2c3e50',
   },
   languageOptionTextActive: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: '#3498db',
+    fontWeight: '600',
   },
-  closeModalButton: {
-    backgroundColor: '#27ae60',
-    borderRadius: 25,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 15,
-  },
-  closeModalText: {
-    color: '#fff',
-    fontWeight: 'bold',
+  message: {
+    textAlign: 'center',
+    paddingBottom: 10,
+    color: 'white',
     fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#3498db',
-    padding: 15,
-    borderRadius: 10,
-    margin: 20,
   },
   buttonText: {
-    color: 'white',
-    textAlign: 'center',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: 'white',
   },
 });

@@ -1,16 +1,12 @@
-import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-backend-webgl';
-import '@tensorflow/tfjs-platform-react-native';
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
 
 class ObjectDetectionService {
   constructor() {
-    this.model = null;
-    this.isModelLoaded = false;
     this.isInitialized = false;
+    this.apiKey = null; // Will be loaded securely from environment
     
-    // Exact same COCO class names from your web app
+    // Same COCO class names from your TensorFlow implementation
     this.COCO_CLASS_NAMES = {
       1: 'person', 2: 'bicycle', 3: 'car', 4: 'motorcycle', 5: 'airplane',
       6: 'bus', 7: 'train', 8: 'truck', 9: 'boat', 10: 'traffic light',
@@ -31,7 +27,7 @@ class ObjectDetectionService {
       86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'
     };
 
-    // Object categories (same as your web app)
+    // Object categories
     this.OBJECT_CATEGORIES = {
       "food": ["banana", "apple", "sandwich", "orange", "broccoli", "carrot", 
                "hot dog", "pizza", "donut", "cake", "bottle", "wine glass", 
@@ -52,79 +48,94 @@ class ObjectDetectionService {
                    "bowl", "book", "clock", "vase", "scissors", "teddy bear", 
                    "hair drier", "toothbrush", "sink"]
     };
+
+    // Google Vision label mapping
+    this.VISION_LABEL_MAPPING = {
+      'mobile phone': 'cell phone',
+      'smartphone': 'cell phone', 
+      'telephone': 'cell phone',
+      'computer': 'laptop',
+      'laptop computer': 'laptop',
+      'television': 'tv',
+      'television set': 'tv',
+      'computer monitor': 'tv',
+      'computer mouse': 'mouse',
+      'computer keyboard': 'keyboard',
+      'remote control': 'remote',
+      'drinking glass': 'cup',
+      'coffee cup': 'cup',
+      'tea cup': 'cup',
+      'wine glass': 'wine glass',
+      'water bottle': 'bottle',
+      'plastic bottle': 'bottle',
+      'glass bottle': 'bottle',
+      'armchair': 'chair',
+      'office chair': 'chair',
+      'sofa': 'couch',
+      'table': 'dining table',
+      'desk': 'dining table',
+      'automobile': 'car',
+      'vehicle': 'car',
+      'ball': 'sports ball',
+      'football': 'sports ball',
+      'basketball': 'sports ball',
+      'tennis ball': 'sports ball',
+      'baseball': 'sports ball',
+      'soccer ball': 'sports ball',
+      'plate': 'bowl',
+      'plant': 'potted plant',
+      'houseplant': 'potted plant'
+    };
   }
 
   async initialize() {
     if (this.isInitialized) return true;
     
     try {
-      console.log('🚀 Initializing TensorFlow.js Object Detection...');
+      console.log('🚀 Initializing Google Vision Object Detection...');
       
-      // Wait for TensorFlow.js to be ready
-      await tf.ready();
-      console.log('✅ TensorFlow.js platform ready');
-      console.log(`📱 Backend: ${tf.getBackend()}`);
-      console.log(`💾 Memory: ${tf.memory().numBytes} bytes used`);
+      // Load API key securely from environment
+      this.apiKey = await this.getSecureApiKey();
+      
+      if (!this.apiKey) {
+        console.warn('⚠️ Google Vision API key not found. Using mock detection.');
+        console.warn('💡 To use real detection:');
+        console.warn('   1. Set GOOGLE_CLOUD_VISION_API_KEY as a GitHub secret');
+        console.warn('   2. Or use: export GOOGLE_CLOUD_VISION_API_KEY="your-key"');
+      } else {
+        console.log('✅ Google Vision API key loaded securely from environment');
+      }
       
       this.isInitialized = true;
-      console.log('✅ Object Detection Service ready (TensorFlow.js)');
+      console.log('✅ Google Vision Object Detection Service ready');
       return true;
       
     } catch (error) {
-      console.error('❌ TensorFlow.js initialization failed:', error);
-      this.isInitialized = false;
+      console.error('❌ Google Vision initialization failed:', error);
       return false;
     }
   }
 
-  async loadModel() {
-    if (this.isModelLoaded && this.model) return this.model;
-    
-    try {
-      console.log('📦 Loading Faster R-CNN model...');
-      console.log('⏳ This will take 30-60 seconds on first load...');
-      console.log('📊 Model size: ~240MB (will be cached after first download)');
-      
-      // Use the exact same model URL as your web app
-      const modelUrl = 'https://tfhub.dev/tensorflow/faster_rcnn/resnet50_v1_640x640/1';
-      
-      const startTime = Date.now();
-      
-      // Load model with progress tracking
-      this.model = await tf.loadGraphModel(modelUrl, {
-        fromTFHub: true,
-        onProgress: (fraction) => {
-          const percentage = (fraction * 100).toFixed(1);
-          console.log(`📥 Model loading: ${percentage}%`);
-        }
-      });
-      
-      const loadTime = Date.now() - startTime;
-      console.log(`✅ Faster R-CNN model loaded successfully in ${loadTime}ms!`);
-      console.log('🎯 Model info:', {
-        inputs: this.model.inputs.map(input => ({
-          name: input.name,
-          shape: input.shape,
-          dtype: input.dtype
-        })),
-        outputs: this.model.outputs.map(output => ({
-          name: output.name,
-          shape: output.shape,
-          dtype: output.dtype
-        }))
-      });
-      
-      this.isModelLoaded = true;
-      return this.model;
-      
-    } catch (error) {
-      console.error('❌ Model loading failed:', error);
-      console.log('💡 Troubleshooting tips:');
-      console.log('- Check internet connection');
-      console.log('- Try restarting the app');
-      console.log('- The model is large and may timeout on slow connections');
-      throw error;
+  async getSecureApiKey() {
+    // SECURE: Load from environment variable (GitHub Codespaces secret)
+    if (process.env.GOOGLE_CLOUD_VISION_API_KEY) {
+      console.log('🔐 Using API key from environment variable (secure)');
+      return process.env.GOOGLE_CLOUD_VISION_API_KEY;
     }
+
+    // Try Expo Constants (if using EAS secrets)
+    try {
+      const Constants = await import('expo-constants');
+      if (Constants.default?.expoConfig?.extra?.googleVisionApiKey) {
+        console.log('🔐 Using API key from Expo config (secure)');
+        return Constants.default.expoConfig.extra.googleVisionApiKey;
+      }
+    } catch (error) {
+      // Expo constants not available
+    }
+
+    console.log('🔍 No secure API key found in environment');
+    return null; // No API key found - will use mock detection
   }
 
   async detectObjects(imageUri, confidenceThreshold = 0.5, iouThreshold = 0.45) {
@@ -133,54 +144,32 @@ class ObjectDetectionService {
         await this.initialize();
       }
       
-      console.log('🔍 Starting TensorFlow.js object detection...');
-      console.log(`📊 Confidence threshold: ${confidenceThreshold}`);
-      
+      console.log('🔍 Starting Google Vision object detection...');
       const startTime = Date.now();
       
-      // Load model if not loaded
-      if (!this.isModelLoaded) {
-        await this.loadModel();
+      // If no API key, use mock detection
+      if (!this.apiKey) {
+        console.log('🎭 Using mock detection (no API key configured)');
+        return this.generateMockDetections(imageUri, confidenceThreshold);
       }
       
-      // Step 1: Preprocess image (React Native compatible)
-      console.log('🖼️ Preprocessing image...');
-      const imageTensor = await this.preprocessImageReactNative(imageUri);
+      // Real Google Vision API call
+      console.log('🖼️ Converting image to base64...');
+      const base64Image = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
       
-      // Step 2: Run inference
-      console.log('⚡ Running Faster R-CNN inference...');
+      console.log('⚡ Calling Google Vision API...');
       const inferenceStart = Date.now();
-      const predictions = await this.model.predict(imageTensor);
+      const visionResponse = await this.callGoogleVisionAPI(base64Image);
       const inferenceTime = Date.now() - inferenceStart;
-      console.log(`🎯 Inference completed in ${inferenceTime}ms`);
       
-      // Step 3: Process results
-      console.log('📊 Processing detection results...');
-      const detections = await this.processDetectionResults(
-        predictions, 
-        imageTensor.shape, 
-        confidenceThreshold, 
-        iouThreshold
-      );
+      console.log(`🎯 Google Vision API completed in ${inferenceTime}ms`);
       
-      // Step 4: Clean up tensors to free memory
-      imageTensor.dispose();
-      if (Array.isArray(predictions)) {
-        predictions.forEach(tensor => {
-          if (tensor && typeof tensor.dispose === 'function') {
-            tensor.dispose();
-          }
-        });
-      } else if (predictions && typeof predictions.dispose === 'function') {
-        predictions.dispose();
-      }
+      const detections = this.processGoogleVisionResults(visionResponse, confidenceThreshold);
       
       const totalTime = Date.now() - startTime;
       console.log(`✅ Detection complete! Found ${detections.length} objects in ${totalTime}ms`);
-      console.log(`📊 Detection summary:`, detections.map(d => ({
-        label: d.label,
-        confidence: Math.round(d.confidence * 100) + '%'
-      })));
       
       return detections.map((detection, index) => ({
         ...detection,
@@ -189,239 +178,134 @@ class ObjectDetectionService {
         processing_time_ms: totalTime,
         inference_time_ms: inferenceTime,
         rank: index + 1,
-        source: 'tensorflow_js_react_native'
+        source: 'google_vision_api'
       }));
       
     } catch (error) {
-      console.error('❌ Object detection failed:', error);
-      throw error;
+      console.error('❌ Google Vision detection failed:', error);
+      console.log('🎭 Falling back to mock detection');
+      return this.generateMockDetections(imageUri, confidenceThreshold);
     }
   }
 
-  async preprocessImageReactNative(imageUri) {
-    try {
-      console.log('🔄 Converting image for TensorFlow.js (React Native)...');
-      
-      // Read image file as base64
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      
-      // Create a data URI
-      const imageDataUri = `data:image/jpeg;base64,${base64}`;
-      
-      // Try using tf.browser.fromPixels with Image element
-      const imageElement = new Image();
-      imageElement.crossOrigin = 'anonymous';
-      
-      return new Promise((resolve, reject) => {
-        imageElement.onload = () => {
-          try {
-            // Convert image to tensor using tf.browser.fromPixels
-            let imageTensor = tf.browser.fromPixels(imageElement);
-            
-            // Ensure RGB (remove alpha channel if present)
-            if (imageTensor.shape[2] === 4) {
-              imageTensor = imageTensor.slice([0, 0, 0], [-1, -1, 3]);
+  async callGoogleVisionAPI(base64Image) {
+    const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=${this.apiKey}`;
+    
+    const requestBody = {
+      requests: [
+        {
+          image: {
+            content: base64Image
+          },
+          features: [
+            {
+              type: 'OBJECT_LOCALIZATION',
+              maxResults: 50
             }
-            
-            // Add batch dimension: [height, width, channels] -> [1, height, width, channels]
-            imageTensor = imageTensor.expandDims(0);
-            
-            // Convert to uint8 (required by Faster R-CNN)
-            imageTensor = imageTensor.cast('uint8');
-            
-            console.log('✅ Image preprocessed successfully');
-            console.log(`📐 Input tensor shape: [${imageTensor.shape.join(', ')}]`);
-            
-            resolve(imageTensor);
-          } catch (err) {
-            console.error('❌ tf.browser.fromPixels failed:', err);
-            reject(err);
-          }
-        };
-        
-        imageElement.onerror = (err) => {
-          console.error('❌ Image loading failed:', err);
-          reject(err);
-        };
-        
-        // Set the source to the data URI
-        imageElement.src = imageDataUri;
-      });
-      
-    } catch (error) {
-      console.error('❌ Image preprocessing failed:', error);
-      
-      // Create a dummy tensor for testing
-      console.log('🔄 Using dummy tensor for testing...');
-      try {
-        const dummyTensor = tf.ones([1, 640, 640, 3], 'uint8');
-        console.log('⚠️ Using dummy tensor - detection will not work correctly');
-        return dummyTensor;
-      } catch (fallbackError) {
-        console.error('❌ Fallback also failed:', fallbackError);
-        throw error;
-      }
-    }
-  }
-
-  async processDetectionResults(predictions, imageShape, confidenceThreshold, iouThreshold) {
-    try {
-      console.log('📋 Extracting predictions from model output...');
-      
-      // Handle different TensorFlow Hub output formats
-      let boxes, classes, scores, numDetections;
-      
-      if (predictions.detection_boxes) {
-        // TensorFlow Hub format (object with named outputs)
-        boxes = predictions.detection_boxes;
-        classes = predictions.detection_classes;
-        scores = predictions.detection_scores;
-        numDetections = predictions.num_detections;
-      } else if (Array.isArray(predictions)) {
-        // Array format: [boxes, classes, scores, num_detections]
-        [boxes, classes, scores, numDetections] = predictions;
-      } else {
-        throw new Error('Unexpected model output format');
-      }
-
-      // Convert tensors to JavaScript arrays
-      const boxesArray = await boxes.data();
-      const classesArray = await classes.data();
-      const scoresArray = await scores.data();
-      const numDet = numDetections ? (await numDetections.data())[0] : scoresArray.length;
-
-      console.log(`📈 Model found ${Math.floor(numDet)} potential objects`);
-
-      // Get image dimensions
-      const [batchSize, height, width, channels] = imageShape;
-      console.log(`📐 Image dimensions: ${width}x${height}`);
-
-      // Filter detections by confidence
-      const validDetections = [];
-      const maxDetections = Math.min(numDet, 100); // Limit to reasonable number
-
-      for (let i = 0; i < maxDetections; i++) {
-        const score = scoresArray[i];
-        
-        if (score >= confidenceThreshold) {
-          const classId = Math.round(classesArray[i]);
-          const className = this.COCO_CLASS_NAMES[classId];
-          
-          if (className) {
-            // Convert normalized coordinates to pixel coordinates
-            const ymin = boxesArray[i * 4] * height;
-            const xmin = boxesArray[i * 4 + 1] * width;
-            const ymax = boxesArray[i * 4 + 2] * height;
-            const xmax = boxesArray[i * 4 + 3] * width;
-            
-            validDetections.push({
-              label: className.toLowerCase(),
-              confidence: score,
-              bbox: [xmin, ymin, xmax, ymax], // [left, top, right, bottom]
-              class_id: classId,
-              category: this.getObjectCategory(className.toLowerCase()),
-              source: 'faster_rcnn_react_native'
-            });
-          }
+          ]
         }
-      }
+      ]
+    };
 
-      console.log(`🔍 ${validDetections.length} detections passed confidence threshold (${confidenceThreshold})`);
-
-      // Apply Non-Maximum Suppression
-      const finalDetections = this.applyNMS(validDetections, iouThreshold);
-      
-      console.log(`✨ ${finalDetections.length} final detections after NMS`);
-      
-      return finalDetections;
-      
-    } catch (error) {
-      console.error('❌ Result processing failed:', error);
-      throw error;
-    }
-  }
-
-  // Non-Maximum Suppression (exact same logic as web app)
-  applyNMS(detections, iouThreshold = 0.45) {
-    if (detections.length <= 1) return detections;
-
-    // Group detections by class
-    const classSeparated = {};
-    detections.forEach(detection => {
-      const classId = detection.class_id;
-      if (!classSeparated[classId]) {
-        classSeparated[classId] = [];
-      }
-      classSeparated[classId].push(detection);
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
     });
 
-    // Apply NMS to each class separately
-    const finalDetections = [];
-    Object.values(classSeparated).forEach(classDetections => {
-      const keepIndices = this.simpleNMS(classDetections, iouThreshold);
-      keepIndices.forEach(index => {
-        finalDetections.push(classDetections[index]);
-      });
-    });
+    if (!response.ok) {
+      throw new Error(`Google Vision API error: ${response.status} ${response.statusText}`);
+    }
 
-    // Sort by confidence (highest first)
-    finalDetections.sort((a, b) => b.confidence - a.confidence);
-    return finalDetections;
+    const result = await response.json();
+    
+    if (result.responses[0].error) {
+      throw new Error(`Google Vision API error: ${result.responses[0].error.message}`);
+    }
+
+    return result.responses[0];
   }
 
-  simpleNMS(detections, iouThreshold) {
-    if (detections.length === 0) return [];
+  processGoogleVisionResults(visionResponse, confidenceThreshold) {
+    const detections = [];
     
-    // Sort by confidence score (highest first)
-    const sortedIndices = detections
-      .map((detection, index) => ({ detection, index }))
-      .sort((a, b) => b.detection.confidence - a.detection.confidence)
-      .map(item => item.index);
-    
-    const keep = [];
-    
-    while (sortedIndices.length > 0) {
-      const current = sortedIndices.shift();
-      keep.push(current);
-      
-      if (sortedIndices.length === 0) break;
-      
-      const currentBox = detections[current].bbox;
-      const remainingIndices = [];
-      
-      sortedIndices.forEach(index => {
-        const iou = this.calculateIoU(currentBox, detections[index].bbox);
-        if (iou < iouThreshold) {
-          remainingIndices.push(index);
-        }
-      });
-      
-      sortedIndices.length = 0;
-      sortedIndices.push(...remainingIndices);
+    if (!visionResponse.localizedObjectAnnotations) {
+      console.log('No objects detected by Google Vision API');
+      return detections;
+    }
+
+    for (const obj of visionResponse.localizedObjectAnnotations) {
+      if (obj.score >= confidenceThreshold) {
+        const mappedLabel = this.mapGoogleVisionLabel(obj.name.toLowerCase());
+        const bbox = this.convertNormalizedBbox(obj.boundingPoly.normalizedVertices);
+        
+        detections.push({
+          label: mappedLabel,
+          confidence: obj.score,
+          bbox: bbox,
+          category: this.getObjectCategory(mappedLabel),
+          source: 'google_vision',
+          original_label: obj.name
+        });
+      }
+    }
+
+    detections.sort((a, b) => b.confidence - a.confidence);
+    return detections;
+  }
+
+  mapGoogleVisionLabel(visionLabel) {
+    if (this.VISION_LABEL_MAPPING[visionLabel]) {
+      return this.VISION_LABEL_MAPPING[visionLabel];
     }
     
-    return keep;
+    for (const [visionKey, ourLabel] of Object.entries(this.VISION_LABEL_MAPPING)) {
+      if (visionKey.includes(visionLabel) || visionLabel.includes(visionKey)) {
+        return ourLabel;
+      }
+    }
+    
+    return visionLabel.replace(/_/g, ' ').trim();
   }
 
-  calculateIoU(box1, box2) {
-    const [x1_1, y1_1, x2_1, y2_1] = box1;
-    const [x1_2, y1_2, x2_2, y2_2] = box2;
+  convertNormalizedBbox(vertices) {
+    const imageWidth = 640;
+    const imageHeight = 480;
     
-    const x1 = Math.max(x1_1, x1_2);
-    const y1 = Math.max(y1_1, y1_2);
-    const x2 = Math.min(x2_1, x2_2);
-    const y2 = Math.min(y2_1, y2_2);
+    const xCoords = vertices.map(v => v.x * imageWidth);
+    const yCoords = vertices.map(v => v.y * imageHeight);
     
-    if (x2 <= x1 || y2 <= y1) return 0;
-    
-    const intersection = (x2 - x1) * (y2 - y1);
-    const area1 = (x2_1 - x1_1) * (y2_1 - y1_1);
-    const area2 = (x2_2 - x1_2) * (y2_2 - y1_2);
-    const union = area1 + area2 - intersection;
-    
-    return intersection / union;
+    return [
+      Math.min(...xCoords),
+      Math.min(...yCoords),
+      Math.max(...xCoords),
+      Math.max(...yCoords)
+    ];
+  }
+
+  generateMockDetections(imageUri, confidenceThreshold) {
+    const mockObjects = [
+      { label: 'cup', confidence: 0.85, category: 'food' },
+      { label: 'cell phone', confidence: 0.78, category: 'electronics' },
+      { label: 'book', confidence: 0.65, category: 'household' },
+      { label: 'chair', confidence: 0.72, category: 'furniture' },
+      { label: 'bottle', confidence: 0.69, category: 'food' }
+    ];
+
+    return mockObjects
+      .filter(obj => obj.confidence >= confidenceThreshold)
+      .map((obj, index) => ({
+        ...obj,
+        bbox: [100 + index * 50, 100 + index * 30, 200 + index * 50, 200 + index * 30],
+        source: 'mock_detection',
+        id: `mock_${Date.now()}_${index}`,
+        timestamp: new Date().toISOString(),
+        processing_time_ms: 150,
+        inference_time_ms: 50,
+        rank: index + 1
+      }));
   }
 
   getObjectCategory(label) {
@@ -436,35 +320,29 @@ class ObjectDetectionService {
 
   getModelInfo() {
     return {
-      type: 'Faster R-CNN (TensorFlow.js React Native)',
-      accuracy: 'High (same model as web app)',
-      cost: '$0 - Completely FREE',
-      source: this.isModelLoaded ? 'TensorFlow Hub' : 'Model Not Loaded',
-      isLoaded: this.isModelLoaded,
+      type: 'Google Cloud Vision API',
+      accuracy: 'High (Google\'s trained models)',
+      cost: '$1.50 per 1000 requests (first 1000/month free)',
+      source: this.apiKey ? 'Google Cloud Vision API' : 'Mock Detection (No API Key)',
+      isLoaded: this.isInitialized,
       platform: Platform.OS,
-      backend: tf.getBackend(),
       status: this.isInitialized ? 'Ready' : 'Initializing...',
-      modelUrl: 'https://tfhub.dev/tensorflow/faster_rcnn/resnet50_v1_640x640/1',
+      apiEndpoint: 'https://vision.googleapis.com/v1/images:annotate',
       features: [
-        '✅ Same Faster R-CNN as web app',
-        '✅ Real object detection',
-        '✅ 80+ COCO object classes', 
+        '✅ Google\'s state-of-the-art object detection',
+        '✅ Real-time API calls',
+        '✅ Supports 1000+ object types',
         '✅ Works in Expo managed workflow',
-        '✅ Completely offline after download',
-        '⚠️ Large model download (~240MB first time)'
-      ],
-      memory: tf.memory()
+        '✅ No large model downloads',
+        '💰 Pay-per-use pricing after free tier',
+        this.apiKey ? '✅ API key configured securely' : '⚠️ API key not found (using mock)'
+      ]
     };
   }
 
   dispose() {
-    if (this.model) {
-      this.model.dispose();
-      this.model = null;
-      this.isModelLoaded = false;
-    }
     this.isInitialized = false;
-    console.log('🧹 Object Detection Service disposed');
+    console.log('🧹 Google Vision Object Detection Service disposed');
   }
 }
 

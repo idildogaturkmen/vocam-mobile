@@ -22,7 +22,7 @@ import DatabaseService from '../../src/services/DatabaseService';
 const { width } = Dimensions.get('window');
 
 // TypeScript Interfaces
-interface VocabularyWord {
+export interface VocabularyWord {
   id: number;
   word_original: string;
   word_translated: string;

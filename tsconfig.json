@@ -24,10 +24,16 @@
         "./*"
       ],
       "@/components/*": [
-        "./components/*"
+        "./src/components/*"
       ],
       "@/services/*": [
         "./src/services/*"
+      ],
+      "@/types/*": [
+        "./src/types/*"
+      ],
+      "@/hooks/*": [
+        "./src/hooks/*"
       ]
     }
   },
@@ -36,7 +42,8 @@
     "**/*.tsx",
     "**/*.js",
     "**/*.jsx",
-    "types/**/*.ts"
+    "src/**/*.ts",
+    "src/**/*.tsx"
   ],
   "exclude": [
     "node_modules"

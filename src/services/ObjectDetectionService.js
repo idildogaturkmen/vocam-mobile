@@ -4,53 +4,20 @@ import { Platform } from 'react-native';
 class ObjectDetectionService {
   constructor() {
     this.isInitialized = false;
-    this.apiKey = null; // Will be loaded securely from environment
+    this.apiKey = null;
     
-    // Same COCO class names from your TensorFlow implementation
-    this.COCO_CLASS_NAMES = {
-      1: 'person', 2: 'bicycle', 3: 'car', 4: 'motorcycle', 5: 'airplane',
-      6: 'bus', 7: 'train', 8: 'truck', 9: 'boat', 10: 'traffic light',
-      11: 'fire hydrant', 13: 'stop sign', 14: 'parking meter', 15: 'bench',
-      16: 'bird', 17: 'cat', 18: 'dog', 19: 'horse', 20: 'sheep',
-      21: 'cow', 22: 'elephant', 23: 'bear', 24: 'zebra', 25: 'giraffe',
-      27: 'backpack', 28: 'umbrella', 31: 'handbag', 32: 'tie', 33: 'suitcase',
-      34: 'frisbee', 35: 'skis', 36: 'snowboard', 37: 'sports ball',
-      38: 'kite', 39: 'baseball bat', 40: 'baseball glove', 41: 'skateboard',
-      42: 'surfboard', 43: 'tennis racket', 44: 'bottle', 46: 'wine glass',
-      47: 'cup', 48: 'fork', 49: 'knife', 50: 'spoon', 51: 'bowl',
-      52: 'banana', 53: 'apple', 54: 'sandwich', 55: 'orange', 56: 'broccoli',
-      57: 'carrot', 58: 'hot dog', 59: 'pizza', 60: 'donut', 61: 'cake',
-      62: 'chair', 63: 'couch', 64: 'potted plant', 65: 'bed', 67: 'dining table',
-      70: 'toilet', 72: 'tv', 73: 'laptop', 74: 'mouse', 75: 'remote',
-      76: 'keyboard', 77: 'cell phone', 78: 'microwave', 79: 'oven',
-      80: 'toaster', 81: 'sink', 82: 'refrigerator', 84: 'book', 85: 'clock',
-      86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'
-    };
-
-    // Object categories
     this.OBJECT_CATEGORIES = {
-      "food": ["banana", "apple", "sandwich", "orange", "broccoli", "carrot", 
-               "hot dog", "pizza", "donut", "cake", "bottle", "wine glass", 
-               "cup", "fork", "knife", "spoon", "bowl"],
-      "animals": ["bird", "cat", "dog", "horse", "sheep", "cow", "elephant", 
-                  "bear", "zebra", "giraffe"],
-      "vehicles": ["bicycle", "car", "motorcycle", "airplane", "bus", "train", 
-                   "truck", "boat"],
-      "electronics": ["tv", "laptop", "mouse", "remote", "keyboard", "cell phone", 
-                     "microwave", "oven", "toaster", "refrigerator"],
-      "furniture": ["chair", "couch", "potted plant", "bed", "dining table", 
-                    "toilet", "bench"],
-      "personal": ["backpack", "umbrella", "handbag", "tie", "suitcase"],
-      "sports": ["frisbee", "skis", "snowboard", "sports ball", "kite", 
-                "baseball bat", "baseball glove", "skateboard", "surfboard", 
-                "tennis racket"],
-      "household": ["bottle", "wine glass", "cup", "fork", "knife", "spoon", 
-                   "bowl", "book", "clock", "vase", "scissors", "teddy bear", 
-                   "hair drier", "toothbrush", "sink"]
+      "food": ["apple", "banana", "orange", "pizza", "burger", "cake", "coffee", "wine", "cup", "bowl", "bottle", "sandwich", "bread"],
+      "electronics": ["laptop", "cell phone", "tv", "keyboard", "mouse", "tablet", "camera", "headphones", "speaker"],
+      "furniture": ["chair", "couch", "table", "bed", "desk", "bookshelf"],
+      "clothing": ["shirt", "pants", "shoes", "hat", "jacket", "dress", "tie"],
+      "transportation": ["car", "bus", "bicycle", "motorcycle", "train", "airplane", "boat"],
+      "animals": ["dog", "cat", "bird", "horse", "cow", "sheep", "elephant", "lion"],
+      "household": ["book", "pen", "scissors", "clock", "lamp", "mirror", "vase", "remote"],
+      "sports": ["ball", "tennis racket", "bicycle", "skateboard", "football", "basketball", "baseball"]
     };
 
-    // Google Vision label mapping
-    this.VISION_LABEL_MAPPING = {
+    this.GOOGLE_VISION_LABEL_MAPPING = {
       'mobile phone': 'cell phone',
       'smartphone': 'cell phone', 
       'telephone': 'cell phone',
@@ -98,21 +65,18 @@ class ObjectDetectionService {
       this.apiKey = await this.getSecureApiKey();
       
       if (!this.apiKey) {
-        console.warn('⚠️ Google Vision API key not found. Using mock detection.');
-        console.warn('💡 To use real detection:');
-        console.warn('   1. Set GOOGLE_CLOUD_VISION_API_KEY as a GitHub secret');
-        console.warn('   2. Or use: export GOOGLE_CLOUD_VISION_API_KEY="your-key"');
-      } else {
-        console.log('✅ Google Vision API key loaded securely from environment');
+        console.error('❌ Google Vision API key not found!');
+        throw new Error('Google Vision API key is required. Please set GOOGLE_CLOUD_VISION_API_KEY in your environment.');
       }
       
+      console.log('✅ Google Vision API key loaded securely from environment');
       this.isInitialized = true;
       console.log('✅ Google Vision Object Detection Service ready');
       return true;
       
     } catch (error) {
       console.error('❌ Google Vision initialization failed:', error);
-      return false;
+      throw error; // Don't catch - let the app handle the error
     }
   }
 
@@ -135,7 +99,7 @@ class ObjectDetectionService {
     }
 
     console.log('🔍 No secure API key found in environment');
-    return null; // No API key found - will use mock detection
+    return null; // No API key found
   }
 
   async detectObjects(imageUri, confidenceThreshold = 0.5, iouThreshold = 0.45) {
@@ -147,10 +111,9 @@ class ObjectDetectionService {
       console.log('🔍 Starting Google Vision object detection...');
       const startTime = Date.now();
       
-      // If no API key, use mock detection
+      // Require API key - no fallback
       if (!this.apiKey) {
-        console.log('🎭 Using mock detection (no API key configured)');
-        return this.generateMockDetections(imageUri, confidenceThreshold);
+        throw new Error('Google Vision API key not configured. Please check your environment variables.');
       }
       
       // Real Google Vision API call
@@ -183,8 +146,7 @@ class ObjectDetectionService {
       
     } catch (error) {
       console.error('❌ Google Vision detection failed:', error);
-      console.log('🎭 Falling back to mock detection');
-      return this.generateMockDetections(imageUri, confidenceThreshold);
+      throw error; // Don't provide fallback - let the app handle the error
     }
   }
 
@@ -216,7 +178,8 @@ class ObjectDetectionService {
     });
 
     if (!response.ok) {
-      throw new Error(`Google Vision API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Google Vision API error: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
     const result = await response.json();
@@ -225,54 +188,42 @@ class ObjectDetectionService {
       throw new Error(`Google Vision API error: ${result.responses[0].error.message}`);
     }
 
-    return result.responses[0];
+    return result;
   }
 
   processGoogleVisionResults(visionResponse, confidenceThreshold) {
-    const detections = [];
+    const annotations = visionResponse.responses[0].localizedObjectAnnotations || [];
     
-    if (!visionResponse.localizedObjectAnnotations) {
-      console.log('No objects detected by Google Vision API');
-      return detections;
-    }
-
-    for (const obj of visionResponse.localizedObjectAnnotations) {
-      if (obj.score >= confidenceThreshold) {
-        const mappedLabel = this.mapGoogleVisionLabel(obj.name.toLowerCase());
-        const bbox = this.convertNormalizedBbox(obj.boundingPoly.normalizedVertices);
+    return annotations
+      .filter(annotation => annotation.score >= confidenceThreshold)
+      .map(annotation => {
+        const label = this.normalizeGoogleVisionLabel(annotation.name);
+        const category = this.getObjectCategory(label);
         
-        detections.push({
-          label: mappedLabel,
-          confidence: obj.score,
+        // Convert normalized vertices to bbox
+        const bbox = this.convertVertexArrayToBbox(annotation.boundingPoly.normalizedVertices);
+        
+        return {
+          label: label,
+          confidence: annotation.score,
           bbox: bbox,
-          category: this.getObjectCategory(mappedLabel),
-          source: 'google_vision',
-          original_label: obj.name
-        });
-      }
-    }
-
-    detections.sort((a, b) => b.confidence - a.confidence);
-    return detections;
+          category: category,
+          raw_label: annotation.name,
+          source: 'google_vision'
+        };
+      })
+      .sort((a, b) => b.confidence - a.confidence);
   }
 
-  mapGoogleVisionLabel(visionLabel) {
-    if (this.VISION_LABEL_MAPPING[visionLabel]) {
-      return this.VISION_LABEL_MAPPING[visionLabel];
-    }
-    
-    for (const [visionKey, ourLabel] of Object.entries(this.VISION_LABEL_MAPPING)) {
-      if (visionKey.includes(visionLabel) || visionLabel.includes(visionKey)) {
-        return ourLabel;
-      }
-    }
-    
-    return visionLabel.replace(/_/g, ' ').trim();
+  normalizeGoogleVisionLabel(googleLabel) {
+    const lowerLabel = googleLabel.toLowerCase();
+    return this.GOOGLE_VISION_LABEL_MAPPING[lowerLabel] || lowerLabel;
   }
 
-  convertNormalizedBbox(vertices) {
-    const imageWidth = 640;
-    const imageHeight = 480;
+  convertVertexArrayToBbox(vertices, imageWidth = 1, imageHeight = 1) {
+    if (!vertices || vertices.length === 0) {
+      return [0, 0, 1, 1];
+    }
     
     const xCoords = vertices.map(v => v.x * imageWidth);
     const yCoords = vertices.map(v => v.y * imageHeight);
@@ -283,29 +234,6 @@ class ObjectDetectionService {
       Math.max(...xCoords),
       Math.max(...yCoords)
     ];
-  }
-
-  generateMockDetections(imageUri, confidenceThreshold) {
-    const mockObjects = [
-      { label: 'cup', confidence: 0.85, category: 'food' },
-      { label: 'cell phone', confidence: 0.78, category: 'electronics' },
-      { label: 'book', confidence: 0.65, category: 'household' },
-      { label: 'chair', confidence: 0.72, category: 'furniture' },
-      { label: 'bottle', confidence: 0.69, category: 'food' }
-    ];
-
-    return mockObjects
-      .filter(obj => obj.confidence >= confidenceThreshold)
-      .map((obj, index) => ({
-        ...obj,
-        bbox: [100 + index * 50, 100 + index * 30, 200 + index * 50, 200 + index * 30],
-        source: 'mock_detection',
-        id: `mock_${Date.now()}_${index}`,
-        timestamp: new Date().toISOString(),
-        processing_time_ms: 150,
-        inference_time_ms: 50,
-        rank: index + 1
-      }));
   }
 
   getObjectCategory(label) {
@@ -323,7 +251,7 @@ class ObjectDetectionService {
       type: 'Google Cloud Vision API',
       accuracy: 'High (Google\'s trained models)',
       cost: '$1.50 per 1000 requests (first 1000/month free)',
-      source: this.apiKey ? 'Google Cloud Vision API' : 'Mock Detection (No API Key)',
+      source: this.apiKey ? 'Google Cloud Vision API' : 'API Key Missing',
       isLoaded: this.isInitialized,
       platform: Platform.OS,
       status: this.isInitialized ? 'Ready' : 'Initializing...',
@@ -335,7 +263,7 @@ class ObjectDetectionService {
         '✅ Works in Expo managed workflow',
         '✅ No large model downloads',
         '💰 Pay-per-use pricing after free tier',
-        this.apiKey ? '✅ API key configured securely' : '⚠️ API key not found (using mock)'
+        this.apiKey ? '✅ API key configured securely' : '❌ API key missing - detection will fail'
       ]
     };
   }

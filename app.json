@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "VocAm Learning",
-    "slug": "vocam-learning-app",
+    "name": "Vocam",
+    "slug": "vocam",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -26,6 +26,12 @@
     "plugins": [
       "expo-router",
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1eb973cc-affd-4289-ab40-dc2ea91b13b9"
+      }
+    }
   }
 }

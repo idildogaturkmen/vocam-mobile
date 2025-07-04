@@ -6,6 +6,9 @@ import {
   StyleSheet,
   ActivityIndicator
 } from 'react-native';
+import Entypo from '@expo/vector-icons/Entypo';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import EvilIcons from '@expo/vector-icons/EvilIcons';
 
 export default function CameraControls({
   facing,
@@ -29,7 +32,7 @@ export default function CameraControls({
           style={styles.topBarButton}
           onPress={onLanguagePress}
         >
-          <Text style={styles.topBarIcon}>🌍</Text>
+          <Text style={styles.topBarIcon}><Entypo name="language" size={25} color="white" /></Text>
           <Text style={styles.topBarText}>{languageName}</Text>
         </TouchableOpacity>
         
@@ -59,7 +62,7 @@ export default function CameraControls({
       <View style={styles.bottomControls}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.button} onPress={onFlipCamera}>
-            <Text style={styles.buttonIcon}>🔄</Text>
+            <Text style={styles.buttonIcon}><Ionicons name="camera-reverse-outline" size={30} color="white" /></Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -70,14 +73,14 @@ export default function CameraControls({
             onPress={onTakePicture}
             disabled={modelStatus !== 'ready'}
           >
-            <Text style={styles.captureIcon}>📷</Text>
+            <Text style={styles.captureIcon}><Entypo name="camera" size={40} color="black" /></Text>
             {modelStatus === 'loading' && (
               <ActivityIndicator size="small" color="white" style={styles.captureLoader} />
             )}
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.button} onPress={onManualInput}>
-            <Text style={styles.buttonIcon}>✏️</Text>
+            <Text style={styles.buttonIcon}><EvilIcons name="pencil" size={40} color="white" /></Text>
           </TouchableOpacity>
         </View>
         

@@ -51,7 +51,7 @@ export default function PhotoResult({
             style={styles.languageButton} 
             onPress={onLanguagePress}
           >
-            <Text style={styles.languageButtonText}>🌍 {languageName}</Text>
+            <Text style={styles.languageButtonText}>{languageName}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -85,7 +85,7 @@ export default function PhotoResult({
           {isProcessing && (
             <View style={styles.processingOverlay}>
               <ActivityIndicator size="large" color="white" />
-              <Text style={styles.processingText}>🤖 Analyzing image...</Text>
+              <Text style={styles.processingText}>Analyzing image...</Text>
             </View>
           )}
 

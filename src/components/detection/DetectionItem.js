@@ -5,6 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet
 } from 'react-native';
+import AntDesign from '@expo/vector-icons/AntDesign';
+import Feather from '@expo/vector-icons/Feather';
 
 export default function DetectionItem({
   detection,
@@ -35,7 +37,7 @@ export default function DetectionItem({
             style={styles.audioButton}
             onPress={() => onSpeakWord(detection.translation || detection.label, targetLanguage)}
           >
-            <Text style={styles.audioIcon}>🔊</Text>
+            <Text style={styles.audioIcon}><AntDesign name="sound" size={24} color="black" /></Text>
           </TouchableOpacity>
         </View>
         
@@ -44,7 +46,7 @@ export default function DetectionItem({
           onPress={() => onToggleSelect(index)}
         >
           <Text style={styles.selectIcon}>
-            {isSelected ? "✅" : "⭕"}
+            {isSelected ? <AntDesign name="checkcircle" size={20} color="white" /> : <Feather name="circle" size={20} color="red" />}
           </Text>
           <Text style={[
             styles.selectButtonText,

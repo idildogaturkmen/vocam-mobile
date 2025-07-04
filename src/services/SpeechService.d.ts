@@ -4,6 +4,13 @@ declare class SpeechService {
   stop(): Promise<void>;
   checkAvailability(language: string): Promise<boolean>;
   speakQueue(textArray: string[], language?: string): Promise<void>;
+  getAudioStatus(): {
+    audioLibrary: string;
+    audioConfigured: boolean;
+    initialized: boolean;
+    voicesAvailable: number;
+    forceMode: boolean;
+  };
 }
 
 declare const speechService: SpeechService;

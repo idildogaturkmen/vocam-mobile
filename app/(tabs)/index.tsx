@@ -20,7 +20,7 @@ export default function IndexScreen() {
   // Fallback UI (users shouldn't see this due to redirect)
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>🚀 Loading VocAm...</Text>
+      <Text style={styles.text}>Loading Vocam...</Text>
     </View>
   );
 }

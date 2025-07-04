@@ -1,15 +1,12 @@
 declare interface ExampleSentence {
-  translated: string;
   english: string;
-}
-
-declare interface LanguageInfo {
-  code: string;
-  name: string;
+  translated: string;
+  source: string;
 }
 
 declare class TranslationService {
-  translateText(text: string, targetLanguage: string): Promise<string>;
+  initialize(): Promise<boolean>;
+  translateText(text: string, targetLanguage: string, sourceLanguage?: string): Promise<string>;
   getExampleSentence(word: string, targetLanguage: string): Promise<ExampleSentence>;
   getSupportedLanguages(): Record<string, string>;
 }

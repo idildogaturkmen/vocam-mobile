@@ -14,7 +14,23 @@ const BoundingBoxOverlay = ({ detections, imageWidth, imageHeight, containerWidt
   return (
     <View style={[styles.overlay, { width: containerWidth, height: containerHeight }]}>
       {detections.map((detection, index) => {
-        const [x1, y1, x2, y2] = detection.bbox;
+        // Handle both array format [x1,y1,x2,y2] and vertices format from Google Vision
+        let x1, y1, x2, y2;
+        
+        if (detection.vertices && Array.isArray(detection.vertices)) {
+          // Google Vision format with normalized vertices
+          const vertices = detection.vertices;
+          x1 = vertices[0].x || 0;
+          y1 = vertices[0].y || 0;
+          x2 = vertices[2].x || 1;
+          y2 = vertices[2].y || 1;
+        } else if (detection.bbox && Array.isArray(detection.bbox)) {
+          // Standard bbox format [x1,y1,x2,y2]
+          [x1, y1, x2, y2] = detection.bbox;
+        } else {
+          // Fallback
+          x1 = 0; y1 = 0; x2 = 1; y2 = 1;
+        }
         
         // Calculate box dimensions based on container size
         const boxLeft = x1 * containerWidth;

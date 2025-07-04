@@ -1,5 +1,8 @@
 import { Tabs } from 'expo-router';
 import { Text } from 'react-native';
+import Entypo from '@expo/vector-icons/Entypo';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 export default function TabLayout() {
   return (
@@ -27,7 +30,7 @@ export default function TabLayout() {
         options={{
           title: 'Camera',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}>📷</Text>
+            <Text style={{ color, fontSize: 20 }}><Entypo name="camera" size={24} color="black" /></Text>
           ),
         }}
       />
@@ -38,7 +41,7 @@ export default function TabLayout() {
         options={{
           title: 'Vocabulary',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}>📚</Text>
+            <Text style={{ color, fontSize: 20 }}><MaterialCommunityIcons name="bookshelf" size={24} color="black" /></Text>
           ),
         }}
       />
@@ -49,7 +52,7 @@ export default function TabLayout() {
         options={{
           title: 'Progress',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}>📊</Text>
+            <Text style={{ color, fontSize: 20 }}><Entypo name="bar-graph" size={24} color="black" /></Text>
           ),
         }}
       />
@@ -60,7 +63,7 @@ export default function TabLayout() {
         options={{
           title: 'Quiz',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}>🎮</Text>
+            <Text style={{ color, fontSize: 20 }}><Entypo name="game-controller" size={24} color="black" /></Text>
           ),
         }}
       />
@@ -71,7 +74,7 @@ export default function TabLayout() {
         options={{
           title: 'Practice',
           tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}>🗣️</Text>
+            <Text style={{ color, fontSize: 20 }}><FontAwesome name="microphone" size={24} color="black" /></Text>
           ),
         }}
       />

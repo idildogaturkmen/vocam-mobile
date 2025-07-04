@@ -1,3 +1,6 @@
+// Load environment variables
+require('dotenv').config();
+
 export default {
   expo: {
     name: "Vocam",
@@ -42,8 +45,9 @@ export default {
       eas: {
         projectId: "1eb973cc-affd-4289-ab40-dc2ea91b13b9"
       },
-      
-      googleVisionApiKey: process.env.GOOGLE_CLOUD_VISION_API_KEY || ""
+      // This will now work because it's JavaScript, not JSON
+      googleVisionApiKey: process.env.GOOGLE_CLOUD_VISION_API_KEY || "",
+      googleCloudApiKey: process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_CLOUD_VISION_API_KEY || ""
     }
   }
 };

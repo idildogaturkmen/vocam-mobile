@@ -11,7 +11,7 @@ npm install
 
 ### 2. Set up Google Vision API Key
 
-#### Option A: GitHub Codespaces (Recommended)
+#### Option A: GitHub Codespaces
 1. Go to your GitHub repository settings
 2. Navigate to Secrets and variables > Codespaces
 3. Add a new secret named `GOOGLE_CLOUD_VISION_API_KEY`

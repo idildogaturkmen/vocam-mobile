@@ -2,11 +2,11 @@ import { readUserData, writeUserData } from './crudOperations';
 import { createUser, login } from './login';
 import 'dotenv/config';
 
-async function testar() {
+async function test() {
     const email = process.env.TEST_EMAIL || '';
     const password = process.env.TEST_PASSWORD || '';
-    await createUser(email, password, 'testuser'); // cria um usuário de teste
-    const user = await login(email, password); // primeiro, autentica o usuário
+    await createUser(email, password, 'testuser'); // create a new user for testing
+    const user = await login(email, password); // log in the user
 
     await writeUserData({
         TableName: 'user_words',
@@ -17,9 +17,9 @@ async function testar() {
         TableName: 'user_words',
         Filters: [],
     });
-    console.log('Itens lidos:', items);
+    console.log('Items read', items);
 }
 
-testar().catch((err) => {
-    console.error('Erro no teste:', err);
+test().catch((err) => {
+    console.error('Error on test:', err);
 });

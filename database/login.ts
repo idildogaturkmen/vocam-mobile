@@ -8,7 +8,7 @@ export async function createUser(email: string, password: string, username: stri
     });
 
     if (error) throw error;
-    console.log('Usuário criado com sucesso');
+    console.log('User created successfully');
     if (data.user) {
         await writeUserData({
             TableName: 'profiles',
@@ -24,12 +24,12 @@ export async function login(email: string, password: string) {
     });
 
     if (error) throw error;
-    console.log('Usuário autenticado');
+    console.log('User logged in successfully');
     return data.user;
 }
 
 export async function logout() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-    console.log('Usuário deslogado com sucesso');
+    console.log('User logged out successfully');
 }

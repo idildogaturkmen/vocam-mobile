@@ -31,7 +31,7 @@ export const readHelper = async (query: any, Filters: Filter[]) => {
                 query = query.in(column, value);
                 break;
             default:
-                throw new Error(`Operador não suportado: ${operator}`);
+                throw new Error(`Operator not supported: ${operator}`);
         }
     });
 

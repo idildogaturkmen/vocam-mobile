@@ -15,3 +15,9 @@ export type WriteInputCommandType = {
     TableName: string;
     Items: Record<string, any>[];
 };
+
+export type UpdateInputCommandType = {
+    TableName: string;
+    Items: Record<string, any>[];
+    UpdateCondition: { column: string; value: any };
+};

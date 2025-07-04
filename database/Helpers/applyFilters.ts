@@ -1,6 +1,6 @@
 import { Filter } from '../dbTypes';
 
-export const readHelper = async (query: any, Filters: Filter[]) => {
+export const applyFilters = (query: any, Filters: Filter[]) => {
     Filters.forEach(({ column, operator, value }) => {
         switch (operator) {
             case 'eq':

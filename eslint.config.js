@@ -11,7 +11,7 @@ export default [
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
-        project: './tsconfig.json', // Se você usar tsconfig
+        project: './tsconfig.json',
       },
     },
     plugins: {
@@ -19,11 +19,9 @@ export default [
       prettier,
     },
     rules: {
-      // Regras TypeScript opcionais
       '@typescript-eslint/no-unused-vars': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
 
-      // Regras Prettier
       'prettier/prettier': [
         'error',
         {

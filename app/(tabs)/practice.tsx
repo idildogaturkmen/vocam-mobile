@@ -1,11 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-export default function PronunciationScreen() {
+export default function QuizScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🎤 Pronunciation</Text>
-      <Text style={styles.subtitle}>Pronunciation practice coming soon</Text>
+      <Text style={styles.title}>Pronunciation Practice</Text>
+      <Text style={styles.subtitle}>Coming soon</Text>
     </View>
   );
 }

@@ -1,18 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-
-interface VocabularyWord {
-  id?: number;
-  word_original: string;
-  word_translated: string;
-  language_translated: string;
-  example_sentence?: string;
-  example_english?: string;
-  category?: string;
-  image_path?: string;
-  date_added?: string;
-  source?: string;
-  session_id?: number | null;
-}
+import type { VocabularyWord } from '../../app/(tabs)/vocabulary';
 
 interface UserProgress {
   id?: number;

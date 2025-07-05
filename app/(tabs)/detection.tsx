@@ -105,7 +105,6 @@ export default function DetectionScreen() {
     'Gujarati': 'gu',
     'Punjabi': 'pa',
     'Icelandic': 'is',
-    'Esperanto': 'eo',
     'Latin': 'la'
   };
 
@@ -201,6 +200,44 @@ export default function DetectionScreen() {
     } catch (error) {
       console.error('❌ Detection error:', error);
       Alert.alert('Detection Failed', 'Unable to analyze the image.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const retranslateDetections = async (newLanguage: string) => {
+    if (detections.length === 0) return;
+    
+    try {
+      setIsProcessing(true);
+      
+      // Re-translate all current detections with the new language
+      const retranslatedResults = await Promise.all(
+        detections.map(async (detection) => {
+          const translation = await TranslationService.translateText(
+            detection.label, 
+            newLanguage
+          );
+          const example = await TranslationService.getExampleSentence(
+            detection.label, 
+            newLanguage
+          );
+          
+          return {
+            ...detection,
+            translation,
+            example: example.translated,
+            exampleEnglish: example.english,
+          };
+        })
+      );
+      
+      setDetections(retranslatedResults);
+      console.log(`✅ Re-translated ${retranslatedResults.length} detections to ${newLanguage}`);
+      
+    } catch (error) {
+      console.error('❌ Re-translation error:', error);
+      Alert.alert('Translation Error', 'Failed to re-translate detections. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -369,6 +406,50 @@ export default function DetectionScreen() {
             )}
           </View>
         </PhotoResult>
+        {/* MODAL */}
+        <Modal
+          visible={showLanguageModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLanguageModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Language</Text>
+              <ScrollView style={styles.languageList}>
+                {Object.entries(languages).map(([name, code]) => (
+                  <TouchableOpacity
+                    key={code}
+                    style={[
+                      styles.languageOption,
+                      targetLanguage === code && styles.languageOptionActive
+                    ]}
+                    onPress={async () => {
+                      const previousLanguage = targetLanguage;
+                      setTargetLanguage(code);
+                      setShowLanguageModal(false);
+                      
+                      // If we have detections (photo was taken), re-translate them
+                      if (photo && detections.length > 0 && code !== previousLanguage) {
+                        await retranslateDetections(code);
+                      }
+                    }}
+                  >
+                    <Text style={[
+                      styles.languageOptionText,
+                      targetLanguage === code && styles.languageOptionTextActive
+                    ]}>
+                      {name}
+                    </Text>
+                    {targetLanguage === code && (
+                      <Text style={styles.languageOptionCheck}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -422,9 +503,15 @@ export default function DetectionScreen() {
                     styles.languageOption,
                     targetLanguage === code && styles.languageOptionActive
                   ]}
-                  onPress={() => {
+                  onPress={async () => {
+                    const previousLanguage = targetLanguage;
                     setTargetLanguage(code);
                     setShowLanguageModal(false);
+                    
+                    // If we have detections (photo was taken), re-translate them
+                    if (photo && detections.length > 0 && code !== previousLanguage) {
+                      await retranslateDetections(code);
+                    }
                   }}
                 >
                   <Text style={[

@@ -72,7 +72,6 @@ export default function PhotoResult({
         offsetX,
         offsetY
       });
-      console.log(`📐 Image layout: Original ${originalWidth}x${originalHeight}, Displayed ${imageWidth}x${imageHeight}, Offset ${offsetX},${offsetY}`);
     });
   }, [photoUri]);
 

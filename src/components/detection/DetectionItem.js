@@ -66,7 +66,7 @@ export default function DetectionItem({
             style={styles.exampleAudioButton}
             onPress={() => onSpeakExample(detection.example || '', targetLanguage)}
           >
-            <Text style={styles.audioIconSmall}>▶️</Text>
+            <Text style={styles.audioIconSmall}><AntDesign name="playcircleo" size={20} color="#3498db" /></Text>
             <Text style={styles.exampleAudioText}>Play Example</Text>
           </TouchableOpacity>
         </View>

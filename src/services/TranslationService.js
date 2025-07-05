@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import ExampleSentenceGenerator from '../services/example-sentences/ExampleSentenceGenerator';
 
 class TranslationService {
   constructor() {
@@ -155,32 +156,14 @@ class TranslationService {
     try {
       console.log(`📝 Getting example sentence for "${word}" in ${targetLanguage}`);
       
-      // First try to get from Tatoeba API
-      const tatoebaExample = await this.getTatoebaExample(word, targetLanguage);
-      if (tatoebaExample) {
-        return tatoebaExample;
-      }
-
-      // Fallback to template-based generation
-      const templates = [
-        `This is a ${word}.`,
-        `I can see the ${word}.`,
-        `The ${word} is here.`,
-        `There is a ${word} in the room.`,
-        `Where is the ${word}?`,
-        `I need a ${word}.`,
-        `That ${word} looks nice.`,
-        `Can you show me the ${word}?`,
-      ];
+      // Use the enhanced sentence generator
+      const example = await ExampleSentenceGenerator.getExampleSentence(
+        word, 
+        targetLanguage, 
+        (text, lang) => this.translateText(text, lang)
+      );
       
-      const template = templates[Math.floor(Math.random() * templates.length)];
-      const translatedSentence = await this.translateText(template, targetLanguage);
-      
-      return {
-        english: template,
-        translated: translatedSentence,
-        source: 'template'
-      };
+      return example;
       
     } catch (error) {
       console.error('Example sentence error:', error);
@@ -188,7 +171,7 @@ class TranslationService {
       return {
         english: fallback,
         translated: await this.translateText(fallback, targetLanguage),
-        source: 'fallback'
+        source: 'error_fallback'
       };
     }
   }

@@ -203,20 +203,44 @@ class ObjectDetectionService {
   processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri) {
     const annotations = visionResponse.responses[0].localizedObjectAnnotations || [];
     
+    console.log(`🔍 Processing ${annotations.length} detections from Google Vision`);
+    
     return annotations
       .filter(annotation => annotation.score >= confidenceThreshold)
-      .map(annotation => {
+      .map((annotation, idx) => {
         const label = this.normalizeGoogleVisionLabel(annotation.name);
         const category = this.getObjectCategory(label);
         
-        // Convert normalized vertices to bbox array
+        // Get vertices and handle undefined values
         const vertices = annotation.boundingPoly.normalizedVertices;
+        
+        // Process each vertex, replacing undefined with appropriate defaults
+        const processedVertices = [];
+        for (let i = 0; i < vertices.length; i++) {
+          const vertex = vertices[i];
+          const x = vertex.x !== undefined ? vertex.x : (i === 0 || i === 3) ? 0 : 1;
+          const y = vertex.y !== undefined ? vertex.y : (i === 0 || i === 1) ? 0 : 1;
+          processedVertices.push({ x, y });
+        }
+       
+        // Calculate bounding box from processed vertices
+        const xValues = processedVertices.map(v => v.x);
+        const yValues = processedVertices.map(v => v.y);
+        
         const bbox = [
-          vertices[0].x,
-          vertices[0].y,
-          vertices[2].x,
-          vertices[2].y
+          Math.min(...xValues),  // left
+          Math.min(...yValues),  // top
+          Math.max(...xValues),  // right
+          Math.max(...yValues)   // bottom
         ];
+        
+        // Validate bbox
+        if (bbox[2] <= bbox[0] || bbox[3] <= bbox[1]) {
+          console.warn(`Invalid bbox for ${label}: [${bbox.join(', ')}]`);
+          // Try to fix it
+          bbox[2] = Math.max(bbox[2], bbox[0] + 0.1);
+          bbox[3] = Math.max(bbox[3], bbox[1] + 0.1);
+        }
         
         return {
           label: label,
@@ -225,7 +249,7 @@ class ObjectDetectionService {
           category: category,
           raw_label: annotation.name,
           source: 'google_vision',
-          vertices: vertices // Keep original vertices for drawing
+          vertices: processedVertices
         };
       })
       .sort((a, b) => b.confidence - a.confidence);

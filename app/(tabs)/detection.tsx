@@ -19,11 +19,46 @@ import DatabaseService from '../../src/services/DatabaseService';
 import ObjectDetectionService from '../../src/services/ObjectDetectionService';
 import TranslationService from '../../src/services/TranslationService';
 import SpeechService from '../../src/services/SpeechService';
+import { getDisplayAndVisionImage } from '../../src/services/ImageUtils';
 
 // Components
 import PhotoResult from '../../src/components/detection/PhotoResult';
 import DetectionItem from '../../src/components/detection/DetectionItem';
 import CameraControls from '../../src/components/detection/CameraControls';
+
+const debugStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: 100,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    padding: 10,
+    borderRadius: 5,
+    zIndex: 1000,
+  },
+  title: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  text: {
+    color: 'white',
+    fontSize: 12,
+  },
+  detection: {
+    marginTop: 5,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.3)',
+    paddingTop: 5,
+  },
+});
+
+
+
+
+
+
+
 
 interface Detection {
   label: string;
@@ -43,6 +78,7 @@ export default function DetectionScreen() {
   
   // Detection states
   const [photo, setPhoto] = useState<string | null>(null);
+  const [rotatedPhoto, setRotatedPhoto] = useState<string | null>(null); // NEW: for normalized image
   const [detections, setDetections] = useState<Detection[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedWords, setSelectedWords] = useState(new Set<number>());
@@ -97,13 +133,13 @@ export default function DetectionScreen() {
   const takePicture = async () => {
     if (cameraRef.current && modelStatus === 'ready') {
       try {
-        const photoData = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-          base64: false,
-        });
+        const photoResult = await cameraRef.current.takePictureAsync({ skipProcessing: false });
         
-        setPhoto(photoData.uri);
-        await detectObjectsWithAI(photoData.uri);
+        // Auto-rotate and strip EXIF before using
+        const rotatedUri = await getDisplayAndVisionImage(photoResult.uri);
+        setPhoto(rotatedUri); // Use rotated image for display
+        setRotatedPhoto(rotatedUri); // Use for detection
+        await detectObjectsWithAI(rotatedUri); // Use rotated image for detection
       } catch (error) {
         console.error('Picture error:', error);
         Alert.alert('Error', 'Could not take picture. Please try again.');
@@ -119,7 +155,6 @@ export default function DetectionScreen() {
       
       // Detect objects
       const results = await ObjectDetectionService.detectObjects(imageUri, 0.5);
-      
       if (results && results.length > 0) {
         // Translate detected objects
         const translatedResults = await Promise.all(
@@ -268,7 +303,7 @@ export default function DetectionScreen() {
     return (
       <View style={styles.container}>
         <PhotoResult
-          photoUri={photo}
+          photoUri={photo} // Use rotated image for display
           detections={detections}
           isProcessing={isProcessing}
           onLanguagePress={() => setShowLanguageModal(true)}
@@ -324,35 +359,36 @@ export default function DetectionScreen() {
     );
   }
 
+  
   // Camera View
   return (
     <View style={styles.container}>
-      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-        <CameraControls
-          facing={facing}
-          onFlipCamera={() => setFacing(facing === 'back' ? 'front' : 'back')}
-          onTakePicture={takePicture}
-          onManualInput={() => setShowManualInput(true)}
-          onLanguagePress={() => setShowLanguageModal(true)}
-          modelStatus={modelStatus}
-          sessionId={sessionId}
-          wordsStudied={wordsStudied}
-          wordsLearned={wordsLearned}
-          languageName={getCurrentLanguageName()}
-          onStartSession={async () => {
-            const id = await DatabaseService.createSession();
-            if (id) setSessionId(id);
-          }}
-          onEndSession={async () => {
-            if (sessionId) {
-              await DatabaseService.endSession(sessionId, wordsStudied, wordsLearned);
-              setSessionId(null);
-              setWordsStudied(0);
-              setWordsLearned(0);
-            }
-          }}
-        />
-      </CameraView>
+      <CameraView style={styles.camera} facing={facing} ref={cameraRef} />
+      {/* Controls are outside CameraView to avoid warning */}
+      <CameraControls
+        facing={facing}
+        onFlipCamera={() => setFacing(facing === 'back' ? 'front' : 'back')}
+        onTakePicture={takePicture}
+        onManualInput={() => setShowManualInput(true)}
+        onLanguagePress={() => setShowLanguageModal(true)}
+        modelStatus={modelStatus}
+        sessionId={sessionId}
+        wordsStudied={wordsStudied}
+        wordsLearned={wordsLearned}
+        languageName={getCurrentLanguageName()}
+        onStartSession={async () => {
+          const id = await DatabaseService.createSession();
+          if (id) setSessionId(id);
+        }}
+        onEndSession={async () => {
+          if (sessionId) {
+            await DatabaseService.endSession(sessionId, wordsStudied, wordsLearned);
+            setSessionId(null);
+            setWordsStudied(0);
+            setWordsLearned(0);
+          }
+        }}
+      />
 
       {/* Language Selection Modal */}
       <Modal
@@ -647,19 +683,5 @@ const styles = StyleSheet.create({
   manualAddText: {
     color: 'white',
     fontWeight: '600',
-  },
-  // Debug button (remove in production)
-  debugButton: {
-    position: 'absolute',
-    top: 60,
-    right: 20,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 10,
-    borderRadius: 20,
-    zIndex: 1000,
-  },
-  debugText: {
-    color: 'white',
-    fontSize: 16,
-  },
+  }
 });

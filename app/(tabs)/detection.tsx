@@ -26,40 +26,6 @@ import PhotoResult from '../../src/components/detection/PhotoResult';
 import DetectionItem from '../../src/components/detection/DetectionItem';
 import CameraControls from '../../src/components/detection/CameraControls';
 
-const debugStyles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: 100,
-    left: 10,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    padding: 10,
-    borderRadius: 5,
-    zIndex: 1000,
-  },
-  title: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  text: {
-    color: 'white',
-    fontSize: 12,
-  },
-  detection: {
-    marginTop: 5,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.3)',
-    paddingTop: 5,
-  },
-});
-
-
-
-
-
-
-
-
 interface Detection {
   label: string;
   confidence: number;
@@ -78,7 +44,7 @@ export default function DetectionScreen() {
   
   // Detection states
   const [photo, setPhoto] = useState<string | null>(null);
-  const [rotatedPhoto, setRotatedPhoto] = useState<string | null>(null); // NEW: for normalized image
+  const [rotatedPhoto, setRotatedPhoto] = useState<string | null>(null); //for normalized image
   const [detections, setDetections] = useState<Detection[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedWords, setSelectedWords] = useState(new Set<number>());
@@ -97,14 +63,53 @@ export default function DetectionScreen() {
 
   const languages = {
     'Spanish': 'es',
-    'French': 'fr', 
+    'French': 'fr',
+    'Chinese (Simplified)': 'zh-CN',
+    'Chinese (Traditional)': 'zh-TW',
     'German': 'de',
+    'Japanese': 'ja',
+    'Korean': 'ko',
     'Italian': 'it',
     'Portuguese': 'pt',
     'Russian': 'ru',
-    'Japanese': 'ja',
-    'Chinese (Simplified)': 'zh-CN'
+    'Arabic': 'ar',
+    'Hindi': 'hi',
+    'Turkish': 'tr',
+    'Dutch': 'nl',
+    'Swedish': 'sv',
+    'Polish': 'pl',
+    'Greek': 'el',
+    'Hebrew': 'he',
+    'Vietnamese': 'vi',
+    'Indonesian': 'id',
+    'Danish': 'da',
+    'Norwegian': 'no',
+    'Finnish': 'fi',
+    'Thai': 'th',
+    'Czech': 'cs',
+    'Hungarian': 'hu',
+    'Ukrainian': 'uk',
+    'Romanian': 'ro',
+    'Filipino': 'tl',
+    'Malay': 'ms',
+    'Swahili': 'sw',
+    'Bengali': 'bn',
+    'Urdu': 'ur',
+    'Serbian': 'sr',
+    'Croatian': 'hr',
+    'Slovak': 'sk',
+    'Bulgarian': 'bg',
+    'Persian (Farsi)': 'fa',
+    'Tamil': 'ta',
+    'Telugu': 'te',
+    'Gujarati': 'gu',
+    'Punjabi': 'pa',
+    'Icelandic': 'is',
+    'Esperanto': 'eo',
+    'Latin': 'la'
   };
+
+
 
   useEffect(() => {
     initializeServices();
@@ -310,50 +315,59 @@ export default function DetectionScreen() {
           targetLanguage={targetLanguage}
           languageName={getCurrentLanguageName()}
         >
-          {/* Detection Results */}
+          <View style={{ flex: 1 }}>
+            {/* Detection Results */}
           {detections.length > 0 && (
             <View style={styles.resultsContainer}>
-              <View style={styles.resultsHeader}>
-                <Text style={styles.resultsTitle}>
-                  Found {detections.length} Object{detections.length > 1 ? 's' : ''}
-                </Text>
+              <View style={{ flex: 1 }}>
+                <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+                  <View style={styles.resultsHeader}>
+                    <Text style={styles.resultsTitle}>
+                      Found {detections.length} Object{detections.length > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+
+                  {detections.map((detection, index) => (
+                    <DetectionItem
+                      key={index}
+                      detection={detection}
+                      index={index}
+                      isSelected={selectedWords.has(index)}
+                      onToggleSelect={toggleWordSelection}
+                      onSpeakWord={(text: string) => handleSpeech(text, targetLanguage)}
+                      onSpeakExample={(text: string) => handleSpeech(text, targetLanguage)}
+                      targetLanguage={targetLanguage}
+                    />
+                  ))}
+                </ScrollView>
               </View>
-              
-              {detections.map((detection, index) => (
-                <DetectionItem
-                  key={index}
-                  detection={detection}
-                  index={index}
-                  isSelected={selectedWords.has(index)}
-                  onToggleSelect={toggleWordSelection}
-                  onSpeakWord={(text: string) => handleSpeech(text, targetLanguage)}
-                  onSpeakExample={(text: string) => handleSpeech(text, targetLanguage)}
-                  targetLanguage={targetLanguage}
-                />
-              ))}
-              
               <View style={styles.actionButtons}>
                 <TouchableOpacity style={styles.saveButton} onPress={saveSelectedWords}>
-                  <Text style={styles.saveButtonIcon}><FontAwesome name="save" size={24} color="white" /></Text>
+                  <Text style={styles.saveButtonIcon}>
+                    <FontAwesome name="save" size={24} color="white" />
+                  </Text>
                   <Text style={styles.saveButtonText}>
                     Save Selected ({selectedWords.size})
                   </Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.retakeButton} 
+
+                <TouchableOpacity
+                  style={styles.retakeButton}
                   onPress={() => {
                     setPhoto(null);
                     setDetections([]);
                     setSelectedWords(new Set());
                   }}
                 >
-                  <Text style={styles.retakeButtonIcon}><Entypo name="camera" size={20} color="white" /></Text>
+                  <Text style={styles.retakeButtonIcon}>
+                    <Entypo name="camera" size={20} color="white" />
+                  </Text>
                   <Text style={styles.retakeButtonText}>Take Another</Text>
                 </TouchableOpacity>
               </View>
             </View>
-          )}
+            )}
+          </View>
         </PhotoResult>
       </View>
     );
@@ -540,8 +554,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   resultsContainer: {
-    backgroundColor: '#f8f9fa',
-    paddingBottom: 100,
+    flex: 1,
+    backgroundColor: '#f8f9fa'
   },
   resultsHeader: {
     paddingHorizontal: 20,
@@ -557,12 +571,12 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
+    marginTop: 10,
     marginHorizontal: 20,
     gap: 10,
   },
   saveButton: {
-    flex: 1,
+    flex: 1.3,
     backgroundColor: '#27ae60',
     flexDirection: 'row',
     alignItems: 'center',
@@ -581,7 +595,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   retakeButton: {
-    flex: 1,
+    flex: 1.05,
     backgroundColor: '#3498db',
     flexDirection: 'row',
     alignItems: 'center',
@@ -683,5 +697,8 @@ const styles = StyleSheet.create({
   manualAddText: {
     color: 'white',
     fontWeight: '600',
+  },
+  resultsScrollContent: {
+    flexGrow: 1,
   }
 });

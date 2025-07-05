@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     marginTop: 95,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 20,
   },
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,

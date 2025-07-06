@@ -42,7 +42,6 @@ export default function Auth() {
             return;
         }
         const data = await login(email, password, setLoading);
-        console.log('Login data:', data);
         if (data && data.session) router.replace('/(tabs)/detection');
         else if (data && !data.session) {
             setLoading(false);
@@ -61,6 +60,7 @@ export default function Auth() {
         const hasAnyError = Object.values(newErrors).some((value) => value === true);
 
         if (hasAnyError) {
+            console.log('Signup errors:', newErrors);
             return;
         }
         await createUser(email, password, username, setLoading);

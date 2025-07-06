@@ -1,6 +1,7 @@
 import { Alert } from 'react-native';
 import { supabase } from './config';
 import { writeUserData } from './crudOperations';
+import { findEmailInUse } from '@/utils/emailInUse';
 
 export async function createUser(
     email: string,
@@ -11,6 +12,11 @@ export async function createUser(
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+            data: {
+                username, // Store username in user metadata
+            },
+        },
     });
 
     if (error) {
@@ -20,14 +26,11 @@ export async function createUser(
     }
     if (!data.session) {
         setLoading(false);
-        Alert.alert('Please check your inbox for email verification!');
+        Alert.alert(
+            'Check your email',
+            "We've sent a confirmation link to the provided address. \n\nIf you already have an account, you won’t be able to create another with the same email",
+        );
         return;
-    }
-    if (data.user) {
-        await writeUserData({
-            TableName: 'profiles',
-            Items: [{ user_id: data.user.id, username: username, streak: 0 }],
-        });
     }
 }
 
@@ -45,6 +48,15 @@ export async function login(
         setLoading(false);
         Alert.alert('Error logging in', error.message);
         return;
+    }
+    const emailInUse = await findEmailInUse(email);
+    if (!emailInUse) {
+        // Write user data on the first login
+        const { username = '' } = data.session.user.user_metadata || {};
+        await writeUserData({
+            TableName: 'profiles',
+            Items: [{ user_id: data.user.id, email, username, streak: 0 }],
+        });
     }
     console.log('User logged in successfully');
     return data;

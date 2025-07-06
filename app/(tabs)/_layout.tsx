@@ -27,6 +27,7 @@ export default function TabLayout() {
       {/* 1. Camera Tab - DEFAULT/FIRST */}
       <Tabs.Screen
         name="detection"
+        name="detection"
         options={{
           title: 'Camera',
           tabBarIcon: ({ color, focused }) => (

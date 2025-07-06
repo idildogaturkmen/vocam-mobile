@@ -5,10 +5,10 @@ import Constants from 'expo-constants';
 class ObjectDetectionService {
   constructor() {
     this.isInitialized = false;
-    this.apiKey = null;
+        this.apiKey = null;
     
     this.OBJECT_CATEGORIES = {
-      "food": ["apple", "banana", "orange", "pizza", "burger", "cake", "coffee", "wine", "cup", "bowl", "bottle", "sandwich", "bread"],
+            "food": ["apple", "banana", "orange", "pizza", "burger", "cake", "coffee", "wine", "cup", "bowl", "bottle", "sandwich", "bread"],
       "electronics": ["laptop", "cell phone", "tv", "keyboard", "mouse", "tablet", "camera", "headphones", "speaker"],
       "furniture": ["chair", "couch", "table", "bed", "desk", "bookshelf"],
       "clothing": ["shirt", "pants", "shoes", "hat", "jacket", "dress", "tie"],
@@ -18,7 +18,7 @@ class ObjectDetectionService {
       "sports": ["ball", "tennis racket", "bicycle", "skateboard", "football", "basketball", "baseball"]
     };
 
-    this.GOOGLE_VISION_LABEL_MAPPING = {
+        this.GOOGLE_VISION_LABEL_MAPPING = {
       'mobile phone': 'cell phone',
       'smartphone': 'cell phone', 
       'telephone': 'cell phone',
@@ -187,7 +187,7 @@ class ObjectDetectionService {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
+            const errorText = await response.text();
       throw new Error(`Google Vision API error: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
@@ -197,7 +197,7 @@ class ObjectDetectionService {
       throw new Error(`Google Vision API error: ${result.responses[0].error.message}`);
     }
 
-    return result;
+        return result;
   }
 
   processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri) {
@@ -275,7 +275,7 @@ class ObjectDetectionService {
       type: 'Google Cloud Vision API',
       accuracy: 'High (Google\'s trained models)',
       cost: '$1.50 per 1000 requests (first 1000/month free)',
-      source: this.apiKey ? 'Google Cloud Vision API' : 'API Key Missing',
+            source: this.apiKey ? 'Google Cloud Vision API' : 'API Key Missing',
       isLoaded: this.isInitialized,
       platform: Platform.OS,
       status: this.isInitialized ? 'Ready' : 'Initializing...',

@@ -1,17 +1,55 @@
 import Constants from 'expo-constants';
-import ExampleSentenceGenerator from '../services/example-sentences/ExampleSentenceGenerator';
+import ExampleSentenceGenerator from './example-sentences/ExampleSentenceGenerator';
+
+interface ExampleSentence {
+  english: string;
+  translated: string;
+  source: string;
+}
+
+interface GoogleTranslateResponse {
+  data: {
+    translations: Array<{
+      translatedText: string;
+    }>;
+  };
+}
+
+interface MyMemoryResponse {
+  responseData: {
+    translatedText: string;
+  };
+}
+
+interface TatoebaResult {
+  text: string;
+  translations: Array<{
+    text: string;
+  }>;
+}
+
+interface TatoebaResponse {
+  results: TatoebaResult[];
+}
 
 class TranslationService {
+  private apiKey: string | null;
+  private translationCache: Map<string, string>;
+  private lastRequestTime: number;
+  private rateLimit: number;
+  private baseUrl: string;
+  private isInitialized: boolean;
+
   constructor() {
     this.apiKey = null;
-    this.translationCache = new Map();
+    this.translationCache = new Map<string, string>();
     this.lastRequestTime = 0;
     this.rateLimit = 100; // ms between requests
     this.baseUrl = 'https://translation.googleapis.com/language/translate/v2';
     this.isInitialized = false;
   }
 
-  async initialize() {
+  async initialize(): Promise<boolean> {
     try {
       // Get API key from multiple sources
       this.apiKey = this.getApiKey();
@@ -32,15 +70,15 @@ class TranslationService {
     }
   }
 
-  getApiKey() {
+  private getApiKey(): string | null {
     // Try multiple sources for API key
-    const sources = [
+    const sources: (string | undefined)[] = [
       // From app.config.js extra
       Constants.expoConfig?.extra?.googleCloudApiKey,
       Constants.expoConfig?.extra?.googleVisionApiKey,
       // From manifest (older Expo versions)
-      Constants.manifest?.extra?.googleCloudApiKey,
-      Constants.manifest?.extra?.googleVisionApiKey,
+      (Constants as any).manifest?.extra?.googleCloudApiKey,
+      (Constants as any).manifest?.extra?.googleVisionApiKey,
       // From environment
       process.env.GOOGLE_CLOUD_API_KEY,
       process.env.GOOGLE_CLOUD_VISION_API_KEY,
@@ -57,14 +95,14 @@ class TranslationService {
     return null;
   }
 
-  async translateText(text, targetLanguage, sourceLanguage = 'en') {
+  async translateText(text: string, targetLanguage: string, sourceLanguage: string = 'en'): Promise<string> {
     try {
       // Define cache key at the beginning
       const cacheKey = `${text}_${sourceLanguage}_${targetLanguage}`;
       
       // Check cache
       if (this.translationCache.has(cacheKey)) {
-        return this.translationCache.get(cacheKey);
+        return this.translationCache.get(cacheKey)!;
       }
 
       // If API key is available, use Google Translate
@@ -80,7 +118,7 @@ class TranslationService {
     }
   }
 
-  async googleTranslate(text, targetLanguage, sourceLanguage, cacheKey) {
+  private async googleTranslate(text: string, targetLanguage: string, sourceLanguage: string, cacheKey: string): Promise<string> {
     // Rate limiting
     const now = Date.now();
     const timeSinceLastRequest = now - this.lastRequestTime;
@@ -108,7 +146,7 @@ class TranslationService {
       throw new Error(`Translation API error: ${response.status} - ${error}`);
     }
 
-    const data = await response.json();
+    const data: GoogleTranslateResponse = await response.json();
     const translation = data.data?.translations?.[0]?.translatedText || text;
     
     // Decode HTML entities
@@ -122,14 +160,14 @@ class TranslationService {
     return decodedTranslation;
   }
 
-  async fallbackTranslation(text, targetLanguage, sourceLanguage = 'en') {
+  private async fallbackTranslation(text: string, targetLanguage: string, sourceLanguage: string = 'en'): Promise<string> {
     try {
       console.log('📱 Using fallback translation (MyMemory API)');
       const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLanguage}|${targetLanguage}`;
       const response = await fetch(url);
       
       if (response.ok) {
-        const data = await response.json();
+        const data: MyMemoryResponse = await response.json();
         const translation = data.responseData?.translatedText || text;
         console.log(`✅ Fallback translation: "${text}" → "${translation}"`);
         return translation;
@@ -142,17 +180,17 @@ class TranslationService {
     return text;
   }
 
-  decodeHTMLEntities(text) {
+  private decodeHTMLEntities(text: string): string {
     return text
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
-      .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec));
+      .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(parseInt(dec)));
   }
 
-  async getExampleSentence(word, targetLanguage) {
+  async getExampleSentence(word: string, targetLanguage: string): Promise<ExampleSentence> {
     try {
       console.log(`📝 Getting example sentence for "${word}" in ${targetLanguage}`);
       
@@ -160,7 +198,7 @@ class TranslationService {
       const example = await ExampleSentenceGenerator.getExampleSentence(
         word, 
         targetLanguage, 
-        (text, lang) => this.translateText(text, lang)
+        (text: string, lang: string) => this.translateText(text, lang)
       );
       
       return example;
@@ -176,14 +214,14 @@ class TranslationService {
     }
   }
 
-  async getTatoebaExample(word, targetLanguage) {
+  private async getTatoebaExample(word: string, targetLanguage: string): Promise<ExampleSentence | null> {
     try {
       const response = await fetch(
         `https://tatoeba.org/en/api_v0/search?from=eng&to=${this.getTatoebaLangCode(targetLanguage)}&query=${encodeURIComponent(word)}&limit=10`
       );
       
       if (response.ok) {
-        const data = await response.json();
+        const data: TatoebaResponse = await response.json();
         if (data.results && data.results.length > 0) {
           const sentence = data.results[Math.floor(Math.random() * Math.min(5, data.results.length))];
           
@@ -202,8 +240,8 @@ class TranslationService {
     return null;
   }
 
-  getTatoebaLangCode(langCode) {
-    const mapping = {
+  private getTatoebaLangCode(langCode: string): string {
+    const mapping: Record<string, string> = {
       'es': 'spa',
       'fr': 'fra',
       'de': 'deu',
@@ -216,7 +254,7 @@ class TranslationService {
     return mapping[langCode] || 'eng';
   }
 
-  getSupportedLanguages() {
+  getSupportedLanguages(): Record<string, string> {
     return {
       'Spanish': 'es',
       'French': 'fr',

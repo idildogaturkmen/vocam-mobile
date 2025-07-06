@@ -17,12 +17,13 @@ export default function CameraControls({
   onManualInput,
   onLanguagePress,
   modelStatus,
-  sessionId,
-  wordsStudied,
-  wordsLearned,
   languageName,
-  onStartSession,
-  onEndSession
+  // Make these optional with default values
+  sessionId = null,
+  wordsStudied = 0,
+  wordsLearned = 0,
+  onStartSession = () => {},
+  onEndSession = () => {}
 }) {
   return (
     <>

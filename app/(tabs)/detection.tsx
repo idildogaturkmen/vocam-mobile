@@ -15,7 +15,6 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Entypo from '@expo/vector-icons/Entypo';
 
 // Services
-import DatabaseService from '../../src/services/DatabaseService';
 import ObjectDetectionService from '../../src/services/ObjectDetectionService';
 import TranslationService from '../../src/services/TranslationService';
 import SpeechService from '../../src/services/SpeechService';
@@ -55,11 +54,6 @@ export default function DetectionScreen() {
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualWord, setManualWord] = useState('');
-  
-  // Session states
-  const [sessionId, setSessionId] = useState<number | null>(null);
-  const [wordsStudied, setWordsStudied] = useState(0);
-  const [wordsLearned, setWordsLearned] = useState(0);
 
   const languages = {
     'Spanish': 'es',
@@ -108,8 +102,6 @@ export default function DetectionScreen() {
     'Latin': 'la'
   };
 
-
-
   useEffect(() => {
     initializeServices();
   }, []);
@@ -119,7 +111,6 @@ export default function DetectionScreen() {
       setModelStatus('loading');
       
       // Initialize all services
-      await DatabaseService.initialize();
       await ObjectDetectionService.initialize();
       await TranslationService.initialize();
       await SpeechService.initialize();
@@ -182,7 +173,6 @@ export default function DetectionScreen() {
         );
 
         setDetections(translatedResults);
-        setWordsStudied(prev => prev + translatedResults.length);
         
         // Auto-select high confidence detections
         const highConfidenceIndices = new Set(
@@ -271,23 +261,12 @@ export default function DetectionScreen() {
     try {
       const selectedDetections = Array.from(selectedWords).map(index => detections[index]);
       
-      for (const detection of selectedDetections) {
-        await DatabaseService.saveVocabularyWord(
-          detection.translation || detection.label,
-          detection.label,
-          targetLanguage,
-          detection.example || '',
-          detection.exampleEnglish || '',
-          detection.category,
-          sessionId
-        );
-      }
-
-      setWordsLearned(prev => prev + selectedDetections.length);
+      // TODO: Implement your new database save logic here
+      console.log('Selected words to save:', selectedDetections);
       
       Alert.alert(
-        'Words Saved!', 
-        `📚 ${selectedDetections.length} word${selectedDetections.length > 1 ? 's' : ''} saved to your vocabulary.`,
+        'Words Selected!', 
+        `📚 ${selectedDetections.length} word${selectedDetections.length > 1 ? 's' : ''} selected.`,
         [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
       );
       
@@ -297,7 +276,7 @@ export default function DetectionScreen() {
       
     } catch (error) {
       console.error('Save error:', error);
-      Alert.alert('Save Error', 'Failed to save words. Please try again.');
+      Alert.alert('Error', 'Failed to process selected words.');
     }
   };
 
@@ -467,22 +446,7 @@ export default function DetectionScreen() {
         onManualInput={() => setShowManualInput(true)}
         onLanguagePress={() => setShowLanguageModal(true)}
         modelStatus={modelStatus}
-        sessionId={sessionId}
-        wordsStudied={wordsStudied}
-        wordsLearned={wordsLearned}
         languageName={getCurrentLanguageName()}
-        onStartSession={async () => {
-          const id = await DatabaseService.createSession();
-          if (id) setSessionId(id);
-        }}
-        onEndSession={async () => {
-          if (sessionId) {
-            await DatabaseService.endSession(sessionId, wordsStudied, wordsLearned);
-            setSessionId(null);
-            setWordsStudied(0);
-            setWordsLearned(0);
-          }
-        }}
       />
 
       {/* Language Selection Modal */}
@@ -569,22 +533,17 @@ export default function DetectionScreen() {
                       // Test pronunciation
                       await handleSpeech(translation, targetLanguage);
                       
-                      // Save to database
-                      await DatabaseService.saveVocabularyWord(
+                      // TODO: Implement your new database save logic here
+                      console.log('Manual word to save:', {
+                        word: manualWord.trim(),
                         translation,
-                        manualWord.trim(),
-                        targetLanguage,
-                        example.translated,
-                        example.english,
-                        'manual',
-                        sessionId
-                      );
+                        example
+                      });
                       
-                      setWordsLearned(prev => prev + 1);
                       setShowManualInput(false);
                       setManualWord('');
                       
-                      Alert.alert('Word Added!', `"${translation}" has been added to your vocabulary.`);
+                      Alert.alert('Word Added!', `"${translation}" has been processed.`);
                     } catch (error) {
                       console.error('Manual word error:', error);
                       Alert.alert('Error', 'Failed to add word. Please try again.');

@@ -1,8 +1,8 @@
 import 'react-native-url-polyfill/auto';
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../database/config';
 import Auth from '../components/Auth/Auth';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { Session } from '@supabase/supabase-js';
 import { useRouter, useSegments } from 'expo-router';
 
@@ -47,7 +47,6 @@ export default function App() {
     return (
         <View>
             <Auth />
-            {session && session.user && <Text>{session.user.id}</Text>}
         </View>
     );
 }

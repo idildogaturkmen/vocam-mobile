@@ -63,7 +63,7 @@ export default function Auth() {
         if (hasAnyError) {
             return;
         }
-        createUser(email, password, username, setLoading);
+        await createUser(email, password, username, setLoading);
     };
 
     const getInputStyle = (hasError: boolean) => ({

@@ -1,11 +1,8 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
-  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -14,70 +11,95 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import DatabaseService from '../../src/services/DatabaseService';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Entypo from '@expo/vector-icons/Entypo';
+
+// Services
 import ObjectDetectionService from '../../src/services/ObjectDetectionService';
 import TranslationService from '../../src/services/TranslationService';
+import SpeechService from '../../src/services/SpeechService';
+import { getDisplayAndVisionImage } from '../../src/services/ImageUtils';
 
-const { width } = Dimensions.get('window');
-
-interface ProcessingStats {
-  processingTime: number;
-  objectsDetected: number;
-  avgConfidence: number;
-  modelUsed: string;
-}
+// Components
+import PhotoResult from '../../src/components/detection/PhotoResult';
+import DetectionItem from '../../src/components/detection/DetectionItem';
+import CameraControls from '../../src/components/detection/CameraControls';
 
 interface Detection {
   label: string;
   confidence: number;
   bbox: number[];
   category: string;
-  source: string;
   translation?: string;
   example?: string;
   exampleEnglish?: string;
-  quality_score?: number;
-  confidence_level?: string;
-}
-
-interface LanguageMap {
-  [key: string]: string;
 }
 
 export default function DetectionScreen() {
+  // Camera states
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+  
+  // Detection states
   const [photo, setPhoto] = useState<string | null>(null);
+  const [rotatedPhoto, setRotatedPhoto] = useState<string | null>(null); //for normalized image
   const [detections, setDetections] = useState<Detection[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedWords, setSelectedWords] = useState(new Set<number>());
+  
+  // Settings states
   const [targetLanguage, setTargetLanguage] = useState('es');
   const [modelStatus, setModelStatus] = useState('loading');
-  const [sessionId, setSessionId] = useState<number | null>(null);
-  const [wordsStudied, setWordsStudied] = useState(0);
-  const [wordsLearned, setWordsLearned] = useState(0);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualWord, setManualWord] = useState('');
-  const [showLanguageModal, setShowLanguageModal] = useState(false);
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
-  const [detectionSettings, setDetectionSettings] = useState({
-    confidenceThreshold: 0.5,
-    maxDetections: 10,
-    enableAdvancedAI: true,
-    showQualityScores: true
-  });
-  const [processingStats, setProcessingStats] = useState<ProcessingStats | null>(null);
-  const cameraRef = useRef<CameraView>(null);
 
-  const languages: LanguageMap = {
+  const languages = {
     'Spanish': 'es',
-    'French': 'fr', 
+    'French': 'fr',
+    'Chinese (Simplified)': 'zh-CN',
+    'Chinese (Traditional)': 'zh-TW',
     'German': 'de',
+    'Japanese': 'ja',
+    'Korean': 'ko',
     'Italian': 'it',
     'Portuguese': 'pt',
     'Russian': 'ru',
-    'Japanese': 'ja',
-    'Chinese (Simplified)': 'zh-CN'
+    'Arabic': 'ar',
+    'Hindi': 'hi',
+    'Turkish': 'tr',
+    'Dutch': 'nl',
+    'Swedish': 'sv',
+    'Polish': 'pl',
+    'Greek': 'el',
+    'Hebrew': 'he',
+    'Vietnamese': 'vi',
+    'Indonesian': 'id',
+    'Danish': 'da',
+    'Norwegian': 'no',
+    'Finnish': 'fi',
+    'Thai': 'th',
+    'Czech': 'cs',
+    'Hungarian': 'hu',
+    'Ukrainian': 'uk',
+    'Romanian': 'ro',
+    'Filipino': 'tl',
+    'Malay': 'ms',
+    'Swahili': 'sw',
+    'Bengali': 'bn',
+    'Urdu': 'ur',
+    'Serbian': 'sr',
+    'Croatian': 'hr',
+    'Slovak': 'sk',
+    'Bulgarian': 'bg',
+    'Persian (Farsi)': 'fa',
+    'Tamil': 'ta',
+    'Telugu': 'te',
+    'Gujarati': 'gu',
+    'Punjabi': 'pa',
+    'Icelandic': 'is',
+    'Latin': 'la'
   };
 
   useEffect(() => {
@@ -86,175 +108,175 @@ export default function DetectionScreen() {
 
   const initializeServices = async () => {
     try {
-        setModelStatus('loading');
-        console.log('🚀 Initializing Services...');
-        
-        // Initialize database
-        await DatabaseService.initialize();
-        console.log('✅ Database ready');
-        
-        // Initialize Google Vision object detection
-        await ObjectDetectionService.initialize();
-        console.log('✅ Google Vision Object Detection ready');
-        setModelStatus('ready');
-        
-        // Get model info for status
-        const modelInfo = ObjectDetectionService.getModelInfo();
-        console.log('🎯 Detection Model Info:', modelInfo);
-        
-        console.log('🎉 All services ready!');
-        
+      setModelStatus('loading');
+      
+      // Initialize all services
+      await ObjectDetectionService.initialize();
+      await TranslationService.initialize();
+      await SpeechService.initialize();
+      
+      setModelStatus('ready');
+      console.log('🎉 All services ready!');
+      
     } catch (error) {
-        setModelStatus('error');
-        console.error('❌ Service initialization failed:', error);
-        
-        // Show specific error message based on the error type
-        let errorMessage = 'There was an issue initializing the detection service.';
-        
-        if (error.message.includes('API key')) {
-        errorMessage = 'Google Vision API key is missing or invalid. Please:\n\n1. Set GOOGLE_CLOUD_VISION_API_KEY in your GitHub Codespace secrets\n2. Restart your Codespace\n3. Try again';
-        }
-        
-        Alert.alert(
-        'Initialization Error',
-        errorMessage,
-        [
-            { text: 'Continue Anyway', style: 'cancel' },
-            { text: 'Retry', onPress: initializeServices }
-        ]
-        );
+      setModelStatus('error');
+      console.error('❌ Service initialization failed:', error);
+      Alert.alert('Initialization Error', 'Failed to initialize services. Please check your API keys.');
     }
-    };
+  };
+
+  const takePicture = async () => {
+    if (cameraRef.current && modelStatus === 'ready') {
+      try {
+        const photoResult = await cameraRef.current.takePictureAsync({ skipProcessing: false });
+        
+        // Auto-rotate and strip EXIF before using
+        const rotatedUri = await getDisplayAndVisionImage(photoResult.uri);
+        setPhoto(rotatedUri); // Use rotated image for display
+        setRotatedPhoto(rotatedUri); // Use for detection
+        await detectObjectsWithAI(rotatedUri); // Use rotated image for detection
+      } catch (error) {
+        console.error('Picture error:', error);
+        Alert.alert('Error', 'Could not take picture. Please try again.');
+      }
+    }
+  };
 
   const detectObjectsWithAI = async (imageUri: string) => {
     if (isProcessing) return;
     
     try {
-        setIsProcessing(true);
-        console.log('🔍 Starting object detection...');
-        
-        const startTime = Date.now();
-        const results = await ObjectDetectionService.detectObjects(imageUri, detectionSettings.confidenceThreshold);
-        
-        if (results && results.length > 0) {
-        console.log('🌐 Translating detected objects...');
-        
+      setIsProcessing(true);
+      
+      // Detect objects
+      const results = await ObjectDetectionService.detectObjects(imageUri, 0.5);
+      if (results && results.length > 0) {
+        // Translate detected objects
         const translatedResults = await Promise.all(
-            results.slice(0, detectionSettings.maxDetections).map(async (detection: Detection) => {
-            const translation = await TranslationService.translateText(detection.label, targetLanguage);
-            const example = await TranslationService.getExampleSentence(detection.label, targetLanguage);
+          results.slice(0, 10).map(async (detection: Detection) => {
+            const translation = await TranslationService.translateText(
+              detection.label, 
+              targetLanguage
+            );
+            const example = await TranslationService.getExampleSentence(
+              detection.label, 
+              targetLanguage
+            );
             
             return {
-                ...detection,
-                translation,
-                example: example.translated,
-                exampleEnglish: example.english,
-                quality_score: detection.confidence * 100,
-                confidence_level: detection.confidence > 0.8 ? 'High' : 
-                                detection.confidence > 0.5 ? 'Medium' : 'Low'
+              ...detection,
+              translation,
+              example: example.translated,
+              exampleEnglish: example.english,
             };
-            })
+          })
         );
 
         setDetections(translatedResults);
-        setWordsStudied(prev => prev + translatedResults.length);
-
-        // Set processing stats
-        const processingTime = Date.now() - startTime;
-        const stats: ProcessingStats = {
-            processingTime,
-            objectsDetected: translatedResults.length,
-            avgConfidence: translatedResults.reduce((sum, det) => sum + det.confidence, 0) / translatedResults.length,
-            modelUsed: 'Google Vision API'
-        };
-        setProcessingStats(stats);
-
+        
         // Auto-select high confidence detections
         const highConfidenceIndices = new Set(
-            translatedResults
+          translatedResults
             .map((detection, index) => ({ detection, index }))
             .filter(({ detection }) => detection.confidence > 0.7)
             .map(({ index }) => index)
         );
         setSelectedWords(highConfidenceIndices.size > 0 ? highConfidenceIndices : new Set([0]));
         
-        } else {
-        Alert.alert(
-            'No Objects Found', 
-            'Google Vision API didn\'t detect any objects in this image. Try taking another photo with clear, well-lit objects.',
-            [
-            { text: 'Manual Input', onPress: () => setShowManualInput(true) },
-            { text: 'Retake Photo', onPress: () => setPhoto(null) }
-            ]
-        );
-        }
-        
+      } else {
+        Alert.alert('No Objects Found', 'No objects were detected in this image.');
+      }
+      
     } catch (error) {
-        console.error('❌ Object detection failed:', error);
-        
-        // Determine the type of error and show appropriate message
-        let errorMessage = 'Object detection failed. Please try again.';
-        let errorTitle = 'Detection Error';
-        
-        if (error.message.includes('API key')) {
-        errorTitle = 'API Configuration Error';
-        errorMessage = 'Google Vision API key is not configured properly. Please check your environment variables and restart the app.';
-        } else if (error.message.includes('network') || error.message.includes('fetch')) {
-        errorTitle = 'Network Error';
-        errorMessage = 'Could not connect to Google Vision API. Please check your internet connection and try again.';
-        } else if (error.message.includes('quota') || error.message.includes('rate limit')) {
-        errorTitle = 'API Limit Reached';
-        errorMessage = 'Google Vision API quota exceeded. Please try again later or check your API usage.';
-        }
-        
-        Alert.alert(
-        errorTitle,
-        errorMessage,
-        [
-            { text: 'Manual Input', onPress: () => setShowManualInput(true) },
-            { text: 'Retake Photo', onPress: () => setPhoto(null) },
-            { text: 'OK', style: 'cancel' }
-        ]
-        );
+      console.error('❌ Detection error:', error);
+      Alert.alert('Detection Failed', 'Unable to analyze the image.');
     } finally {
-        setIsProcessing(false);
+      setIsProcessing(false);
     }
-    };
+  };
 
-  const handleManualInput = async () => {
-    if (!manualWord.trim()) {
-      Alert.alert('Error', 'Please enter a word');
+  const retranslateDetections = async (newLanguage: string) => {
+    if (detections.length === 0) return;
+    
+    try {
+      setIsProcessing(true);
+      
+      // Re-translate all current detections with the new language
+      const retranslatedResults = await Promise.all(
+        detections.map(async (detection) => {
+          const translation = await TranslationService.translateText(
+            detection.label, 
+            newLanguage
+          );
+          const example = await TranslationService.getExampleSentence(
+            detection.label, 
+            newLanguage
+          );
+          
+          return {
+            ...detection,
+            translation,
+            example: example.translated,
+            exampleEnglish: example.english,
+          };
+        })
+      );
+      
+      setDetections(retranslatedResults);
+      console.log(`✅ Re-translated ${retranslatedResults.length} detections to ${newLanguage}`);
+      
+    } catch (error) {
+      console.error('❌ Re-translation error:', error);
+      Alert.alert('Translation Error', 'Failed to re-translate detections. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Enhanced speech function that ensures text is valid
+  const handleSpeech = async (text: string, language: string) => {
+    try {
+      // Validate text before speaking
+      if (!text || typeof text !== 'string' || text.trim() === '') {
+        console.warn('⚠️ Invalid text for speech:', text);
+        Alert.alert('Speech Error', 'No text available to pronounce.');
+        return;
+      }
+
+      console.log(`🔊 Playing pronunciation: "${text}" in ${language}`);
+      await SpeechService.speak(text, language);
+      
+    } catch (error) {
+      console.error('❌ Speech failed:', error);
+      Alert.alert('Speech Error', 'Unable to play pronunciation. Please check your device volume.');
+    }
+  };
+
+  const saveSelectedWords = async () => {
+    if (selectedWords.size === 0) {
+      Alert.alert('No Selection', 'Please select at least one word to save.');
       return;
     }
 
     try {
-      console.log('🖊️ Processing manual input:', manualWord);
+      const selectedDetections = Array.from(selectedWords).map(index => detections[index]);
       
-      const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
-      const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
-
-      const manualDetection: Detection = {
-        label: manualWord.trim().toLowerCase(),
-        confidence: 1.0,
-        bbox: [0, 0, 1, 1],
-        category: 'manual',
-        source: 'manual_input',
-        translation,
-        example: example.translated,
-        exampleEnglish: example.english,
-        quality_score: 95,
-        confidence_level: 'Manual Input'
-      };
-
-      setDetections([manualDetection]);
-      setSelectedWords(new Set([0]));
-      setShowManualInput(false);
-      setManualWord('');
+      // TODO: Implement your new database save logic here
+      console.log('Selected words to save:', selectedDetections);
       
-      console.log('✅ Manual input processed');
+      Alert.alert(
+        'Words Selected!', 
+        `📚 ${selectedDetections.length} word${selectedDetections.length > 1 ? 's' : ''} selected.`,
+        [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
+      );
+      
+      setSelectedWords(new Set());
+      setDetections([]);
+      setPhoto(null);
+      
     } catch (error) {
-      console.error('Manual input error:', error);
-      Alert.alert('Error', 'Failed to process manual input');
+      console.error('Save error:', error);
+      Alert.alert('Error', 'Failed to process selected words.');
     }
   };
 
@@ -269,186 +291,30 @@ export default function DetectionScreen() {
   };
 
   const getCurrentLanguageName = (): string => {
-    const languageEntry = Object.entries(languages).find(([_, code]) => code === targetLanguage);
-    return languageEntry ? languageEntry[0] : 'Spanish';
-  };
-
-  const startSession = async () => {
-    try {
-      const id = await DatabaseService.createSession();
-      if (id) {
-        setSessionId(id);
-        Alert.alert('Success', '🎓 Learning session started!');
-      } else {
-        throw new Error('Failed to create session');
-      }
-    } catch (error) {
-      console.error('Session start error:', error);
-      Alert.alert('Error', 'Failed to start session. You can still use the app.');
-    }
-  };
-
-  const endSession = async () => {
-    if (sessionId) {
-      try {
-        await DatabaseService.endSession(sessionId, wordsStudied, wordsLearned);
-        Alert.alert('Session Complete', `📊 Words studied: ${wordsStudied}, Words learned: ${wordsLearned}`);
-        setSessionId(null);
-        setWordsStudied(0);
-        setWordsLearned(0);
-      } catch (error) {
-        console.error('Session end error:', error);
-        Alert.alert('Error', 'Failed to end session properly.');
-      }
-    }
-  };
-
-  const takePicture = async () => {
-    if (cameraRef.current && modelStatus === 'ready') {
-      try {
-        console.log('📸 Taking picture with AI analysis...');
-        const photoData = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-          base64: false,
-        });
-        
-        setPhoto(photoData.uri);
-        await detectObjectsWithAI(photoData.uri);
-      } catch (error) {
-        console.error('Picture error:', error);
-        Alert.alert('Error', 'Could not take picture. Please try again.');
-      }
-    } else if (modelStatus !== 'ready') {
-      Alert.alert('Detection Loading', '🤖 Object detection is still loading. Please wait a moment.');
-    }
-  };
-
-  const speakWord = async (text: string, language: string) => {
-    try {
-      await Speech.speak(text, {
-        language: language,
-        pitch: 1.0,
-        rate: 0.8,
-      });
-    } catch (error) {
-      console.error('Speech error:', error);
-      Alert.alert('Speech Error', 'Unable to speak the word. Please check your device settings.');
-    }
-  };
-
-  const saveSelectedWords = async () => {
-    if (selectedWords.size === 0) {
-      Alert.alert('No Selection', 'Please select at least one word to save.');
-      return;
-    }
-
-    try {
-      const selectedDetections = Array.from(selectedWords).map(index => detections[index]);
-      
-      // Auto-start session if needed
-      let currentSessionId = sessionId;
-      if (!currentSessionId) {
-        console.log('🎓 Auto-starting session for vocabulary save...');
-        currentSessionId = await DatabaseService.createSession();
-        if (currentSessionId) {
-          setSessionId(currentSessionId);
-        }
-      }
-
-      const savedCount = selectedDetections.length;
-      
-      for (const detection of selectedDetections) {
-        await DatabaseService.saveVocabularyWord(
-          detection.translation || detection.label,
-          detection.label,
-          targetLanguage,
-          detection.example || `I can see a ${detection.label}.`,
-          detection.exampleEnglish || `I can see a ${detection.label}.`,
-          detection.category,
-          currentSessionId
-        );
-      }
-
-      setWordsStudied(prev => prev + savedCount);
-      setWordsLearned(prev => prev + savedCount);
-      
-      Alert.alert(
-        'Words Saved!', 
-        `📚 ${savedCount} word${savedCount > 1 ? 's' : ''} saved to your vocabulary.`,
-        [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
-      );
-      
-      setSelectedWords(new Set());
-      setDetections([]);
-      setPhoto(null);
-      
-    } catch (error) {
-      console.error('Save error:', error);
-      Alert.alert('Save Error', 'Failed to save words. Please try again.');
-    }
-  };
-
-  const addManualWord = async () => {
-    if (!manualWord.trim()) {
-      Alert.alert('Empty Input', 'Please enter a word to translate.');
-      return;
-    }
-
-    try {
-      const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
-      
-      let currentSessionId = sessionId;
-      if (!currentSessionId) {
-        currentSessionId = await DatabaseService.createSession();
-        if (currentSessionId) {
-          setSessionId(currentSessionId);
-        }
-      }
-
-      await DatabaseService.saveVocabularyWord(
-        translation,
-        manualWord.trim(),
-        targetLanguage,
-        `I can use the word "${manualWord.trim()}".`,
-        `I can use the word "${manualWord.trim()}".`,
-        'manual',
-        currentSessionId
-      );
-
-      setWordsLearned(prev => prev + 1);
-      
-      Alert.alert(
-        'Word Added!',
-        `📚 "${manualWord.trim()}" → "${translation}" added to your vocabulary.`,
-        [{ text: 'Add Another', onPress: () => setManualWord('') }]
-      );
-      
-      setShowManualInput(false);
-      setManualWord('');
-      
-    } catch (error) {
-      console.error('Manual word error:', error);
-      Alert.alert('Error', 'Failed to add manual word. Please try again.');
-    }
+    return Object.entries(languages).find(([_, code]) => code === targetLanguage)?.[0] || 'Spanish';
   };
 
   // Permission handling
   if (!permission) {
     return (
-      <View style={styles.permissionContainer}>
-        <ActivityIndicator size="large" color="#3498db" style={{ marginTop: 20 }} />
-        <Text style={styles.permissionMessage}>Requesting camera permission...</Text>
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#3498db" />
       </View>
     );
   }
 
   if (!permission.granted) {
     return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionMessage}>🔒 Camera permission required for object detection</Text>
-        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionButtonText}>Grant Camera Permission</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <View style={styles.permissionCard}>
+          <Text style={styles.permissionTitle}>📸 Camera Permission Required</Text>
+          <Text style={styles.permissionText}>
+            VocAm needs camera access to detect objects and help you learn languages.
+          </Text>
+          <TouchableOpacity style={styles.grantButton} onPress={requestPermission}>
+            <Text style={styles.grantButtonText}>Grant Permission</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -456,245 +322,143 @@ export default function DetectionScreen() {
   // Show photo results
   if (photo) {
     return (
-      <ScrollView style={styles.container}>
-        <View style={styles.photoContainer}>
-          <Image source={{ uri: photo }} style={styles.capturedPhoto} />
-          {isProcessing && (
-            <View style={styles.processingOverlay}>
-              <ActivityIndicator size="large" color="white" />
-              <Text style={styles.processingText}>🤖 Analyzing image...</Text>
-            </View>
-          )}
-        </View>
-
-        {processingStats && (
-          <View style={styles.statsContainer}>
-            <Text style={styles.statsTitle}>📊 Analysis Results</Text>
-            <Text style={styles.statsText}>
-              Found {processingStats.objectsDetected} objects in {processingStats.processingTime}ms
-            </Text>
-            <Text style={styles.statsText}>
-              Average confidence: {(processingStats.avgConfidence * 100).toFixed(1)}%
-            </Text>
-          </View>
-        )}
-
-        {detections.length > 0 && (
-          <View style={styles.detectionsContainer}>
-            <Text style={styles.detectionsTitle}>
-              🎯 Found {detections.length} Object{detections.length > 1 ? 's' : ''}
-            </Text>
-            
-            {detections.map((detection, index) => (
-              <View key={index} style={styles.detectionCard}>
-                <View style={styles.detectionHeader}>
-                  <View style={styles.detectionInfo}>
-                    <Text style={styles.detectionLabel}>{detection.label}</Text>
-                    <Text style={styles.detectionTranslation}>
-                      {detection.translation || 'Translation not available'}
-                    </Text>
-                    <Text style={styles.detectionConfidence}>
-                      Confidence: {(detection.confidence * 100).toFixed(1)}% • {detection.confidence_level}
+      <View style={styles.container}>
+        <PhotoResult
+          photoUri={photo} // Use rotated image for display
+          detections={detections}
+          isProcessing={isProcessing}
+          onLanguagePress={() => setShowLanguageModal(true)}
+          targetLanguage={targetLanguage}
+          languageName={getCurrentLanguageName()}
+        >
+          <View style={{ flex: 1 }}>
+            {/* Detection Results */}
+          {detections.length > 0 && (
+            <View style={styles.resultsContainer}>
+              <View style={{ flex: 1 }}>
+                <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+                  <View style={styles.resultsHeader}>
+                    <Text style={styles.resultsTitle}>
+                      Found {detections.length} Object{detections.length > 1 ? 's' : ''}
                     </Text>
                   </View>
-                  
-                  <TouchableOpacity
-                    style={[styles.selectButton, selectedWords.has(index) && styles.selectButtonActive]}
-                    onPress={() => toggleWordSelection(index)}
-                  >
-                    <Text style={{
-                      color: selectedWords.has(index) ? "#fff" : "#3498db",
-                      fontSize: 20 
-                    }}>
-                      {selectedWords.has(index) ? "✅" : "⭕"}
-                    </Text>
-                    <Text style={[
-                      styles.selectButtonText,
-                      selectedWords.has(index) && styles.selectButtonTextActive
-                    ]}>
-                      {selectedWords.has(index) ? 'Selected' : 'Select'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                
-                {detection.example && (
-                  <View style={styles.exampleContainer}>
-                    <Text style={styles.exampleEnglish}>{detection.exampleEnglish || 'Example not available'}</Text>
-                    <Text style={styles.exampleTranslated}>{detection.example}</Text>
-                    <TouchableOpacity
-                      style={styles.exampleAudioButton}
-                      onPress={() => speakWord(detection.example || detection.exampleEnglish || '', targetLanguage)}
-                    >
-                      <Text style={{ color: '#3498db', fontSize: 16 }}>▶️</Text>
-                      <Text style={styles.exampleAudioText}>Play Example</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+
+                  {detections.map((detection, index) => (
+                    <DetectionItem
+                      key={index}
+                      detection={detection}
+                      index={index}
+                      isSelected={selectedWords.has(index)}
+                      onToggleSelect={toggleWordSelection}
+                      onSpeakWord={(text: string) => handleSpeech(text, targetLanguage)}
+                      onSpeakExample={(text: string) => handleSpeech(text, targetLanguage)}
+                      targetLanguage={targetLanguage}
+                    />
+                  ))}
+                </ScrollView>
               </View>
-            ))}
-            
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.saveButton} onPress={saveSelectedWords}>
-                <Text style={{ color: 'white', fontSize: 20 }}>💾</Text>
-                <Text style={styles.saveButtonText}>
-                  Save Selected ({selectedWords.size})
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.retakeButton} 
-                onPress={() => {
-                  setPhoto(null);
-                  setDetections([]);
-                  setSelectedWords(new Set());
-                  setProcessingStats(null);
-                }}
-              >
-                <Text style={{ color: 'white', fontSize: 20 }}>📷</Text>
-                <Text style={styles.retakeButtonText}>Take Another</Text>
-              </TouchableOpacity>
+              <View style={styles.actionButtons}>
+                <TouchableOpacity style={styles.saveButton} onPress={saveSelectedWords}>
+                  <Text style={styles.saveButtonIcon}>
+                    <FontAwesome name="save" size={24} color="white" />
+                  </Text>
+                  <Text style={styles.saveButtonText}>
+                    Save Selected ({selectedWords.size})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.retakeButton}
+                  onPress={() => {
+                    setPhoto(null);
+                    setDetections([]);
+                    setSelectedWords(new Set());
+                  }}
+                >
+                  <Text style={styles.retakeButtonIcon}>
+                    <Entypo name="camera" size={20} color="white" />
+                  </Text>
+                  <Text style={styles.retakeButtonText}>Take Another</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            )}
+          </View>
+        </PhotoResult>
+        {/* MODAL */}
+        <Modal
+          visible={showLanguageModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowLanguageModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Language</Text>
+              <ScrollView style={styles.languageList}>
+                {Object.entries(languages).map(([name, code]) => (
+                  <TouchableOpacity
+                    key={code}
+                    style={[
+                      styles.languageOption,
+                      targetLanguage === code && styles.languageOptionActive
+                    ]}
+                    onPress={async () => {
+                      const previousLanguage = targetLanguage;
+                      setTargetLanguage(code);
+                      setShowLanguageModal(false);
+                      
+                      // If we have detections (photo was taken), re-translate them
+                      if (photo && detections.length > 0 && code !== previousLanguage) {
+                        await retranslateDetections(code);
+                      }
+                    }}
+                  >
+                    <Text style={[
+                      styles.languageOptionText,
+                      targetLanguage === code && styles.languageOptionTextActive
+                    ]}>
+                      {name}
+                    </Text>
+                    {targetLanguage === code && (
+                      <Text style={styles.languageOptionCheck}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           </View>
-        )}
-      </ScrollView>
+        </Modal>
+      </View>
     );
   }
 
-  // Main Camera View
+  
+  // Camera View
   return (
     <View style={styles.container}>
-      {/* Session Management */}
-      <View style={styles.sessionContainer}>
-        {sessionId ? (
-          <View style={styles.sessionActive}>
-            <Text style={styles.sessionText}>
-              📚 Session Active | Words: {wordsStudied} | Learned: {wordsLearned}
-            </Text>
-            <TouchableOpacity style={styles.endSessionButton} onPress={endSession}>
-              <Text style={styles.endSessionButtonText}>End Session</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity style={styles.startSessionButton} onPress={startSession}>
-            <Text style={styles.startSessionButtonText}>🎓 Start Learning Session</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Camera View */}
-      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.button} onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}>
-            <Text style={{ color: 'white', fontSize: 24 }}>🔄</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[
-              styles.captureButton,
-              modelStatus !== 'ready' && styles.captureButtonDisabled
-            ]} 
-            onPress={takePicture}
-            disabled={modelStatus !== 'ready'}
-          >
-            <Text style={{ color: 'white', fontSize: 32 }}>📷</Text>
-            {modelStatus === 'loading' && (
-              <ActivityIndicator size="small" color="white" style={styles.captureLoader} />
-            )}
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.button} onPress={() => setShowManualInput(true)}>
-            <Text style={{ color: 'white', fontSize: 24 }}>✏️</Text>
-          </TouchableOpacity>
-        </View>
-      </CameraView>
-
-      {/* Language Selection */}
-      <View style={styles.languageContainer}>
-        <TouchableOpacity 
-          style={styles.languageButton} 
-          onPress={() => setShowLanguageModal(true)}
-        >
-          <Text style={{ color: '#3498db', fontSize: 20 }}>🌍</Text>
-          <Text style={styles.languageButtonText}>
-            Learning: {getCurrentLanguageName()}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Status Bar */}
-      <View style={styles.statusContainer}>
-        <Text style={styles.statusText}>
-          {modelStatus === 'loading' && '🔄 Loading AI Model...'}
-          {modelStatus === 'ready' && '✅ AI Ready - Take a photo!'}
-          {modelStatus === 'error' && '⚠️ AI Model Error - Limited functionality'}
-        </Text>
-      </View>
-
-      {/* Manual Input Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={showManualInput}
-        onRequestClose={() => setShowManualInput(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>✏️ Add Word Manually</Text>
-              <TouchableOpacity onPress={() => setShowManualInput(false)}>
-                <Text style={{ color: '#666', fontSize: 24 }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.modalSubtitle}>
-              Enter a word in English to translate to {getCurrentLanguageName()}
-            </Text>
-            
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter word (e.g., apple, car, book)"
-              value={manualWord}
-              onChangeText={setManualWord}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus={true}
-            />
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setShowManualInput(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={addManualWord}
-              >
-                <Text style={styles.addButtonText}>Add Word</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <CameraView style={styles.camera} facing={facing} ref={cameraRef} />
+      {/* Controls are outside CameraView to avoid warning */}
+      <CameraControls
+        facing={facing}
+        onFlipCamera={() => setFacing(facing === 'back' ? 'front' : 'back')}
+        onTakePicture={takePicture}
+        onManualInput={() => setShowManualInput(true)}
+        onLanguagePress={() => setShowLanguageModal(true)}
+        modelStatus={modelStatus}
+        languageName={getCurrentLanguageName()}
+      />
 
       {/* Language Selection Modal */}
       <Modal
-        animationType="slide"
-        transparent={true}
         visible={showLanguageModal}
+        transparent={true}
+        animationType="slide"
         onRequestClose={() => setShowLanguageModal(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🌍 Select Language</Text>
-              <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-                <Text style={{ color: '#666', fontSize: 24 }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            
+            <Text style={styles.modalTitle}>Select Language</Text>
             <ScrollView style={styles.languageList}>
               {Object.entries(languages).map(([name, code]) => (
                 <TouchableOpacity
@@ -703,9 +467,15 @@ export default function DetectionScreen() {
                     styles.languageOption,
                     targetLanguage === code && styles.languageOptionActive
                   ]}
-                  onPress={() => {
+                  onPress={async () => {
+                    const previousLanguage = targetLanguage;
                     setTargetLanguage(code);
                     setShowLanguageModal(false);
+                    
+                    // If we have detections (photo was taken), re-translate them
+                    if (photo && detections.length > 0 && code !== previousLanguage) {
+                      await retranslateDetections(code);
+                    }
                   }}
                 >
                   <Text style={[
@@ -715,11 +485,75 @@ export default function DetectionScreen() {
                     {name}
                   </Text>
                   {targetLanguage === code && (
-                    <Text style={{ color: '#3498db', fontSize: 20 }}>✓</Text>
+                    <Text style={styles.languageOptionCheck}>✓</Text>
                   )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Manual Input Modal */}
+      <Modal
+        visible={showManualInput}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowManualInput(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Word Manually</Text>
+            <TextInput
+              style={styles.manualInput}
+              placeholder="Enter a word to translate"
+              value={manualWord}
+              onChangeText={setManualWord}
+              autoFocus
+            />
+            <View style={styles.manualButtons}>
+              <TouchableOpacity 
+                style={styles.manualCancelButton}
+                onPress={() => {
+                  setShowManualInput(false);
+                  setManualWord('');
+                }}
+              >
+                <Text style={styles.manualCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.manualAddButton}
+                onPress={async () => {
+                  if (manualWord.trim()) {
+                    try {
+                      // Translate manual word
+                      const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
+                      const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
+                      
+                      // Test pronunciation
+                      await handleSpeech(translation, targetLanguage);
+                      
+                      // TODO: Implement your new database save logic here
+                      console.log('Manual word to save:', {
+                        word: manualWord.trim(),
+                        translation,
+                        example
+                      });
+                      
+                      setShowManualInput(false);
+                      setManualWord('');
+                      
+                      Alert.alert('Word Added!', `"${translation}" has been processed.`);
+                    } catch (error) {
+                      console.error('Manual word error:', error);
+                      Alert.alert('Error', 'Failed to add word. Please try again.');
+                    }
+                  }
+                }}
+              >
+                <Text style={styles.manualAddText}>Add Word</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -732,390 +566,119 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  permissionContainer: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  permissionMessage: {
-    fontSize: 18,
-    color: '#2c3e50',
-    textAlign: 'center',
-    marginBottom: 30,
-    lineHeight: 24,
-  },
-  permissionButton: {
-    backgroundColor: '#3498db',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  permissionButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
   camera: {
     flex: 1,
   },
-  buttonContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: 'transparent',
-    margin: 20,
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingBottom: 50,
-  },
-  button: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-  },
-  captureButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#3498db',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-  },
-  captureButtonDisabled: {
-    backgroundColor: '#7f8c8d',
-  },
-  captureLoader: {
-    position: 'absolute',
-    top: -35,
-  },
-  sessionContainer: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ecf0f1',
-  },
-  sessionActive: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sessionText: {
-    fontSize: 14,
-    color: '#2c3e50',
-    fontWeight: '500',
-    flex: 1,
-  },
-  startSessionButton: {
-    backgroundColor: '#27ae60',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  startSessionButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  endSessionButton: {
-    backgroundColor: '#e74c3c',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  endSessionButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  languageContainer: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ecf0f1',
-  },
-  languageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  languageButtonText: {
-    fontSize: 16,
-    color: '#3498db',
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  statusContainer: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    padding: 10,
-    alignItems: 'center',
-  },
-  statusText: {
-    fontSize: 14,
-    color: '#2c3e50',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  photoContainer: {
-    position: 'relative',
-  },
-  capturedPhoto: {
-    width: width,
-    height: width * 0.8,
-    resizeMode: 'cover',
-  },
-  processingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  processingText: {
-    color: 'white',
-    marginTop: 10,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  statsContainer: {
-    backgroundColor: 'rgba(52, 152, 219, 0.9)',
-    padding: 15,
-  },
-  statsTitle: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  statsText: {
-    color: 'white',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 5,
-  },
-  detectionsContainer: {
+  permissionCard: {
     backgroundColor: 'white',
-    padding: 15,
-  },
-  detectionsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  detectionCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3498db',
-    elevation: 2,
-  },
-  detectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  detectionInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  detectionLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    textTransform: 'capitalize',
-  },
-  detectionTranslation: {
-    fontSize: 16,
-    color: '#3498db',
-    fontWeight: '600',
-    marginTop: 5,
-  },
-  detectionConfidence: {
-    fontSize: 12,
-    color: '#7f8c8d',
-    marginTop: 5,
-  },
-  selectButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    padding: 30,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#3498db',
-    elevation: 1,
-  },
-  selectButtonActive: {
-    backgroundColor: '#3498db',
-  },
-  selectButtonText: {
-    color: '#3498db',
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 5,
-  },
-  selectButtonTextActive: {
-    color: 'white',
-  },
-  exampleContainer: {
-    marginTop: 15,
-    padding: 12,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    elevation: 1,
-  },
-  exampleEnglish: {
-    fontSize: 14,
-    color: '#2c3e50',
-    fontStyle: 'italic',
-  },
-  exampleTranslated: {
-    fontSize: 14,
-    color: '#3498db',
-    fontWeight: '500',
-    marginTop: 5,
-  },
-  exampleAudioButton: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    alignSelf: 'flex-start',
+    margin: 20,
   },
-  exampleAudioText: {
-    color: '#3498db',
-    fontSize: 12,
-    marginLeft: 5,
+  permissionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#074173',
+    marginBottom: 15,
+  },
+  permissionText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 25,
+  },
+  grantButton: {
+    backgroundColor: '#1679AB',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 25,
+  },
+  grantButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  resultsContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa'
+  },
+  resultsHeader: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  resultsTitle: {
+    paddingVertical: 10,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'black',
+    textAlign: 'center',
   },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
-    paddingHorizontal: 5,
+    marginTop: 10,
+    marginHorizontal: 20,
+    gap: 10,
   },
   saveButton: {
+    flex: 1.3,
     backgroundColor: '#27ae60',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'center',
     paddingVertical: 15,
     borderRadius: 25,
-    flex: 0.48,
-    justifyContent: 'center',
     elevation: 3,
+  },
+  saveButtonIcon: {
+    fontSize: 20,
+    marginRight: 8,
   },
   saveButtonText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 14,
-    marginLeft: 8,
+    fontSize: 16,
   },
   retakeButton: {
+    flex: 1.05,
     backgroundColor: '#3498db',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'center',
     paddingVertical: 15,
     borderRadius: 25,
-    flex: 0.48,
-    justifyContent: 'center',
     elevation: 3,
+  },
+  retakeButtonIcon: {
+    fontSize: 20,
+    marginRight: 8,
   },
   retakeButtonText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 14,
-    marginLeft: 8,
+    fontSize: 16,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
     backgroundColor: 'white',
     borderRadius: 20,
     padding: 20,
-    margin: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    width: '100%',
     maxWidth: 400,
-    width: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#2c3e50',
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#666',
     marginBottom: 20,
     textAlign: 'center',
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cancelButton: {
-    backgroundColor: '#95a5a6',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flex: 0.45,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  addButton: {
-    backgroundColor: '#27ae60',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flex: 0.45,
-    alignItems: 'center',
-  },
-  addButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
   },
   languageList: {
     maxHeight: 300,
@@ -1127,10 +690,10 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#ecf0f1',
   },
   languageOptionActive: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: '#e8f4f8',
   },
   languageOptionText: {
     fontSize: 16,
@@ -1138,6 +701,50 @@ const styles = StyleSheet.create({
   },
   languageOptionTextActive: {
     color: '#3498db',
+    fontWeight: '600',
+  },
+  languageOptionCheck: {
+    fontSize: 18,
+    color: '#3498db',
     fontWeight: 'bold',
   },
+  // Manual input styles
+  manualInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 15,
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  manualButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  manualCancelButton: {
+    flex: 1,
+    backgroundColor: '#95a5a6',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  manualCancelText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  manualAddButton: {
+    flex: 1,
+    backgroundColor: '#3498db',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  manualAddText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  resultsScrollContent: {
+    flexGrow: 1,
+  }
 });

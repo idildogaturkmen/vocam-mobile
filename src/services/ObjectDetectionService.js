@@ -1,13 +1,14 @@
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 class ObjectDetectionService {
   constructor() {
     this.isInitialized = false;
-    this.apiKey = null;
+        this.apiKey = null;
     
     this.OBJECT_CATEGORIES = {
-      "food": ["apple", "banana", "orange", "pizza", "burger", "cake", "coffee", "wine", "cup", "bowl", "bottle", "sandwich", "bread"],
+            "food": ["apple", "banana", "orange", "pizza", "burger", "cake", "coffee", "wine", "cup", "bowl", "bottle", "sandwich", "bread"],
       "electronics": ["laptop", "cell phone", "tv", "keyboard", "mouse", "tablet", "camera", "headphones", "speaker"],
       "furniture": ["chair", "couch", "table", "bed", "desk", "bookshelf"],
       "clothing": ["shirt", "pants", "shoes", "hat", "jacket", "dress", "tie"],
@@ -17,7 +18,7 @@ class ObjectDetectionService {
       "sports": ["ball", "tennis racket", "bicycle", "skateboard", "football", "basketball", "baseball"]
     };
 
-    this.GOOGLE_VISION_LABEL_MAPPING = {
+        this.GOOGLE_VISION_LABEL_MAPPING = {
       'mobile phone': 'cell phone',
       'smartphone': 'cell phone', 
       'telephone': 'cell phone',
@@ -61,45 +62,52 @@ class ObjectDetectionService {
     try {
       console.log('🚀 Initializing Google Vision Object Detection...');
       
-      // Load API key securely from environment
+      // Load API key from multiple sources
       this.apiKey = await this.getSecureApiKey();
+      
+      console.log('🔐 API Key loaded:', this.apiKey ? 'Yes (hidden)' : 'No');
       
       if (!this.apiKey) {
         console.error('❌ Google Vision API key not found!');
         throw new Error('Google Vision API key is required. Please set GOOGLE_CLOUD_VISION_API_KEY in your environment.');
       }
       
-      console.log('✅ Google Vision API key loaded securely from environment');
+      console.log('✅ Google Vision API key loaded successfully');
       this.isInitialized = true;
       console.log('✅ Google Vision Object Detection Service ready');
       return true;
       
     } catch (error) {
       console.error('❌ Google Vision initialization failed:', error);
-      throw error; // Don't catch - let the app handle the error
+      throw error;
     }
   }
 
   async getSecureApiKey() {
-    // SECURE: Load from environment variable (GitHub Codespaces secret)
+    // Method 1: Try Expo Constants extra field
+    if (Constants.expoConfig?.extra?.googleVisionApiKey) {
+      console.log('🔐 Using API key from app.json extra field');
+      return Constants.expoConfig.extra.googleVisionApiKey;
+    }
+
+    // Method 2: Try manifest extra field (older Expo versions)
+    if (Constants.manifest?.extra?.googleVisionApiKey) {
+      console.log('🔐 Using API key from manifest extra field');
+      return Constants.manifest.extra.googleVisionApiKey;
+    }
+
+    // Method 3: Try environment variables (works in development)
     if (process.env.GOOGLE_CLOUD_VISION_API_KEY) {
-      console.log('🔐 Using API key from environment variable (secure)');
+      console.log('🔐 Using API key from environment variable');
       return process.env.GOOGLE_CLOUD_VISION_API_KEY;
     }
 
-    // Try Expo Constants (if using EAS secrets)
-    try {
-      const Constants = await import('expo-constants');
-      if (Constants.default?.expoConfig?.extra?.googleVisionApiKey) {
-        console.log('🔐 Using API key from Expo config (secure)');
-        return Constants.default.expoConfig.extra.googleVisionApiKey;
-      }
-    } catch (error) {
-      // Expo constants not available
-    }
+    // Method 4: For development only - hardcoded key (REMOVE IN PRODUCTION)
+    // Uncomment and add your key here for testing:
+    // return 'YOUR_API_KEY_HERE';
 
-    console.log('🔍 No secure API key found in environment');
-    return null; // No API key found
+    console.log('🔍 No API key found in any source');
+    return null;
   }
 
   async detectObjects(imageUri, confidenceThreshold = 0.5, iouThreshold = 0.45) {
@@ -108,20 +116,20 @@ class ObjectDetectionService {
         await this.initialize();
       }
       
+      if (!this.apiKey) {
+        throw new Error('Google Vision API key not configured. Detection cannot proceed.');
+      }
+      
       console.log('🔍 Starting Google Vision object detection...');
       const startTime = Date.now();
       
-      // Require API key - no fallback
-      if (!this.apiKey) {
-        throw new Error('Google Vision API key not configured. Please check your environment variables.');
-      }
-      
-      // Real Google Vision API call
+      // Convert image to base64
       console.log('🖼️ Converting image to base64...');
       const base64Image = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
       
+      // Call Google Vision API
       console.log('⚡ Calling Google Vision API...');
       const inferenceStart = Date.now();
       const visionResponse = await this.callGoogleVisionAPI(base64Image);
@@ -129,7 +137,8 @@ class ObjectDetectionService {
       
       console.log(`🎯 Google Vision API completed in ${inferenceTime}ms`);
       
-      const detections = this.processGoogleVisionResults(visionResponse, confidenceThreshold);
+      // Process results with bounding boxes
+      const detections = this.processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri);
       
       const totalTime = Date.now() - startTime;
       console.log(`✅ Detection complete! Found ${detections.length} objects in ${totalTime}ms`);
@@ -146,7 +155,7 @@ class ObjectDetectionService {
       
     } catch (error) {
       console.error('❌ Google Vision detection failed:', error);
-      throw error; // Don't provide fallback - let the app handle the error
+      throw error;
     }
   }
 
@@ -178,7 +187,7 @@ class ObjectDetectionService {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
+            const errorText = await response.text();
       throw new Error(`Google Vision API error: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
@@ -188,20 +197,50 @@ class ObjectDetectionService {
       throw new Error(`Google Vision API error: ${result.responses[0].error.message}`);
     }
 
-    return result;
+        return result;
   }
 
-  processGoogleVisionResults(visionResponse, confidenceThreshold) {
+  processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri) {
     const annotations = visionResponse.responses[0].localizedObjectAnnotations || [];
+    
+    console.log(`🔍 Processing ${annotations.length} detections from Google Vision`);
     
     return annotations
       .filter(annotation => annotation.score >= confidenceThreshold)
-      .map(annotation => {
+      .map((annotation, idx) => {
         const label = this.normalizeGoogleVisionLabel(annotation.name);
         const category = this.getObjectCategory(label);
         
-        // Convert normalized vertices to bbox
-        const bbox = this.convertVertexArrayToBbox(annotation.boundingPoly.normalizedVertices);
+        // Get vertices and handle undefined values
+        const vertices = annotation.boundingPoly.normalizedVertices;
+        
+        // Process each vertex, replacing undefined with appropriate defaults
+        const processedVertices = [];
+        for (let i = 0; i < vertices.length; i++) {
+          const vertex = vertices[i];
+          const x = vertex.x !== undefined ? vertex.x : (i === 0 || i === 3) ? 0 : 1;
+          const y = vertex.y !== undefined ? vertex.y : (i === 0 || i === 1) ? 0 : 1;
+          processedVertices.push({ x, y });
+        }
+       
+        // Calculate bounding box from processed vertices
+        const xValues = processedVertices.map(v => v.x);
+        const yValues = processedVertices.map(v => v.y);
+        
+        const bbox = [
+          Math.min(...xValues),  // left
+          Math.min(...yValues),  // top
+          Math.max(...xValues),  // right
+          Math.max(...yValues)   // bottom
+        ];
+        
+        // Validate bbox
+        if (bbox[2] <= bbox[0] || bbox[3] <= bbox[1]) {
+          console.warn(`Invalid bbox for ${label}: [${bbox.join(', ')}]`);
+          // Try to fix it
+          bbox[2] = Math.max(bbox[2], bbox[0] + 0.1);
+          bbox[3] = Math.max(bbox[3], bbox[1] + 0.1);
+        }
         
         return {
           label: label,
@@ -209,7 +248,8 @@ class ObjectDetectionService {
           bbox: bbox,
           category: category,
           raw_label: annotation.name,
-          source: 'google_vision'
+          source: 'google_vision',
+          vertices: processedVertices
         };
       })
       .sort((a, b) => b.confidence - a.confidence);
@@ -218,22 +258,6 @@ class ObjectDetectionService {
   normalizeGoogleVisionLabel(googleLabel) {
     const lowerLabel = googleLabel.toLowerCase();
     return this.GOOGLE_VISION_LABEL_MAPPING[lowerLabel] || lowerLabel;
-  }
-
-  convertVertexArrayToBbox(vertices, imageWidth = 1, imageHeight = 1) {
-    if (!vertices || vertices.length === 0) {
-      return [0, 0, 1, 1];
-    }
-    
-    const xCoords = vertices.map(v => v.x * imageWidth);
-    const yCoords = vertices.map(v => v.y * imageHeight);
-    
-    return [
-      Math.min(...xCoords),
-      Math.min(...yCoords),
-      Math.max(...xCoords),
-      Math.max(...yCoords)
-    ];
   }
 
   getObjectCategory(label) {
@@ -251,7 +275,7 @@ class ObjectDetectionService {
       type: 'Google Cloud Vision API',
       accuracy: 'High (Google\'s trained models)',
       cost: '$1.50 per 1000 requests (first 1000/month free)',
-      source: this.apiKey ? 'Google Cloud Vision API' : 'API Key Missing',
+            source: this.apiKey ? 'Google Cloud Vision API' : 'API Key Missing',
       isLoaded: this.isInitialized,
       platform: Platform.OS,
       status: this.isInitialized ? 'Ready' : 'Initializing...',
@@ -263,7 +287,7 @@ class ObjectDetectionService {
         '✅ Works in Expo managed workflow',
         '✅ No large model downloads',
         '💰 Pay-per-use pricing after free tier',
-        this.apiKey ? '✅ API key configured securely' : '❌ API key missing - detection will fail'
+        this.apiKey ? '✅ API key configured' : '❌ API key missing'
       ]
     };
   }

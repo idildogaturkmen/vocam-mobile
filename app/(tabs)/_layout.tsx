@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import Entypo from '@expo/vector-icons/Entypo';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function TabLayout() {
   return (
@@ -27,11 +28,10 @@ export default function TabLayout() {
       {/* 1. Camera Tab - DEFAULT/FIRST */}
       <Tabs.Screen
         name="detection"
-        name="detection"
         options={{
           title: 'Camera',
-          tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}><Entypo name="camera" size={24} color="black" /></Text>
+          tabBarIcon: ({ color }: { color: string }) => (
+            <Entypo name="camera" size={24} color={color} />
           ),
         }}
       />
@@ -41,8 +41,8 @@ export default function TabLayout() {
         name="vocabulary"
         options={{
           title: 'Vocabulary',
-          tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}><MaterialCommunityIcons name="bookshelf" size={24} color="black" /></Text>
+          tabBarIcon: ({ color }: { color: string }) => (
+            <MaterialCommunityIcons name="bookshelf" size={24} color={color} />
           ),
         }}
       />
@@ -52,8 +52,8 @@ export default function TabLayout() {
         name="progress"
         options={{
           title: 'Progress',
-          tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}><Entypo name="bar-graph" size={24} color="black" /></Text>
+          tabBarIcon: ({ color }: { color: string }) => (
+            <Entypo name="bar-graph" size={24} color={color} />
           ),
         }}
       />
@@ -63,8 +63,8 @@ export default function TabLayout() {
         name="quiz"
         options={{
           title: 'Quiz',
-          tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}><Entypo name="game-controller" size={24} color="black" /></Text>
+          tabBarIcon: ({ color }: { color: string }) => (
+            <Entypo name="game-controller" size={24} color={color} />
           ),
         }}
       />
@@ -74,8 +74,19 @@ export default function TabLayout() {
         name="practice"
         options={{
           title: 'Practice',
-          tabBarIcon: ({ color, focused }) => (
-            <Text style={{ color, fontSize: 20 }}><FontAwesome name="microphone" size={24} color="black" /></Text>
+          tabBarIcon: ({ color }: { color: string }) => (
+            <FontAwesome name="microphone" size={24} color={color} />
+          ),
+        }}
+      />
+      
+      {/* 6. Settings Tab */}
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color }: { color: string }) => (
+            <Ionicons name="settings" size={24} color={color} />
           ),
         }}
       />
@@ -84,7 +95,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          href: null, // This hides the tab
+          href: null,
         }}
       />
     </Tabs>

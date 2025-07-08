@@ -19,6 +19,12 @@ import ObjectDetectionService from '../../src/services/ObjectDetectionService';
 import TranslationService from '../../src/services/TranslationService';
 import SpeechService from '../../src/services/SpeechService';
 import { getDisplayAndVisionImage } from '../../src/services/ImageUtils';
+import VocabularyService from '../../src/services/VocabularyService';
+import type { SaveWordResult } from '../../src/services/VocabularyService';
+import SessionService from '../../src/services/SessionService';
+
+// Database
+import { supabase } from '../../database/config';
 
 // Components
 import PhotoResult from '../../src/components/detection/PhotoResult';
@@ -106,6 +112,17 @@ export default function DetectionScreen() {
     initializeServices();
   }, []);
 
+  useEffect(() => {
+    const initSession = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await SessionService.startSession(user.id);
+        await SessionService.updateStreak(user.id);
+      }
+    };
+    initSession();
+  }, []);
+
   const initializeServices = async () => {
     try {
       setModelStatus('loading');
@@ -128,7 +145,11 @@ export default function DetectionScreen() {
   const takePicture = async () => {
     if (cameraRef.current && modelStatus === 'ready') {
       try {
-        const photoResult = await cameraRef.current.takePictureAsync({ skipProcessing: false });
+        const photoResult = await cameraRef.current.takePictureAsync({ 
+          skipProcessing: false,
+          quality: 0.9,
+          exif: false,
+        });
         
         // Auto-rotate and strip EXIF before using
         const rotatedUri = await getDisplayAndVisionImage(photoResult.uri);
@@ -236,7 +257,7 @@ export default function DetectionScreen() {
   // Enhanced speech function that ensures text is valid
   const handleSpeech = async (text: string, language: string) => {
     try {
-      // Validate text before speaking
+      // Validate text before speaking (Fix for TypeScript error)
       if (!text || typeof text !== 'string' || text.trim() === '') {
         console.warn('⚠️ Invalid text for speech:', text);
         Alert.alert('Speech Error', 'No text available to pronounce.');
@@ -261,22 +282,77 @@ export default function DetectionScreen() {
     try {
       const selectedDetections = Array.from(selectedWords).map(index => detections[index]);
       
-      // TODO: Implement your new database save logic here
-      console.log('Selected words to save:', selectedDetections);
-      
-      Alert.alert(
-        'Words Selected!', 
-        `📚 ${selectedDetections.length} word${selectedDetections.length > 1 ? 's' : ''} selected.`,
-        [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
-      );
-      
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Please log in to save vocabulary');
+        return;
+      }
+
+      // Save each selected word and track results
+      let savedCount = 0;
+      let existsCount = 0;
+      const errors: string[] = [];
+      const existingWords: string[] = [];
+
+      for (const detection of selectedDetections) {
+        // Fix TypeScript errors by providing fallback values
+        const translation = detection.translation || '';
+        const example = detection.example || '';
+        const exampleEnglish = detection.exampleEnglish || '';
+
+        const result: SaveWordResult = await VocabularyService.saveWord(
+          detection.label,
+          translation,
+          example,
+          exampleEnglish,
+          targetLanguage,
+          user.id
+        );
+
+        if (result === 'success') {
+          savedCount++;
+        } else if (result === 'exists') {
+          existsCount++;
+          existingWords.push(detection.label);
+        } else {
+          errors.push(detection.label);
+        }
+      }
+
+      // Show results with proper timing
+      if (existsCount > 0 && savedCount === 0 && errors.length === 0) {
+        // Only existing words - alert already shown by service
+        setSelectedWords(new Set());
+        setDetections([]);
+        setPhoto(null);
+        return;
+      }
+
+      // Delay before showing success/error messages to avoid jumpscare effect
+      setTimeout(() => {
+        if (savedCount > 0) {
+          Alert.alert(
+            'Success!', 
+            `✅ Saved ${savedCount} new word${savedCount > 1 ? 's' : ''} to your vocabulary!${existsCount > 0 ? ` (${existsCount} already existed)` : ''}`,
+            [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
+          );
+        }
+
+        if (errors.length > 0) {
+          setTimeout(() => {
+            Alert.alert('Some words failed', `Could not save: ${errors.join(', ')}`);
+          }, savedCount > 0 ? 500 : 0); // Additional delay if there was a success message
+        }
+      }, existsCount > 0 ? 1500 : 0); // Delay if there were existing word alerts
+
       setSelectedWords(new Set());
       setDetections([]);
       setPhoto(null);
       
     } catch (error) {
       console.error('Save error:', error);
-      Alert.alert('Error', 'Failed to process selected words.');
+      Alert.alert('Error', 'Failed to save vocabulary. Please try again.');
     }
   };
 
@@ -434,10 +510,17 @@ export default function DetectionScreen() {
   }
 
   
-  // Camera View
+  // Camera View with improved settings to prevent zoom
   return (
     <View style={styles.container}>
-      <CameraView style={styles.camera} facing={facing} ref={cameraRef} />
+      <CameraView 
+        style={styles.camera} 
+        facing={facing} 
+        ref={cameraRef}
+        zoom={0}
+        flash="off"
+        enableTorch={false}
+      />
       {/* Controls are outside CameraView to avoid warning */}
       <CameraControls
         facing={facing}
@@ -526,6 +609,13 @@ export default function DetectionScreen() {
                 onPress={async () => {
                   if (manualWord.trim()) {
                     try {
+                      // Get current user
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (!user) {
+                        Alert.alert('Error', 'Please log in to save vocabulary');
+                        return;
+                      }
+
                       // Translate manual word
                       const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
                       const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
@@ -533,17 +623,29 @@ export default function DetectionScreen() {
                       // Test pronunciation
                       await handleSpeech(translation, targetLanguage);
                       
-                      // TODO: Implement your new database save logic here
-                      console.log('Manual word to save:', {
-                        word: manualWord.trim(),
+                      // Save to vocabulary
+                      const result: SaveWordResult = await VocabularyService.saveWord(
+                        manualWord.trim(),
                         translation,
-                        example
-                      });
+                        example.translated || '',
+                        example.english || '',
+                        targetLanguage,
+                        user.id
+                      );
                       
                       setShowManualInput(false);
                       setManualWord('');
                       
-                      Alert.alert('Word Added!', `"${translation}" has been processed.`);
+                      if (result === 'success') {
+                        // Delay to avoid jumpscare effect
+                        setTimeout(() => {
+                          Alert.alert('Word Added!', `"${translation}" has been added to your vocabulary.`);
+                        }, 500);
+                      } else if (result === 'exists') {
+                        // Alert already shown by service with language name
+                      } else {
+                        Alert.alert('Error', 'Failed to save word. Please try again.');
+                      }
                     } catch (error) {
                       console.error('Manual word error:', error);
                       Alert.alert('Error', 'Failed to add word. Please try again.');
@@ -568,6 +670,8 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   permissionCard: {
     backgroundColor: 'white',

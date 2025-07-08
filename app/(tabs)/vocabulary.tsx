@@ -688,7 +688,7 @@ const styles = StyleSheet.create({
         borderRadius: 50,
     },
     tapHint: {
-        backgroundColor: '#f1c40f',
+        backgroundColor: '#27ae60',
         paddingVertical: 8,
         paddingHorizontal: 20,
         alignItems: 'center',

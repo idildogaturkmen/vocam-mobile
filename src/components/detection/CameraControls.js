@@ -9,6 +9,7 @@ import {
 import Entypo from '@expo/vector-icons/Entypo';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 export default function CameraControls({
   facing,
@@ -18,13 +19,20 @@ export default function CameraControls({
   onLanguagePress,
   modelStatus,
   languageName,
-  // Make these optional with default values
-  sessionId = null,
-  wordsStudied = 0,
-  wordsLearned = 0,
-  onStartSession = () => {},
-  onEndSession = () => {}
+  // User stats props
+  userStats = null
 }) {
+  // Determine user level based on total words
+  const getUserLevel = (totalWords) => {
+    if (totalWords >= 200) return { level: 'Expert', color: '#e74c3c' };
+    if (totalWords >= 100) return { level: 'Advanced', color: '#f39c12' };
+    if (totalWords >= 50) return { level: 'Intermediate', color: '#9b59b6' };
+    if (totalWords >= 20) return { level: 'Beginner', color: '#3498db' };
+    return { level: 'Newbie', color: '#2ecc71' };
+  };
+
+  const userLevel = userStats ? getUserLevel(userStats.totalWords) : null;
+
   return (
     <>
       {/* Top Controls */}
@@ -33,37 +41,36 @@ export default function CameraControls({
           style={styles.topBarButton}
           onPress={onLanguagePress}
         >
-          <Text style={styles.topBarIcon}><Entypo name="language" size={25} color="white" /></Text>
+          <Entypo name="language" size={22} color="white" />
           <Text style={styles.topBarText}>{languageName}</Text>
         </TouchableOpacity>
         
-        <View style={styles.sessionInfo}>
-          {sessionId ? (
-            <TouchableOpacity 
-              style={styles.sessionBadge}
-              onPress={onEndSession}
-            >
-              <Text style={styles.sessionBadgeText}>
-                📚 {wordsStudied} | 🎯 {wordsLearned}
-              </Text>
-              <Text style={styles.endSessionText}>End</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity 
-              style={styles.startSessionBadge}
-              onPress={onStartSession}
-            >
-              <Text style={styles.startSessionText}>Start Session</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* User Stats Display */}
+        {userStats && (
+          <View style={styles.statsContainer}>
+            <View style={[styles.statBadge, { backgroundColor: userLevel.color }]}>
+              <MaterialCommunityIcons name="shield-star" size={16} color="white" />
+              <Text style={styles.statText}>{userLevel.level}</Text>
+            </View>
+            
+            <View style={styles.statBadge}>
+              <Ionicons name="book" size={16} color="white" />
+              <Text style={styles.statText}>{userStats.totalWords}</Text>
+            </View>
+            
+            <View style={[styles.statBadge, styles.streakBadge]}>
+              <Ionicons name="flame" size={16} color="#ff6b6b" />
+              <Text style={styles.statText}>{userStats.currentStreak}</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Bottom Controls */}
       <View style={styles.bottomControls}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.button} onPress={onFlipCamera}>
-            <Text style={styles.buttonIcon}><Ionicons name="camera-reverse-outline" size={30} color="white" /></Text>
+            <Ionicons name="camera-reverse-outline" size={28} color="white" />
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -74,23 +81,39 @@ export default function CameraControls({
             onPress={onTakePicture}
             disabled={modelStatus !== 'ready'}
           >
-            <Text style={styles.captureIcon}><Entypo name="camera" size={40} color="black" /></Text>
-            {modelStatus === 'loading' && (
-              <ActivityIndicator size="small" color="white" style={styles.captureLoader} />
+            {modelStatus === 'loading' ? (
+              <ActivityIndicator size="large" color="white" />
+            ) : (
+              <Entypo name="camera" size={40} color="white" />
             )}
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.button} onPress={onManualInput}>
-            <Text style={styles.buttonIcon}><EvilIcons name="pencil" size={40} color="white" /></Text>
+            <EvilIcons name="pencil" size={36} color="white" />
           </TouchableOpacity>
         </View>
         
-        {/* Status Text */}
-        <Text style={styles.statusText}>
-          {modelStatus === 'loading' && '🔄 Loading AI Model...'}
-          {modelStatus === 'ready' && '✅ Ready to detect objects'}
-          {modelStatus === 'error' && '❌ AI Error - Check API key'}
-        </Text>
+        {/* Status Display */}
+        <View style={styles.statusContainer}>
+          {modelStatus === 'loading' && (
+            <View style={styles.statusRow}>
+              <ActivityIndicator size="small" color="white" />
+              <Text style={styles.statusText}>Loading AI Model...</Text>
+            </View>
+          )}
+          {modelStatus === 'ready' && (
+            <View style={styles.statusRow}>
+              <Ionicons name="checkmark-done" size={20} color="#27ae60" />
+              <Text style={styles.statusText}>Ready to detect objects</Text>
+            </View>
+          )}
+          {modelStatus === 'error' && (
+            <View style={styles.statusRow}>
+              <Ionicons name="close-circle" size={20} color="#ff4444" />
+              <Text style={styles.statusText}>AI Error - Check API key</Text>
+            </View>
+          )}
+        </View>
       </View>
     </>
   );
@@ -115,50 +138,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
-  },
-  topBarIcon: {
-    fontSize: 20,
-    marginRight: 5,
+    gap: 8,
   },
   topBarText: {
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
   },
-  sessionInfo: {
-    alignItems: 'flex-end',
+  statsContainer: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  sessionBadge: {
-    backgroundColor: 'rgba(39, 174, 96, 0.9)',
+  statBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
   },
-  sessionBadgeText: {
+  streakBadge: {
+    backgroundColor: 'rgba(255, 107, 107, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 107, 0.5)',
+  },
+  statText: {
     color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  endSessionText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.3)',
-    paddingLeft: 10,
-  },
-  startSessionBadge: {
-    backgroundColor: 'rgba(52, 152, 219, 0.9)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  startSessionText: {
-    color: 'white',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   bottomControls: {
@@ -185,10 +192,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  buttonIcon: {
-    color: 'white',
-    fontSize: 24,
-  },
   captureButton: {
     width: 80,
     height: 80,
@@ -205,19 +208,20 @@ const styles = StyleSheet.create({
   captureButtonDisabled: {
     backgroundColor: '#7f8c8d',
   },
-  captureIcon: {
-    color: 'white',
-    fontSize: 32,
+  statusContainer: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  captureLoader: {
-    position: 'absolute',
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   statusText: {
     color: 'white',
     fontSize: 14,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 20,
-    paddingVertical: 5,
-    borderRadius: 15,
+    fontWeight: '500',
   },
 });

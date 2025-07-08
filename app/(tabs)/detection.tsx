@@ -294,6 +294,7 @@ export default function DetectionScreen() {
       let existsCount = 0;
       const errors: string[] = [];
       const existingWords: string[] = [];
+      const savedWords: string[] = [];
 
       for (const detection of selectedDetections) {
         // Fix TypeScript errors by providing fallback values
@@ -312,6 +313,7 @@ export default function DetectionScreen() {
 
         if (result === 'success') {
           savedCount++;
+          savedWords.push(detection.label);
         } else if (result === 'exists') {
           existsCount++;
           existingWords.push(detection.label);
@@ -320,31 +322,37 @@ export default function DetectionScreen() {
         }
       }
 
-      // Show results with proper timing
-      if (existsCount > 0 && savedCount === 0 && errors.length === 0) {
-        // Only existing words - alert already shown by service
-        setSelectedWords(new Set());
-        setDetections([]);
-        setPhoto(null);
-        return;
-      }
+      // Get language name for display
+      const languageName = getCurrentLanguageName();
 
-      // Delay before showing success/error messages to avoid jumpscare effect
-      setTimeout(() => {
+      // Show consolidated message
+      if (savedCount > 0 || existsCount > 0) {
+        let message = '';
+        
         if (savedCount > 0) {
-          Alert.alert(
-            'Success!', 
-            `✅ Saved ${savedCount} new word${savedCount > 1 ? 's' : ''} to your vocabulary!${existsCount > 0 ? ` (${existsCount} already existed)` : ''}`,
-            [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
-          );
+          message = `✅ ${savedCount} word${savedCount > 1 ? 's' : ''} saved in ${languageName}`;
         }
-
+        
+        if (existsCount > 0) {
+          const existingWordsText = existingWords.map(w => `"${w}"`).join(', ');
+          if (message) message += '\n\n';
+          message += `ℹ️ Already in ${languageName}: ${existingWordsText}`;
+        }
+        
         if (errors.length > 0) {
-          setTimeout(() => {
-            Alert.alert('Some words failed', `Could not save: ${errors.join(', ')}`);
-          }, savedCount > 0 ? 500 : 0); // Additional delay if there was a success message
+          const errorWordsText = errors.map(w => `"${w}"`).join(', ');
+          if (message) message += '\n\n';
+          message += `❌ Failed to save: ${errorWordsText}`;
         }
-      }, existsCount > 0 ? 1500 : 0); // Delay if there were existing word alerts
+        
+        Alert.alert(
+          savedCount > 0 ? 'Vocabulary Updated!' : 'Already Saved',
+          message,
+          [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
+        );
+      } else if (errors.length > 0) {
+        Alert.alert('Save Failed', `Could not save: ${errors.join(', ')}`);
+      }
 
       setSelectedWords(new Set());
       setDetections([]);
@@ -514,12 +522,10 @@ export default function DetectionScreen() {
   return (
     <View style={styles.container}>
       <CameraView 
-        style={styles.camera} 
+        style={StyleSheet.absoluteFillObject} 
         facing={facing} 
         ref={cameraRef}
         zoom={0}
-        flash="off"
-        enableTorch={false}
       />
       {/* Controls are outside CameraView to avoid warning */}
       <CameraControls
@@ -636,13 +642,19 @@ export default function DetectionScreen() {
                       setShowManualInput(false);
                       setManualWord('');
                       
+                      // Get language name for display
+                      const languageName = getCurrentLanguageName();
+                      
                       if (result === 'success') {
-                        // Delay to avoid jumpscare effect
-                        setTimeout(() => {
-                          Alert.alert('Word Added!', `"${translation}" has been added to your vocabulary.`);
-                        }, 500);
+                        Alert.alert(
+                          'Word Added!', 
+                          `✅ "${manualWord.trim()}" saved in ${languageName}\nTranslation: "${translation}"`
+                        );
                       } else if (result === 'exists') {
-                        // Alert already shown by service with language name
+                        Alert.alert(
+                          'Already Saved', 
+                          `ℹ️ "${manualWord.trim()}" is already in your ${languageName} vocabulary!`
+                        );
                       } else {
                         Alert.alert('Error', 'Failed to save word. Please try again.');
                       }

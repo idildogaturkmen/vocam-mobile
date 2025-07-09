@@ -7,16 +7,20 @@ import { getImageTrophy } from '@/utils/progress/getImageTrophy';
 import { formatDate } from '@/utils/formatDate';
 import { useRouter } from 'expo-router';
 import { getImageWord } from '@/utils/progress/getImageWord';
+import { getAchievements } from '@/utils/progress/getAchievements';
 
 export default function ProgressScreen() {
     const [level, setLevel] = useState<number | 0>(0);
     const [achievements, setAchievements] = useState<number | 0>(0);
+    const [trophies, setTrophies] = useState<number | 0>(0);
     const [words, setWords] = useState<number | 0>(0);
     const [wordsInfo, setWordsInfo] = useState<Record<string, string>[]>([]);
     const router = useRouter();
 
     useEffect(() => {
         const fetchData = async () => {
+            const achievements = await getAchievements();
+            setAchievements(achievements.length);
             const learnedWords = await getLearnedWords();
             setWordsInfo(learnedWords);
         };
@@ -31,9 +35,9 @@ export default function ProgressScreen() {
                     Level {level} <Text style={{ fontSize: 16, color: '#888' }}>Tap to change</Text>
                 </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setAchievements((prev) => (prev + 1) % 4)}>
+            <TouchableOpacity onPress={() => setTrophies((prev) => (prev + 1) % 5)}>
                 <Text style={styles.heading}>
-                    Trophy {achievements}{' '}
+                    Trophy {trophies}{' '}
                     <Text style={{ fontSize: 16, color: '#888' }}>Tap to change</Text>
                 </Text>
             </TouchableOpacity>
@@ -47,7 +51,7 @@ export default function ProgressScreen() {
                 <StatBox
                     label="Trophies"
                     value={achievements ?? '...'}
-                    image={() => getImageTrophy(achievements)}
+                    image={() => getImageTrophy(trophies)}
                 />
                 <StatBox
                     label="Words Learned"

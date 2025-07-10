@@ -60,6 +60,12 @@ export default function DetectionScreen() {
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualWord, setManualWord] = useState('');
+  const [userStats, setUserStats] = useState<{
+    totalWords: number;
+    masteredWords: number;
+    averageProficiency: number;
+    currentStreak: number;
+  } | null>(null);
 
   const languages = {
     'Spanish': 'es',
@@ -289,74 +295,66 @@ export default function DetectionScreen() {
         return;
       }
 
-      // Save each selected word and track results
-      let savedCount = 0;
-      let existsCount = 0;
-      const errors: string[] = [];
-      const existingWords: string[] = [];
-      const savedWords: string[] = [];
+      // Prepare words for batch save
+      const wordsToSave = selectedDetections.map(detection => ({
+        original: detection.label,
+        translation: detection.translation || '',
+        example: detection.example || '',
+        exampleEnglish: detection.exampleEnglish || ''
+      }));
 
-      for (const detection of selectedDetections) {
-        // Fix TypeScript errors by providing fallback values
-        const translation = detection.translation || '';
-        const example = detection.example || '';
-        const exampleEnglish = detection.exampleEnglish || '';
-
-        const result: SaveWordResult = await VocabularyService.saveWord(
-          detection.label,
-          translation,
-          example,
-          exampleEnglish,
-          targetLanguage,
-          user.id
-        );
-
-        if (result === 'success') {
-          savedCount++;
-          savedWords.push(detection.label);
-        } else if (result === 'exists') {
-          existsCount++;
-          existingWords.push(detection.label);
-        } else {
-          errors.push(detection.label);
-        }
-      }
+      // Use batch save for better performance
+      const result = await VocabularyService.saveMultipleWords(
+        wordsToSave,
+        targetLanguage,
+        user.id
+      );
 
       // Get language name for display
       const languageName = getCurrentLanguageName();
 
       // Show consolidated message
-      if (savedCount > 0 || existsCount > 0) {
+      if (result.savedWords.length > 0 || result.existingWords.length > 0) {
         let message = '';
         
-        if (savedCount > 0) {
-          message = `✅ ${savedCount} word${savedCount > 1 ? 's' : ''} saved in ${languageName}`;
+        if (result.savedWords.length > 0) {
+          message = `✅ ${result.savedWords.length} word${result.savedWords.length > 1 ? 's' : ''} saved in ${languageName}`;
         }
         
-        if (existsCount > 0) {
-          const existingWordsText = existingWords.map(w => `"${w}"`).join(', ');
+        if (result.existingWords.length > 0) {
+          const existingWordsText = result.existingWords.map(w => `"${w}"`).join(', ');
           if (message) message += '\n\n';
           message += `ℹ️ Already in ${languageName}: ${existingWordsText}`;
         }
         
-        if (errors.length > 0) {
-          const errorWordsText = errors.map(w => `"${w}"`).join(', ');
+        if (result.errors.length > 0) {
+          const errorWordsText = result.errors.map(w => `"${w}"`).join(', ');
           if (message) message += '\n\n';
           message += `❌ Failed to save: ${errorWordsText}`;
         }
         
         Alert.alert(
-          savedCount > 0 ? 'Vocabulary Updated!' : 'Already Saved',
+          result.savedWords.length > 0 ? 'Vocabulary Updated!' : 'Already Saved',
           message,
-          [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
+          [{ 
+            text: 'Continue Learning', 
+            onPress: async () => {
+              setPhoto(null);
+              // Refresh user stats after saving
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                const stats = await SessionService.getUserStats(user.id);
+                setUserStats(stats);
+              }
+            }
+          }]
         );
-      } else if (errors.length > 0) {
-        Alert.alert('Save Failed', `Could not save: ${errors.join(', ')}`);
+      } else if (result.errors.length > 0) {
+        Alert.alert('Save Failed', `Could not save: ${result.errors.join(', ')}`);
       }
 
       setSelectedWords(new Set());
       setDetections([]);
-      setPhoto(null);
       
     } catch (error) {
       console.error('Save error:', error);

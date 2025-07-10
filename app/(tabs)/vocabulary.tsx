@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
     View, 
     Text, 
@@ -10,15 +10,20 @@ import {
     Modal,
     RefreshControl,
     Animated,
-    Dimensions
+    Dimensions,
+    TextInput,
+    KeyboardAvoidingView,
+    Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../database/config';
 import VocabularyService, { SavedWord } from '../../src/services/VocabularyService';
 import SpeechService from '../../src/services/SpeechService';
 import AntDesign from '@expo/vector-icons/AntDesign';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 // Define language mapping with proper typing
 const languages: Record<string, string> = {
@@ -70,17 +75,23 @@ const languages: Record<string, string> = {
 
 // Type for language keys
 type LanguageName = keyof typeof languages;
+type ViewMode = 'cards' | 'list' | 'flashcard';
 
 export default function VocabularyScreen() {
     const [vocabulary, setVocabulary] = useState<SavedWord[]>([]);
     const [filteredVocabulary, setFilteredVocabulary] = useState<SavedWord[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
     const [filterLanguage, setFilterLanguage] = useState<string>('All');
     const [sortBy, setSortBy] = useState<string>('newest');
     const [showLanguageFilter, setShowLanguageFilter] = useState(false);
     const [showSortFilter, setShowSortFilter] = useState(false);
     const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+    const [viewMode, setViewMode] = useState<ViewMode>('cards');
+    const [currentFlashcardIndex, setCurrentFlashcardIndex] = useState(0);
+    const [showFlashcardAnswer, setShowFlashcardAnswer] = useState(false);
+    const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
 
     useEffect(() => {
         loadVocabulary();
@@ -88,7 +99,7 @@ export default function VocabularyScreen() {
 
     useEffect(() => {
         applyFiltersAndSort();
-    }, [vocabulary, filterLanguage, sortBy]);
+    }, [vocabulary, filterLanguage, sortBy, searchQuery]);
 
     const loadVocabulary = async () => {
         try {
@@ -111,6 +122,15 @@ export default function VocabularyScreen() {
 
     const applyFiltersAndSort = () => {
         let filtered = [...vocabulary];
+
+        // Apply search filter
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter(word => 
+                word.original.toLowerCase().includes(query) ||
+                word.translation.toLowerCase().includes(query)
+            );
+        }
 
         // Apply language filter
         if (filterLanguage !== 'All') {
@@ -140,6 +160,57 @@ export default function VocabularyScreen() {
         }
 
         setFilteredVocabulary(filtered);
+        
+        // Reset flashcard index when filters change
+        setCurrentFlashcardIndex(0);
+        setShowFlashcardAnswer(false);
+    };
+
+    // Get search suggestions
+    const searchSuggestions = useMemo(() => {
+        if (!searchQuery.trim()) return [];
+        
+        const query = searchQuery.toLowerCase();
+        const suggestions: string[] = [];
+        
+        // Get unique languages that match
+        const matchingLanguages = new Set<string>();
+        vocabulary.forEach(word => {
+            const langName = getLanguageName(word.language);
+            if (langName.toLowerCase().includes(query)) {
+                matchingLanguages.add(langName);
+            }
+        });
+        
+        matchingLanguages.forEach(lang => {
+            suggestions.push(`🌐 ${lang} words`);
+        });
+        
+        // Get unique categories that match
+        const matchingCategories = new Set<string>();
+        vocabulary.forEach(word => {
+            if (word.category && word.category.includes(query)) {
+                matchingCategories.add(word.category);
+            }
+        });
+        
+        matchingCategories.forEach(cat => {
+            suggestions.push(`📁 ${cat.charAt(0).toUpperCase() + cat.slice(1)} category`);
+        });
+        
+        return suggestions.slice(0, 5);
+    }, [searchQuery, vocabulary]);
+
+    const handleSearchSuggestion = (suggestion: string) => {
+        if (suggestion.includes('🌐')) {
+            const lang = suggestion.replace('🌐 ', '').replace(' words', '');
+            setFilterLanguage(lang);
+            setSearchQuery('');
+        } else if (suggestion.includes('📁')) {
+            const category = suggestion.replace('📁 ', '').replace(' category', '').toLowerCase();
+            setSearchQuery(category);
+        }
+        setShowSearchSuggestions(false);
     };
 
     const toggleExpanded = (id: string) => {
@@ -207,6 +278,29 @@ export default function VocabularyScreen() {
             general: '#95a5a6'
         };
         return colors[category as keyof typeof colors] || colors.general;
+    };
+
+    // Flashcard navigation
+    const nextFlashcard = () => {
+        if (currentFlashcardIndex < filteredVocabulary.length - 1) {
+            setCurrentFlashcardIndex(currentFlashcardIndex + 1);
+            setShowFlashcardAnswer(false);
+        } else {
+            // Loop back to start
+            setCurrentFlashcardIndex(0);
+            setShowFlashcardAnswer(false);
+        }
+    };
+
+    const previousFlashcard = () => {
+        if (currentFlashcardIndex > 0) {
+            setCurrentFlashcardIndex(currentFlashcardIndex - 1);
+            setShowFlashcardAnswer(false);
+        } else {
+            // Loop to end
+            setCurrentFlashcardIndex(filteredVocabulary.length - 1);
+            setShowFlashcardAnswer(false);
+        }
     };
 
     const renderVocabularyItem = (word: SavedWord) => {
@@ -337,6 +431,105 @@ export default function VocabularyScreen() {
         );
     };
 
+    const renderCompactListItem = (word: SavedWord) => {
+        const proficiencyInfo = getProficiencyInfo(word.proficiency);
+        
+        return (
+            <View key={word.id} style={styles.compactItem}>
+                <View style={styles.compactItemLeft}>
+                    <Text style={styles.compactOriginal}>{word.original}</Text>
+                    <Text style={styles.compactTranslation}>{word.translation}</Text>
+                    <Text style={styles.compactMeta}>
+                        {getLanguageName(word.language)} • {new Date(word.learnedAt).toLocaleDateString()}
+                    </Text>
+                </View>
+                <View style={styles.compactItemRight}>
+                    <View style={[styles.compactProficiency, { backgroundColor: proficiencyInfo.color }]}>
+                        <Text style={styles.compactProficiencyText}>{word.proficiency}%</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={styles.compactSpeaker}
+                        onPress={() => handleSpeech(word.translation, word.language)}
+                    >
+                        <Ionicons name="volume-medium" size={22} color="#3498db" />
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    };
+
+    const renderFlashcard = () => {
+        if (filteredVocabulary.length === 0) return null;
+        
+        const word = filteredVocabulary[currentFlashcardIndex];
+        const proficiencyInfo = getProficiencyInfo(word.proficiency);
+        
+        return (
+            <View style={styles.flashcardContainer}>
+                <View style={styles.flashcardHeader}>
+                    <Text style={styles.flashcardCounter}>
+                        {currentFlashcardIndex + 1} / {filteredVocabulary.length}
+                    </Text>
+                    <View style={[styles.flashcardProficiency, { backgroundColor: proficiencyInfo.color }]}>
+                        <Text style={styles.flashcardProficiencyText}>
+                            {proficiencyInfo.emoji} {word.proficiency}%
+                        </Text>
+                    </View>
+                </View>
+                
+                <TouchableOpacity
+                    style={styles.flashcard}
+                    onPress={() => setShowFlashcardAnswer(!showFlashcardAnswer)}
+                    activeOpacity={0.9}
+                >
+                    <View style={styles.flashcardContent}>
+                        {!showFlashcardAnswer ? (
+                            <>
+                                <Text style={styles.flashcardWord}>{word.original}</Text>
+                                <Text style={styles.flashcardHint}>Tap to reveal translation</Text>
+                            </>
+                        ) : (
+                            <>
+                                <Text style={styles.flashcardTranslation}>{word.translation}</Text>
+                                <Text style={styles.flashcardLanguage}>{getLanguageName(word.language)}</Text>
+                                {word.example && (
+                                    <View style={styles.flashcardExample}>
+                                        <Text style={styles.flashcardExampleText}>{word.example}</Text>
+                                        <Text style={styles.flashcardExampleEn}>{word.exampleEnglish}</Text>
+                                    </View>
+                                )}
+                                <TouchableOpacity
+                                    style={styles.flashcardSpeaker}
+                                    onPress={() => handleSpeech(word.translation, word.language)}
+                                >
+                                    <Ionicons name="volume-high" size={30} color="white" />
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </View>
+                </TouchableOpacity>
+                
+                <View style={styles.flashcardControls}>
+                    <TouchableOpacity
+                        style={styles.flashcardButton}
+                        onPress={previousFlashcard}
+                    >
+                        <Ionicons name="arrow-back" size={24} color="white" />
+                        <Text style={styles.flashcardButtonText}>Previous</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                        style={[styles.flashcardButton, styles.flashcardButtonPrimary]}
+                        onPress={nextFlashcard}
+                    >
+                        <Text style={styles.flashcardButtonText}>Next</Text>
+                        <Ionicons name="arrow-forward" size={24} color="white" />
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    };
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -347,15 +540,94 @@ export default function VocabularyScreen() {
     }
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView 
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
             {/* Header */}
             <View style={styles.header}>
                 <View>
                     <Text style={styles.title}>My Vocabulary</Text>
                     <Text style={styles.subtitle}>
-                        {filteredVocabulary.length} word{filteredVocabulary.length !== 1 ? 's' : ''} learned
+                        {filteredVocabulary.length} word{filteredVocabulary.length !== 1 ? 's' : ''} 
+                        {searchQuery || filterLanguage !== 'All' ? ` (filtered)` : ' learned'}
                     </Text>
                 </View>
+                
+                {/* View Mode Toggle */}
+                <View style={styles.viewModeToggle}>
+                    <TouchableOpacity
+                        style={[styles.viewModeButton, viewMode === 'cards' && styles.viewModeActive]}
+                        onPress={() => setViewMode('cards')}
+                    >
+                        <MaterialCommunityIcons 
+                            name="card-text" 
+                            size={20} 
+                            color={viewMode === 'cards' ? 'white' : '#3498db'} 
+                        />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeActive]}
+                        onPress={() => setViewMode('list')}
+                    >
+                        <Ionicons 
+                            name="list" 
+                            size={20} 
+                            color={viewMode === 'list' ? 'white' : '#3498db'} 
+                        />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.viewModeButton, viewMode === 'flashcard' && styles.viewModeActive]}
+                        onPress={() => setViewMode('flashcard')}
+                    >
+                        <FontAwesome5 
+                            name="layer-group" 
+                            size={16} 
+                            color={viewMode === 'flashcard' ? 'white' : '#3498db'} 
+                        />
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Smart Search Bar */}
+            <View style={styles.searchSection}>
+                <View style={styles.searchContainer}>
+                    <Ionicons name="search" size={20} color="#7f8c8d" />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search words, languages, or categories..."
+                        value={searchQuery}
+                        onChangeText={(text) => {
+                            setSearchQuery(text);
+                            setShowSearchSuggestions(text.length > 0);
+                        }}
+                        onFocus={() => setShowSearchSuggestions(searchQuery.length > 0)}
+                        onBlur={() => setTimeout(() => setShowSearchSuggestions(false), 200)}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => {
+                            setSearchQuery('');
+                            setShowSearchSuggestions(false);
+                        }}>
+                            <Ionicons name="close-circle" size={20} color="#7f8c8d" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+                
+                {/* Search Suggestions */}
+                {showSearchSuggestions && searchSuggestions.length > 0 && (
+                    <View style={styles.suggestionsContainer}>
+                        {searchSuggestions.map((suggestion, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                style={styles.suggestionItem}
+                                onPress={() => handleSearchSuggestion(suggestion)}
+                            >
+                                <Text style={styles.suggestionText}>{suggestion}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
             </View>
 
             {/* Filter Row */}
@@ -379,37 +651,69 @@ export default function VocabularyScreen() {
                     <Text style={styles.filterChipText}>Sort</Text>
                     <Ionicons name="chevron-down" size={16} color="#3498db" />
                 </TouchableOpacity>
+                
+                {(searchQuery || filterLanguage !== 'All') && (
+                    <TouchableOpacity
+                        style={styles.clearFiltersChip}
+                        onPress={() => {
+                            setSearchQuery('');
+                            setFilterLanguage('All');
+                            setShowSearchSuggestions(false);
+                        }}
+                    >
+                        <Ionicons name="close" size={18} color="#e74c3c" />
+                        <Text style={styles.clearFiltersText}>Clear</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
-            {/* Vocabulary List */}
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={() => {
-                            setRefreshing(true);
-                            loadVocabulary();
-                        }}
-                        colors={['#3498db']}
-                    />
-                }
-            >
-                {filteredVocabulary.length > 0 ? (
-                    filteredVocabulary.map(renderVocabularyItem)
-                ) : (
+            {/* Content based on view mode */}
+            {viewMode === 'flashcard' ? (
+                filteredVocabulary.length > 0 ? renderFlashcard() : (
                     <View style={styles.emptyState}>
                         <Text style={styles.emptyIcon}>📚</Text>
-                        <Text style={styles.emptyTitle}>No words yet</Text>
+                        <Text style={styles.emptyTitle}>No words to practice</Text>
                         <Text style={styles.emptyText}>
-                            {filterLanguage !== 'All' 
-                                ? `No ${filterLanguage} words found`
+                            {filterLanguage !== 'All' || searchQuery
+                                ? 'Try adjusting your filters'
                                 : 'Start learning by using the Camera tab!'}
                         </Text>
                     </View>
-                )}
-            </ScrollView>
+                )
+            ) : (
+                <ScrollView
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={() => {
+                                setRefreshing(true);
+                                loadVocabulary();
+                            }}
+                            colors={['#3498db']}
+                        />
+                    }
+                >
+                    {filteredVocabulary.length > 0 ? (
+                        viewMode === 'cards' ? (
+                            filteredVocabulary.map(renderVocabularyItem)
+                        ) : (
+                            filteredVocabulary.map(renderCompactListItem)
+                        )
+                    ) : (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyIcon}>📚</Text>
+                            <Text style={styles.emptyTitle}>No words yet</Text>
+                            <Text style={styles.emptyText}>
+                                {filterLanguage !== 'All' || searchQuery
+                                    ? 'No words match your search'
+                                    : 'Start learning by using the Camera tab!'}
+                            </Text>
+                        </View>
+                    )}
+                </ScrollView>
+            )}
 
             {/* Language Filter Modal */}
             <Modal
@@ -495,7 +799,7 @@ export default function VocabularyScreen() {
                     </View>
                 </View>
             </Modal>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -516,6 +820,9 @@ const styles = StyleSheet.create({
         color: '#7f8c8d',
     },
     header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         paddingHorizontal: 20,
         paddingTop: 50,
         paddingBottom: 20,
@@ -537,6 +844,68 @@ const styles = StyleSheet.create({
     subtitle: {
         fontSize: 16,
         color: '#7f8c8d',
+    },
+    viewModeToggle: {
+        flexDirection: 'row',
+        backgroundColor: '#f0f0f0',
+        borderRadius: 20,
+        padding: 4,
+    },
+    viewModeButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 16,
+    },
+    viewModeActive: {
+        backgroundColor: '#3498db',
+    },
+    searchSection: {
+        paddingHorizontal: 20,
+        paddingTop: 15,
+        zIndex: 10,
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'white',
+        paddingHorizontal: 15,
+        paddingVertical: 12,
+        borderRadius: 25,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 10,
+        fontSize: 16,
+        color: '#2c3e50',
+    },
+    suggestionsContainer: {
+        position: 'absolute',
+        top: 60,
+        left: 0,
+        right: 0,
+        backgroundColor: 'white',
+        borderRadius: 15,
+        marginHorizontal: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 5,
+        elevation: 5,
+    },
+    suggestionItem: {
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+    },
+    suggestionText: {
+        fontSize: 16,
+        color: '#2c3e50',
     },
     filterRow: {
         flexDirection: 'row',
@@ -566,6 +935,20 @@ const styles = StyleSheet.create({
     },
     filterChipTextActive: {
         color: 'white',
+    },
+    clearFiltersChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fee',
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        borderRadius: 25,
+        gap: 6,
+    },
+    clearFiltersText: {
+        fontSize: 14,
+        color: '#e74c3c',
+        fontWeight: '500',
     },
     scrollView: {
         flex: 1,
@@ -688,7 +1071,7 @@ const styles = StyleSheet.create({
         borderRadius: 50,
     },
     tapHint: {
-        backgroundColor: '#27ae60',
+        backgroundColor: '#f1c40f',
         paddingVertical: 8,
         paddingHorizontal: 20,
         alignItems: 'center',
@@ -777,6 +1160,172 @@ const styles = StyleSheet.create({
     },
     deleteText: {
         color: '#e74c3c',
+        fontWeight: '600',
+    },
+    // Compact List View Styles
+    compactItem: {
+        backgroundColor: 'white',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 15,
+        marginBottom: 10,
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    compactItemLeft: {
+        flex: 1,
+        marginRight: 10,
+    },
+    compactOriginal: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#2c3e50',
+        marginBottom: 2,
+    },
+    compactTranslation: {
+        fontSize: 14,
+        color: '#27ae60',
+        marginBottom: 4,
+    },
+    compactMeta: {
+        fontSize: 12,
+        color: '#95a5a6',
+    },
+    compactItemRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    compactProficiency: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    compactProficiencyText: {
+        color: 'white',
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    compactSpeaker: {
+        padding: 8,
+    },
+    // Flashcard Styles
+    flashcardContainer: {
+        flex: 1,
+        padding: 20,
+    },
+    flashcardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    flashcardCounter: {
+        fontSize: 18,
+        color: '#7f8c8d',
+        fontWeight: '600',
+    },
+    flashcardProficiency: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+    },
+    flashcardProficiencyText: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    flashcard: {
+        flex: 1,
+        backgroundColor: 'white',
+        borderRadius: 20,
+        marginBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        elevation: 5,
+    },
+    flashcardContent: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 30,
+    },
+    flashcardWord: {
+        fontSize: 36,
+        fontWeight: 'bold',
+        color: '#2c3e50',
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    flashcardHint: {
+        fontSize: 16,
+        color: '#95a5a6',
+        fontStyle: 'italic',
+    },
+    flashcardTranslation: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#27ae60',
+        textAlign: 'center',
+        marginBottom: 10,
+    },
+    flashcardLanguage: {
+        fontSize: 18,
+        color: '#7f8c8d',
+        marginBottom: 20,
+    },
+    flashcardExample: {
+        backgroundColor: '#f8f9fa',
+        padding: 20,
+        borderRadius: 15,
+        marginTop: 20,
+        width: '100%',
+    },
+    flashcardExampleText: {
+        fontSize: 16,
+        color: '#34495e',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    flashcardExampleEn: {
+        fontSize: 14,
+        color: '#7f8c8d',
+        fontStyle: 'italic',
+        textAlign: 'center',
+    },
+    flashcardSpeaker: {
+        marginTop: 20,
+        backgroundColor: 'rgba(52, 152, 219, 0.2)',
+        padding: 15,
+        borderRadius: 50,
+    },
+    flashcardControls: {
+        flexDirection: 'row',
+        gap: 15,
+    },
+    flashcardButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#7f8c8d',
+        paddingVertical: 15,
+        borderRadius: 25,
+        gap: 10,
+    },
+    flashcardButtonPrimary: {
+        backgroundColor: '#3498db',
+    },
+    flashcardButtonText: {
+        color: 'white',
+        fontSize: 16,
         fontWeight: '600',
     },
     emptyState: {

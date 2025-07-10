@@ -100,6 +100,170 @@ class VocabularyService {
     }
 
     /**
+     * Batch save multiple words for better performance
+     */
+    async saveMultipleWords(
+        words: Array<{
+            original: string;
+            translation: string;
+            example: string;
+            exampleEnglish: string;
+        }>,
+        language: string,
+        userId: string
+    ): Promise<BatchSaveResult> {
+        const result: BatchSaveResult = {
+            savedWords: [],
+            existingWords: [],
+            errors: [],
+            language: this.getLanguageName(language)
+        };
+
+        try {
+            // Step 1: Check which words user already has in this language (single query)
+            const originals = words.map(w => w.original.toLowerCase());
+            const { data: existingUserWords, error: checkError } = await supabase
+                .from('user_words')
+                .select(`
+                    word_id,
+                    words!inner (
+                        original,
+                        translations!inner (
+                            language_code
+                        )
+                    )
+                `)
+                .eq('user_id', userId)
+                .in('words.original', originals)
+                .eq('words.translations.language_code', language);
+
+            if (checkError) {
+                console.error('Batch check error:', checkError);
+            }
+
+
+
+            // Create a set of existing word originals for this language
+            const existingOriginals = new Set<string>();
+            if (existingUserWords) {
+                for (const uw of existingUserWords) {
+                    // Handle the case where words might be an array or object
+                    const word = Array.isArray(uw.words) ? uw.words[0] : uw.words;
+                    if (word?.original) {
+                        existingOriginals.add(word.original);
+                    }
+                }
+            }
+
+            // Step 2: Check which words exist globally
+            const { data: existingGlobalWords } = await supabase
+                .from('words')
+                .select('word_id, original')
+                .in('original', originals);
+
+            const existingGlobalMap = new Map(
+                existingGlobalWords?.map(w => [w.original, w.word_id]) || []
+            );
+
+            // Step 3: Prepare batch operations
+            const newWords: any[] = [];
+            const newTranslations: any[] = [];
+            const newUserWords: any[] = [];
+
+            for (const word of words) {
+                const original = word.original.toLowerCase();
+                
+                // Skip if user already has this word in this language
+                if (existingOriginals.has(original)) {
+                    result.existingWords.push(word.original);
+                    continue;
+                }
+
+                let wordId = existingGlobalMap.get(original);
+                
+                if (!wordId) {
+                    // Need to create new word
+                    wordId = crypto.randomUUID();
+                    newWords.push({
+                        word_id: wordId,
+                        original: original,
+                        created_at: new Date().toISOString()
+                    });
+                }
+
+                // Add translation
+                newTranslations.push({
+                    word_id: wordId,
+                    language_code: language,
+                    translated_text: word.translation,
+                    example: `${word.example}|${word.exampleEnglish}`
+                });
+
+                // Add to user's vocabulary
+                newUserWords.push({
+                    user_id: userId,
+                    word_id: wordId,
+                    proficiency: Math.floor(Math.random() * 20) + 10,     // PLACEHOLDER FOR NOW / NEED TO CHANGE AFTER QUIZ MODE
+                    learned_at: new Date().toISOString()
+                });
+
+                result.savedWords.push(word.original);
+            }
+
+            /// Step 4: Execute batch inserts
+            if (newWords.length > 0) {
+                const { error: wordsError } = await supabase
+                    .from('words')
+                    .upsert(newWords, {
+                        onConflict: 'original'
+                    });
+                if (wordsError) console.error('Words insert error:', wordsError);
+            }
+
+            if (newTranslations.length > 0) {
+                const { error: translationsError } = await supabase
+                    .from('translations')
+                    .upsert(newTranslations, {
+                        onConflict: 'word_id,language_code'
+                    });
+                if (translationsError) console.error('Translations insert error:', translationsError);
+            }
+
+            if (newUserWords.length > 0) {
+                // Filter out any duplicates before inserting
+                const existingUserWordIds = new Set(
+                    existingUserWords?.map(uw => uw.word_id) || []
+                );
+                
+                const uniqueNewUserWords = newUserWords.filter(
+                    nuw => !existingUserWordIds.has(nuw.word_id)
+                );
+                
+                if (uniqueNewUserWords.length > 0) {
+                    const { error: userWordsError } = await supabase
+                        .from('user_words')
+                        .insert(uniqueNewUserWords);
+                    if (userWordsError) {
+                        console.error('User words insert error:', userWordsError);
+                        // Don't fail the whole operation, just log the error
+                    }
+                }
+            }
+
+            return result;
+        } catch (error) {
+            console.error('Batch save error:', error);
+            // If batch fails, return all as errors
+            return {
+                savedWords: [],
+                existingWords: [],
+                errors: words.map(w => w.original),
+                language: this.getLanguageName(language)
+            };
+        }
+    }
+
+    /**
      * Save a detected word to the vocabulary database
      * Returns detailed result for batch operations
      */
@@ -113,7 +277,6 @@ class VocabularyService {
     ): Promise<SaveWordResult> {
         try {
             const languageName = this.getLanguageName(language);
-            console.log(`🔄 Attempting to save "${original}" -> "${translation}" in ${languageName} for user ${userId}`);
 
             // Step 1: First check if user already has this word in this specific language
             const { data: existingUserWord, error: userCheckError } = await supabase
@@ -139,7 +302,6 @@ class VocabularyService {
                     .single();
 
                 if (existingTranslation) {
-                    console.log(`❌ User already has "${original}" in ${languageName}`);
                     return 'exists'; // Return exists without showing alert (will be handled by caller)
                 }
             }
@@ -155,7 +317,6 @@ class VocabularyService {
 
             if (existingWord) {
                 wordId = existingWord.word_id;
-                console.log(`✅ Found existing word:`, wordId);
                 
                 // Check if translation exists for this language
                 const { data: existingTranslation } = await supabase
@@ -183,8 +344,6 @@ class VocabularyService {
                 }
             } else {
                 // Create new word
-                console.log(`🆕 Creating new word: "${original}" -> "${translation}" (${language})`);
-                
                 const { data: newWord, error: wordError } = await supabase
                     .from('words')
                     .insert({
@@ -234,7 +393,6 @@ class VocabularyService {
                 }
             }
 
-            console.log(`✅ Successfully saved "${original}" -> "${translation}" (${languageName}) to vocabulary`);
             return 'success';
         } catch (error) {
             console.error('Error saving word:', error);
@@ -279,7 +437,6 @@ class VocabularyService {
             }
 
             if (!data || data.length === 0) {
-                console.log('No vocabulary found for user');
                 return [];
             }
 
@@ -291,7 +448,6 @@ class VocabularyService {
                 const words = userWord.words;
                 
                 if (!words || !words.translations) {
-                    console.warn('Invalid word structure:', item);
                     continue;
                 }
 
@@ -324,7 +480,6 @@ class VocabularyService {
                 }
             }
 
-            console.log(`Retrieved ${vocabulary.length} vocabulary items`);
             return vocabulary;
         } catch (error) {
             console.error('Error getting vocabulary:', error);

@@ -8,7 +8,7 @@ export default function TabLayout() {
     return (
         <>
             {/* This removes the (tabs) text on top of the page */}
-            <Stack.Screen options={{ headerShown: false }} />{' '}
+            <Stack.Screen options={{ headerShown: false }} />
             <Tabs
                 screenOptions={{
                     tabBarActiveTintColor: '#3498db',

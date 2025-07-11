@@ -8,6 +8,8 @@ import { formatDate } from '@/utils/formatDate';
 import { useRouter } from 'expo-router';
 import { getImageWord } from '@/utils/progress/getImageWord';
 import { getAchievements } from '@/utils/progress/getAchievements';
+import FireStreak from '@/components/Progress/FireStreak';
+import { getStreak } from '@/utils/progress/getStreak';
 
 export default function ProgressScreen() {
     const [level, setLevel] = useState<number | 0>(0);
@@ -15,6 +17,7 @@ export default function ProgressScreen() {
     const [trophies, setTrophies] = useState<number | 0>(0);
     const [words, setWords] = useState<number | 0>(0);
     const [wordsInfo, setWordsInfo] = useState<Record<string, string>[]>([]);
+    const [streak, setStreak] = useState<number | 0>(0);
     const router = useRouter();
 
     useEffect(() => {
@@ -23,13 +26,18 @@ export default function ProgressScreen() {
             setAchievements(achievements.length);
             const learnedWords = await getLearnedWords();
             setWordsInfo(learnedWords);
+            const streak_num = await getStreak();
+            setStreak(streak_num);
         };
         fetchData();
     }, []);
 
     return (
         <SafeAreaView style={styles.container}>
-            <Text style={styles.heading}>Your progress</Text>
+            <View style={styles.row}>
+                <Text style={styles.heading}>Your progress</Text>
+                <FireStreak streak={streak} />
+            </View>
             <TouchableOpacity onPress={() => setLevel((prev) => (prev + 1) % 6)}>
                 <Text style={styles.heading}>
                     Level {level} <Text style={{ fontSize: 16, color: '#888' }}>Tap to change</Text>
@@ -47,7 +55,11 @@ export default function ProgressScreen() {
                 </Text>
             </TouchableOpacity>
             <View style={styles.statsRow}>
-                <StatBox label="Level" value={level} image={() => getImageLevel(level)} />
+                <StatBox
+                    label="Level"
+                    value={level}
+                    image={async () => await getImageLevel(level)}
+                />
                 <StatBox
                     label="Trophies"
                     value={achievements ?? '...'}
@@ -56,7 +68,7 @@ export default function ProgressScreen() {
                 <StatBox
                     label="Words Learned"
                     value={wordsInfo.length}
-                    image={() => getImageWord(words)}
+                    image={async () => await getImageWord(words)}
                 />
             </View>
             <Text style={styles.subheading}>Words Learned Until Now, Keep Going!</Text>
@@ -90,7 +102,8 @@ export default function ProgressScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        padding: 16,
+        paddingVertical: 40,
+        paddingHorizontal: 20,
         backgroundColor: '#fff',
     },
     heading: {
@@ -131,5 +144,10 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 16,
         fontStyle: 'italic',
+    },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
 });

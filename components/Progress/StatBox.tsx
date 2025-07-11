@@ -1,18 +1,53 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, ImageSourcePropType } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+    View,
+    Text,
+    Image,
+    StyleSheet,
+    ImageSourcePropType,
+    ActivityIndicator,
+} from 'react-native';
 
 type StatBoxProps = {
     label: string;
-    value: string | number;
-    image: ImageSourcePropType | (() => ImageSourcePropType);
+    value: number | string;
+    image: string | (() => Promise<string>);
 };
 
 export const StatBox = ({ label, value, image }: StatBoxProps) => {
-    const imageSource = typeof image === 'function' ? image() : image;
+    const [imageSource, setImageSource] = useState<ImageSourcePropType | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadImage = async () => {
+            setLoading(true);
+            try {
+                if (typeof image === 'function') {
+                    const url = await image();
+                    setImageSource({ uri: url });
+                } else {
+                    setImageSource({ uri: image });
+                }
+            } catch (error) {
+                console.error('Error loading image:', error);
+                setImageSource(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadImage();
+    }, [image]);
 
     return (
         <View style={styles.box}>
-            <Image source={imageSource} style={styles.image} resizeMode="contain" />
+            {loading ? (
+                <ActivityIndicator size="small" color="#999" style={styles.image} />
+            ) : (
+                imageSource && (
+                    <Image source={imageSource} style={styles.image} resizeMode="contain" />
+                )
+            )}
             <Text style={styles.label}>
                 {label} {value}
             </Text>

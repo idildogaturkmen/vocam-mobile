@@ -6,7 +6,6 @@ export async function getAchievements(): Promise<Record<string, string>[]> {
         TableName: 'user_achievements',
     };
     const data = await readUserData(readInput);
-    console.log('Achievements data:', data);
     if (!data) {
         return [];
     }

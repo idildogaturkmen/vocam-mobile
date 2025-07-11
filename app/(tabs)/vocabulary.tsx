@@ -75,7 +75,7 @@ const languages: Record<string, string> = {
 
 // Type for language keys
 type LanguageName = keyof typeof languages;
-type ViewMode = 'cards' | 'list' | 'flashcard';
+type ViewMode = 'cards' | 'flashcard';
 
 export default function VocabularyScreen() {
     const [vocabulary, setVocabulary] = useState<SavedWord[]>([]);
@@ -92,6 +92,12 @@ export default function VocabularyScreen() {
     const [currentFlashcardIndex, setCurrentFlashcardIndex] = useState(0);
     const [showFlashcardAnswer, setShowFlashcardAnswer] = useState(false);
     const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+
+    // Helper function - moved before useMemo that uses it
+    const getLanguageName = (code: string): string => {
+        const entry = Object.entries(languages).find(([_, c]) => c === code);
+        return entry ? entry[0] : code;
+    };
 
     useEffect(() => {
         loadVocabulary();
@@ -252,11 +258,6 @@ export default function VocabularyScreen() {
                 }
             ]
         );
-    };
-
-    const getLanguageName = (code: string): string => {
-        const entry = Object.entries(languages).find(([_, c]) => c === code);
-        return entry ? entry[0] : code;
     };
 
     const getProficiencyInfo = (level: number) => {
@@ -431,40 +432,13 @@ export default function VocabularyScreen() {
         );
     };
 
-    const renderCompactListItem = (word: SavedWord) => {
-        const proficiencyInfo = getProficiencyInfo(word.proficiency);
-        
-        return (
-            <View key={word.id} style={styles.compactItem}>
-                <View style={styles.compactItemLeft}>
-                    <Text style={styles.compactOriginal}>{word.original}</Text>
-                    <Text style={styles.compactTranslation}>{word.translation}</Text>
-                    <Text style={styles.compactMeta}>
-                        {getLanguageName(word.language)} • {new Date(word.learnedAt).toLocaleDateString()}
-                    </Text>
-                </View>
-                <View style={styles.compactItemRight}>
-                    <View style={[styles.compactProficiency, { backgroundColor: proficiencyInfo.color }]}>
-                        <Text style={styles.compactProficiencyText}>{word.proficiency}%</Text>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.compactSpeaker}
-                        onPress={() => handleSpeech(word.translation, word.language)}
-                    >
-                        <Ionicons name="volume-medium" size={22} color="#3498db" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-        );
-    };
-
     const renderFlashcard = () => {
         if (filteredVocabulary.length === 0) return null;
         
         const word = filteredVocabulary[currentFlashcardIndex];
         const proficiencyInfo = getProficiencyInfo(word.proficiency);
         
-        return (
+        return (                    
             <View style={styles.flashcardContainer}>
                 <View style={styles.flashcardHeader}>
                     <Text style={styles.flashcardCounter}>
@@ -485,25 +459,58 @@ export default function VocabularyScreen() {
                     <View style={styles.flashcardContent}>
                         {!showFlashcardAnswer ? (
                             <>
-                                <Text style={styles.flashcardWord}>{word.original}</Text>
-                                <Text style={styles.flashcardHint}>Tap to reveal translation</Text>
+                                <View style={styles.flashcardWordContainer}>
+                                    <Text 
+                                        style={styles.flashcardTranslation}
+                                        numberOfLines={3}
+                                        adjustsFontSizeToFit
+                                        minimumFontScale={0.6}
+                                    >
+                                        {word.translation}
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={styles.flashcardSpeakerTop}
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            handleSpeech(word.translation, word.language);
+                                        }}
+                                    >
+                                        <Ionicons name="volume-high" size={24} color="#3498db" />
+                                    </TouchableOpacity>
+                                </View>
+                                <Text style={styles.flashcardLanguage}>{getLanguageName(word.language)}</Text>
+                                <Text style={styles.flashcardHint}>Tap to reveal meaning</Text>
                             </>
                         ) : (
                             <>
-                                <Text style={styles.flashcardTranslation}>{word.translation}</Text>
-                                <Text style={styles.flashcardLanguage}>{getLanguageName(word.language)}</Text>
+                                <Text 
+                                    style={styles.flashcardWord}
+                                    numberOfLines={3}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.6}
+                                >
+                                    {word.original}
+                                </Text>
+                                <Text style={styles.flashcardMeaning}>English</Text>
                                 {word.example && (
                                     <View style={styles.flashcardExample}>
-                                        <Text style={styles.flashcardExampleText}>{word.example}</Text>
-                                        <Text style={styles.flashcardExampleEn}>{word.exampleEnglish}</Text>
+                                        <View style={styles.exampleContent}>
+                                            <View style={styles.exampleTextContainer}>
+                                                <Text style={styles.flashcardExampleText}>{word.example}</Text>
+                                                <Text style={styles.flashcardExampleEn}>{word.exampleEnglish}</Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                style={styles.exampleSpeaker}
+                                                onPress={(e) => {
+                                                    e.stopPropagation();
+                                                    handleSpeech(word.example || word.translation, word.language);
+                                                }}
+                                            >
+                                                <Ionicons name="volume-high" size={20} color="#3498db" />
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
                                 )}
-                                <TouchableOpacity
-                                    style={styles.flashcardSpeaker}
-                                    onPress={() => handleSpeech(word.translation, word.language)}
-                                >
-                                    <Ionicons name="volume-high" size={30} color="white" />
-                                </TouchableOpacity>
                             </>
                         )}
                     </View>
@@ -564,16 +571,6 @@ export default function VocabularyScreen() {
                             name="card-text" 
                             size={20} 
                             color={viewMode === 'cards' ? 'white' : '#3498db'} 
-                        />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeActive]}
-                        onPress={() => setViewMode('list')}
-                    >
-                        <Ionicons 
-                            name="list" 
-                            size={20} 
-                            color={viewMode === 'list' ? 'white' : '#3498db'} 
                         />
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -696,11 +693,7 @@ export default function VocabularyScreen() {
                     }
                 >
                     {filteredVocabulary.length > 0 ? (
-                        viewMode === 'cards' ? (
-                            filteredVocabulary.map(renderVocabularyItem)
-                        ) : (
-                            filteredVocabulary.map(renderCompactListItem)
-                        )
+                        filteredVocabulary.map(renderVocabularyItem)
                     ) : (
                         <View style={styles.emptyState}>
                             <Text style={styles.emptyIcon}>📚</Text>
@@ -1071,7 +1064,7 @@ const styles = StyleSheet.create({
         borderRadius: 50,
     },
     tapHint: {
-        backgroundColor: '#f1c40f',
+        backgroundColor: '#27ae60',
         paddingVertical: 8,
         paddingHorizontal: 20,
         alignItems: 'center',
@@ -1162,58 +1155,6 @@ const styles = StyleSheet.create({
         color: '#e74c3c',
         fontWeight: '600',
     },
-    // Compact List View Styles
-    compactItem: {
-        backgroundColor: 'white',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 15,
-        marginBottom: 10,
-        borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 2,
-    },
-    compactItemLeft: {
-        flex: 1,
-        marginRight: 10,
-    },
-    compactOriginal: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#2c3e50',
-        marginBottom: 2,
-    },
-    compactTranslation: {
-        fontSize: 14,
-        color: '#27ae60',
-        marginBottom: 4,
-    },
-    compactMeta: {
-        fontSize: 12,
-        color: '#95a5a6',
-    },
-    compactItemRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    compactProficiency: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    compactProficiencyText: {
-        color: 'white',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    compactSpeaker: {
-        padding: 8,
-    },
     // Flashcard Styles
     flashcardContainer: {
         flex: 1,
@@ -1250,6 +1191,10 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.15,
         shadowRadius: 10,
         elevation: 5,
+        overflow: 'hidden',
+    },
+    flashcardScrollView: {
+        flex: 1,
     },
     flashcardContent: {
         flex: 1,
@@ -1257,12 +1202,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 30,
     },
+    flashcardMainContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        marginBottom: 15,
+    },
     flashcardWord: {
-        fontSize: 36,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#2c3e50',
         textAlign: 'center',
         marginBottom: 20,
+        paddingHorizontal: 10,
+        width: '100%',
     },
     flashcardHint: {
         fontSize: 16,
@@ -1274,7 +1228,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#27ae60',
         textAlign: 'center',
-        marginBottom: 10,
     },
     flashcardLanguage: {
         fontSize: 18,
@@ -1283,32 +1236,50 @@ const styles = StyleSheet.create({
     },
     flashcardExample: {
         backgroundColor: '#f8f9fa',
-        padding: 20,
+        padding: 15,
         borderRadius: 15,
         marginTop: 20,
         width: '100%',
     },
+    exampleContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    exampleTextContainer: {
+        flex: 1,
+        marginRight: 10,
+    },
+    flashcardExampleScroll: {
+        maxHeight: 170,
+    },
     flashcardExampleText: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#34495e',
-        textAlign: 'center',
         marginBottom: 8,
+        lineHeight: 22,
     },
     flashcardExampleEn: {
-        fontSize: 14,
+        fontSize: 13,
         color: '#7f8c8d',
         fontStyle: 'italic',
-        textAlign: 'center',
+        lineHeight: 20,
+    },
+    exampleSpeaker: {
+        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+        padding: 8,
+        borderRadius: 50,
+        marginTop: 5,
     },
     flashcardSpeaker: {
         marginTop: 20,
         backgroundColor: 'rgba(52, 152, 219, 0.2)',
-        padding: 15,
+        padding: 10,
         borderRadius: 50,
+        flex: 1
     },
     flashcardControls: {
         flexDirection: 'row',
-        gap: 15,
+        gap: 15
     },
     flashcardButton: {
         flex: 1,
@@ -1397,4 +1368,37 @@ const styles = StyleSheet.create({
         color: '#3498db',
         fontWeight: '600',
     },
+    flashcardTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        gap: 20,
+    },
+    flashcardSpeakerTop: {
+        position: 'absolute',
+        right: 0,
+        top: '50%',
+        transform: [{ translateY: -20 }], // Half of button height
+        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+        padding: 10,
+        borderRadius: 50,
+    },
+    flashcardMeaning: {
+        fontSize: 16,
+        color: '#7f8c8d',
+        marginBottom: 20,
+        fontStyle: 'italic',
+    },
+    speakerLabel: {
+        color: 'white',
+        fontSize: 14,
+        marginTop: 5,
+    },
+    flashcardWordContainer: {
+        width: '100%',
+        alignItems: 'center',
+        marginBottom: 15,
+        position: 'relative',
+    }
 });

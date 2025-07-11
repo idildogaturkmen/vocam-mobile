@@ -124,6 +124,10 @@ export default function DetectionScreen() {
       if (user) {
         await SessionService.startSession(user.id);
         await SessionService.updateStreak(user.id);
+        
+        // Load user stats
+        const stats = await SessionService.getUserStats(user.id);
+        setUserStats(stats);
       }
     };
     initSession();
@@ -534,6 +538,7 @@ export default function DetectionScreen() {
         onLanguagePress={() => setShowLanguageModal(true)}
         modelStatus={modelStatus}
         languageName={getCurrentLanguageName()}
+        // userStats={userStats || undefined}
       />
 
       {/* Language Selection Modal */}
@@ -646,7 +651,15 @@ export default function DetectionScreen() {
                       if (result === 'success') {
                         Alert.alert(
                           'Word Added!', 
-                          `✅ "${manualWord.trim()}" saved in ${languageName}\nTranslation: "${translation}"`
+                          `✅ "${manualWord.trim()}" saved in ${languageName}\nTranslation: "${translation}"`,
+                          [{
+                            text: 'OK',
+                            onPress: async () => {
+                              // Refresh user stats
+                              const stats = await SessionService.getUserStats(user.id);
+                              setUserStats(stats);
+                            }
+                          }]
                         );
                       } else if (result === 'exists') {
                         Alert.alert(

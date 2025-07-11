@@ -1,5 +1,6 @@
 import { supabase } from '../../database/config';
 import { Alert } from 'react-native';
+import uuid from 'react-native-uuid';
 
 interface VocabularyItem {
     word_id?: string;
@@ -141,8 +142,6 @@ class VocabularyService {
                 console.error('Batch check error:', checkError);
             }
 
-
-
             // Create a set of existing word originals for this language
             const existingOriginals = new Set<string>();
             if (existingUserWords) {
@@ -155,7 +154,15 @@ class VocabularyService {
                 }
             }
 
-            // Step 2: Check which words exist globally
+            // Step 3: Get user's existing words to properly filter out duplicates
+            const { data: userExistingWords } = await supabase
+                .from('user_words')
+                .select('word_id')
+                .eq('user_id', userId);
+            
+            const userWordIds = new Set(userExistingWords?.map(uw => uw.word_id) || []);
+
+            // Step 4: Check which words exist globally
             const { data: existingGlobalWords } = await supabase
                 .from('words')
                 .select('word_id, original')
@@ -165,7 +172,7 @@ class VocabularyService {
                 existingGlobalWords?.map(w => [w.original, w.word_id]) || []
             );
 
-            // Step 3: Prepare batch operations
+            // Step 5: Prepare batch operations
             const newWords: any[] = [];
             const newTranslations: any[] = [];
             const newUserWords: any[] = [];
@@ -183,12 +190,14 @@ class VocabularyService {
                 
                 if (!wordId) {
                     // Need to create new word
-                    wordId = crypto.randomUUID();
+                    // Generate a proper UUID v4
+                    wordId = uuid.v4() as string;
                     newWords.push({
                         word_id: wordId,
                         original: original,
                         created_at: new Date().toISOString()
                     });
+                    existingGlobalMap.set(original, wordId);
                 }
 
                 // Add translation
@@ -199,18 +208,21 @@ class VocabularyService {
                     example: `${word.example}|${word.exampleEnglish}`
                 });
 
-                // Add to user's vocabulary
-                newUserWords.push({
-                    user_id: userId,
-                    word_id: wordId,
-                    proficiency: Math.floor(Math.random() * 20) + 10,     // PLACEHOLDER FOR NOW / NEED TO CHANGE AFTER QUIZ MODE
-                    learned_at: new Date().toISOString()
-                });
-
-                result.savedWords.push(word.original);
+                // Only add to user's vocabulary if they don't already have this word
+                if (!userWordIds.has(wordId)) {
+                    newUserWords.push({
+                        user_id: userId,
+                        word_id: wordId,
+                        proficiency: Math.floor(Math.random() * 20) + 10,
+                        learned_at: new Date().toISOString()
+                    });
+                    result.savedWords.push(word.original);
+                } else {
+                    result.existingWords.push(word.original);
+                }
             }
 
-            /// Step 4: Execute batch inserts
+            // Step 6: Execute batch inserts
             if (newWords.length > 0) {
                 const { error: wordsError } = await supabase
                     .from('words')
@@ -230,23 +242,12 @@ class VocabularyService {
             }
 
             if (newUserWords.length > 0) {
-                // Filter out any duplicates before inserting
-                const existingUserWordIds = new Set(
-                    existingUserWords?.map(uw => uw.word_id) || []
-                );
-                
-                const uniqueNewUserWords = newUserWords.filter(
-                    nuw => !existingUserWordIds.has(nuw.word_id)
-                );
-                
-                if (uniqueNewUserWords.length > 0) {
-                    const { error: userWordsError } = await supabase
-                        .from('user_words')
-                        .insert(uniqueNewUserWords);
-                    if (userWordsError) {
-                        console.error('User words insert error:', userWordsError);
-                        // Don't fail the whole operation, just log the error
-                    }
+                const { error: userWordsError } = await supabase
+                    .from('user_words')
+                    .insert(newUserWords);
+                if (userWordsError) {
+                    console.error('User words insert error:', userWordsError);
+                    // Don't fail the whole operation, just log the error
                 }
             }
 
@@ -278,35 +279,31 @@ class VocabularyService {
         try {
             const languageName = this.getLanguageName(language);
 
-            // Step 1: First check if user already has this word in this specific language
+            // Step 1: Check if this specific user already has this word in this specific language
             const { data: existingUserWord, error: userCheckError } = await supabase
                 .from('user_words')
                 .select(`
                     id,
                     word_id,
                     words!inner (
-                        original
+                        word_id,
+                        original,
+                        translations!inner (
+                            language_code,
+                            translated_text
+                        )
                     )
                 `)
                 .eq('user_id', userId)
                 .eq('words.original', original.toLowerCase())
-                .single();
+                .eq('words.translations.language_code', language);
 
-            if (existingUserWord) {
-                // User has this word, now check if they have it in this specific language
-                const { data: existingTranslation, error: translationCheckError } = await supabase
-                    .from('translations')
-                    .select('*')
-                    .eq('word_id', existingUserWord.word_id)
-                    .eq('language_code', language)
-                    .single();
-
-                if (existingTranslation) {
-                    return 'exists'; // Return exists without showing alert (will be handled by caller)
-                }
+            if (existingUserWord && existingUserWord.length > 0) {
+                // User already has this word in this language
+                return 'exists';
             }
 
-            // Step 2: Check if word exists in the global words table
+            // Step 2: Check if word exists globally
             let wordId: string;
             
             const { data: existingWord } = await supabase
@@ -376,8 +373,16 @@ class VocabularyService {
                 }
             }
 
-            // Step 3: Add to user's vocabulary if not already there
-            if (!existingUserWord) {
+            // Step 3: Check if user already has this word (in any language)
+            const { data: userHasWord } = await supabase
+                .from('user_words')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('word_id', wordId)
+                .single();
+
+            if (!userHasWord) {
+                // Add to user's vocabulary
                 const { error: userWordError } = await supabase
                     .from('user_words')
                     .insert({
@@ -399,7 +404,6 @@ class VocabularyService {
             return 'error';
         }
     }
-
     /**
      * Get all vocabulary for a user
      */

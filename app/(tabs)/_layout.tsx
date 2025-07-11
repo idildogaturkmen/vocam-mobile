@@ -69,18 +69,7 @@ export default function TabLayout() {
         }}
       />
       
-      {/* 5. Pronunciation Practice Tab */}
-      <Tabs.Screen
-        name="practice"
-        options={{
-          title: 'Practice',
-          tabBarIcon: ({ color }: { color: string }) => (
-            <FontAwesome name="microphone" size={24} color={color} />
-          ),
-        }}
-      />
-      
-      {/* 6. Settings Tab */}
+      {/* 5. Settings Tab */}
       <Tabs.Screen
         name="settings"
         options={{

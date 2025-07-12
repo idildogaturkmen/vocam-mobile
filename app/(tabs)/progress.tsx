@@ -10,10 +10,11 @@ import { getImageWord } from '@/utils/progress/getImageWord';
 import { getAchievements } from '@/utils/progress/getAchievements';
 import FireStreak from '@/components/Progress/FireStreak';
 import { getStreak } from '@/utils/progress/getStreak';
+import { BadgeCard } from '@/components/Progress/BadgeCard';
 
 export default function ProgressScreen() {
     const [level, setLevel] = useState<number | 0>(0);
-    const [achievements, setAchievements] = useState<number | 0>(0);
+    const [achievements, setAchievements] = useState<Record<string, string>[] | []>([]);
     const [trophies, setTrophies] = useState<number | 0>(0);
     const [words, setWords] = useState<number | 0>(0);
     const [wordsInfo, setWordsInfo] = useState<Record<string, string>[]>([]);
@@ -23,7 +24,7 @@ export default function ProgressScreen() {
     useEffect(() => {
         const fetchData = async () => {
             const achievements = await getAchievements();
-            setAchievements(achievements.length);
+            setAchievements(achievements);
             const learnedWords = await getLearnedWords();
             setWordsInfo(learnedWords);
             const streak_num = await getStreak();
@@ -62,7 +63,7 @@ export default function ProgressScreen() {
                 />
                 <StatBox
                     label="Trophies"
-                    value={achievements ?? '...'}
+                    value={achievements.length ?? '...'}
                     image={() => getImageTrophy(trophies)}
                 />
                 <StatBox
@@ -94,6 +95,18 @@ export default function ProgressScreen() {
                         ))
                     )}
                 </View>
+            </ScrollView>
+
+            <Text style={styles.subheading}>Achievements</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {achievements.map((achievement) => (
+                    <BadgeCard
+                        key={achievement.id}
+                        imageSource={async () => await getImageLevel(level)}
+                        description={achievement.description}
+                        date={achievement.earned_at}
+                    />
+                ))}
             </ScrollView>
         </SafeAreaView>
     );

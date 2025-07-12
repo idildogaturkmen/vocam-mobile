@@ -15,8 +15,6 @@ import { BadgeCard } from '@/components/Progress/BadgeCard';
 export default function ProgressScreen() {
     const [level, setLevel] = useState<number | 0>(0);
     const [achievements, setAchievements] = useState<Record<string, string>[] | []>([]);
-    const [trophies, setTrophies] = useState<number | 0>(0);
-    const [words, setWords] = useState<number | 0>(0);
     const [wordsInfo, setWordsInfo] = useState<Record<string, string>[]>([]);
     const [streak, setStreak] = useState<number | 0>(0);
     const router = useRouter();
@@ -39,22 +37,6 @@ export default function ProgressScreen() {
                 <Text style={styles.heading}>Your progress</Text>
                 <FireStreak streak={streak} />
             </View>
-            <TouchableOpacity onPress={() => setLevel((prev) => (prev + 1) % 6)}>
-                <Text style={styles.heading}>
-                    Level {level} <Text style={{ fontSize: 16, color: '#888' }}>Tap to change</Text>
-                </Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setTrophies((prev) => (prev + 1) % 5)}>
-                <Text style={styles.heading}>
-                    Trophy {trophies}{' '}
-                    <Text style={{ fontSize: 16, color: '#888' }}>Tap to change</Text>
-                </Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setWords((prev) => (prev + 1) % 4)}>
-                <Text style={styles.heading}>
-                    Words {words} <Text style={{ fontSize: 16, color: '#888' }}>Tap to change</Text>
-                </Text>
-            </TouchableOpacity>
             <View style={styles.statsRow}>
                 <StatBox
                     label="Level"
@@ -64,12 +46,12 @@ export default function ProgressScreen() {
                 <StatBox
                     label="Trophies"
                     value={achievements.length ?? '...'}
-                    image={() => getImageTrophy(trophies)}
+                    image={() => getImageTrophy(achievements.length)}
                 />
                 <StatBox
                     label="Words Learned"
                     value={wordsInfo.length}
-                    image={async () => await getImageWord(words)}
+                    image={async () => await getImageWord(wordsInfo.length)}
                 />
             </View>
             <Text style={styles.subheading}>Words Learned Until Now, Keep Going!</Text>
@@ -130,6 +112,7 @@ const styles = StyleSheet.create({
         marginVertical: 16,
     },
     statsRow: {
+        paddingVertical: 6,
         flexDirection: 'row',
         justifyContent: 'space-between',
     },

@@ -46,6 +46,7 @@ export const BadgeCard: React.FC<BadgeCardProps> = ({ imageSource, description, 
 
 const styles = StyleSheet.create({
     card: {
+        maxHeight: 80,
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFF',

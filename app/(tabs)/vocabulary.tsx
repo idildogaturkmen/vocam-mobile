@@ -13,7 +13,8 @@ import {
     Dimensions,
     TextInput,
     KeyboardAvoidingView,
-    Platform
+    Platform,
+    Pressable
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../database/config';
@@ -22,55 +23,56 @@ import SpeechService from '../../src/services/SpeechService';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
+import { useRouter } from 'expo-router';
 
 const { width, height } = Dimensions.get('window');
 
-// Define language mapping with proper typing
+// Define language mapping with proper typing - NOW SORTED ALPHABETICALLY
 const languages: Record<string, string> = {
-    'Spanish': 'es',
-    'French': 'fr',
+    'Arabic': 'ar',
+    'Bengali': 'bn',
+    'Bulgarian': 'bg',
     'Chinese (Simplified)': 'zh-CN',
     'Chinese (Traditional)': 'zh-TW',
+    'Croatian': 'hr',
+    'Czech': 'cs',
+    'Danish': 'da',
+    'Dutch': 'nl',
+    'Filipino': 'tl',
+    'Finnish': 'fi',
+    'French': 'fr',
     'German': 'de',
+    'Greek': 'el',
+    'Gujarati': 'gu',
+    'Hebrew': 'he',
+    'Hindi': 'hi',
+    'Hungarian': 'hu',
+    'Icelandic': 'is',
+    'Indonesian': 'id',
+    'Italian': 'it',
     'Japanese': 'ja',
     'Korean': 'ko',
-    'Italian': 'it',
-    'Portuguese': 'pt',
-    'Russian': 'ru',
-    'Arabic': 'ar',
-    'Hindi': 'hi',
-    'Turkish': 'tr',
-    'Dutch': 'nl',
-    'Swedish': 'sv',
-    'Polish': 'pl',
-    'Greek': 'el',
-    'Hebrew': 'he',
-    'Vietnamese': 'vi',
-    'Indonesian': 'id',
-    'Danish': 'da',
-    'Norwegian': 'no',
-    'Finnish': 'fi',
-    'Thai': 'th',
-    'Czech': 'cs',
-    'Hungarian': 'hu',
-    'Ukrainian': 'uk',
-    'Romanian': 'ro',
-    'Filipino': 'tl',
+    'Latin': 'la',
     'Malay': 'ms',
-    'Swahili': 'sw',
-    'Bengali': 'bn',
-    'Urdu': 'ur',
-    'Serbian': 'sr',
-    'Croatian': 'hr',
-    'Slovak': 'sk',
-    'Bulgarian': 'bg',
+    'Norwegian': 'no',
     'Persian (Farsi)': 'fa',
+    'Polish': 'pl',
+    'Portuguese': 'pt',
+    'Punjabi': 'pa',
+    'Romanian': 'ro',
+    'Russian': 'ru',
+    'Serbian': 'sr',
+    'Slovak': 'sk',
+    'Spanish': 'es',
+    'Swahili': 'sw',
+    'Swedish': 'sv',
     'Tamil': 'ta',
     'Telugu': 'te',
-    'Gujarati': 'gu',
-    'Punjabi': 'pa',
-    'Icelandic': 'is',
-    'Latin': 'la'
+    'Thai': 'th',
+    'Turkish': 'tr',
+    'Ukrainian': 'uk',
+    'Urdu': 'ur',
+    'Vietnamese': 'vi'
 };
 
 // Type for language keys
@@ -92,6 +94,9 @@ export default function VocabularyScreen() {
     const [currentFlashcardIndex, setCurrentFlashcardIndex] = useState(0);
     const [showFlashcardAnswer, setShowFlashcardAnswer] = useState(false);
     const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+    const [languageSearchQuery, setLanguageSearchQuery] = useState('');
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+    const router = useRouter();
 
     // Helper function - moved before useMemo that uses it
     const getLanguageName = (code: string): string => {
@@ -99,9 +104,43 @@ export default function VocabularyScreen() {
         return entry ? entry[0] : code;
     };
 
-    useEffect(() => {
-        loadVocabulary();
+    // Get sorted language list
+    const sortedLanguages = useMemo(() => {
+        return Object.keys(languages).sort((a, b) => a.localeCompare(b));
     }, []);
+
+    // Filter languages based on search
+    const filteredLanguages = useMemo(() => {
+        if (!languageSearchQuery.trim()) return sortedLanguages;
+        
+        const query = languageSearchQuery.toLowerCase();
+        return sortedLanguages.filter(lang => 
+            lang.toLowerCase().includes(query)
+        );
+    }, [languageSearchQuery, sortedLanguages]);
+
+    useEffect(() => {
+        checkAuthAndLoadVocabulary();
+    }, []);
+
+    const checkAuthAndLoadVocabulary = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                setIsAuthenticated(false);
+                setLoading(false);
+                // Don't show alert immediately, just set the state
+                return;
+            }
+            
+            setIsAuthenticated(true);
+            await loadVocabulary();
+        } catch (error) {
+            console.error('Auth check error:', error);
+            setIsAuthenticated(false);
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
         applyFiltersAndSort();
@@ -238,6 +277,11 @@ export default function VocabularyScreen() {
     };
 
     const handleDelete = (word: SavedWord) => {
+        if (!isAuthenticated) {
+            Alert.alert('Login Required', 'Please log in to manage your vocabulary');
+            return;
+        }
+
         Alert.alert(
             'Delete Word',
             `Are you sure you want to remove "${word.original}" from your vocabulary?`,
@@ -546,6 +590,39 @@ export default function VocabularyScreen() {
         );
     }
 
+    // Show empty state for non-authenticated users
+    if (isAuthenticated === false) {
+        return (
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>My Vocabulary</Text>
+                </View>
+                
+                <View style={styles.authRequiredContainer}>
+                    <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
+                    <Text style={styles.authRequiredTitle}>Login Recommended</Text>
+                    <Text style={styles.authRequiredText}>
+                        You're browsing without logging in. Your vocabulary won't be saved.
+                    </Text>
+                    <Text style={styles.authRequiredSubtext}>
+                        Login to save words, track progress, and access your vocabulary across devices.
+                    </Text>
+                    <TouchableOpacity
+                        style={styles.loginButton}
+                        onPress={() => router.replace('/App')}
+                    >
+                        <Text style={styles.loginButtonText}>Go to Login</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.continueButton}
+                        onPress={() => router.replace('/(tabs)/detection')}
+                    >
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
+
     return (
         <KeyboardAvoidingView 
             style={styles.container}
@@ -713,36 +790,105 @@ export default function VocabularyScreen() {
                 visible={showLanguageFilter}
                 animationType="slide"
                 transparent={true}
-                onRequestClose={() => setShowLanguageFilter(false)}
+                onRequestClose={() => {
+                    setShowLanguageFilter(false);
+                    setLanguageSearchQuery('');
+                }}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Filter by Language</Text>
-                        
-                        <ScrollView style={styles.optionsList}>
-                            {['All', ...Object.keys(languages)].map(lang => (
-                                <TouchableOpacity
-                                    key={lang}
-                                    style={[
-                                        styles.optionItem,
-                                        filterLanguage === lang && styles.optionItemActive
-                                    ]}
-                                    onPress={() => {
-                                        setFilterLanguage(lang);
-                                        setShowLanguageFilter(false);
-                                    }}
-                                >
-                                    <Text style={[
-                                        styles.optionText,
-                                        filterLanguage === lang && styles.optionTextActive
-                                    ]}>{lang}</Text>
-                                    {filterLanguage === lang && (
-                                        <Ionicons name="checkmark" size={20} color="#3498db" />
+                    <KeyboardAvoidingView 
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={styles.keyboardAvoidingView}
+                    >
+                        <Pressable 
+                            style={styles.modalContentWrapper}
+                            onPress={() => {
+                                setShowLanguageFilter(false);
+                                setLanguageSearchQuery('');
+                            }}
+                        >
+                            <Pressable 
+                                style={styles.modalContent}
+                                onPress={(e) => e.stopPropagation()}
+                            >
+                                <Text style={styles.modalTitle}>Filter by Language</Text>
+                                
+                                {/* Language Search Bar */}
+                                <View style={styles.modalSearchContainer}>
+                                    <Ionicons name="search" size={20} color="#7f8c8d" />
+                                    <TextInput
+                                        style={styles.modalSearchInput}
+                                        placeholder="Search languages..."
+                                        value={languageSearchQuery}
+                                        onChangeText={setLanguageSearchQuery}
+                                        autoFocus
+                                    />
+                                    {languageSearchQuery.length > 0 && (
+                                        <TouchableOpacity onPress={() => setLanguageSearchQuery('')}>
+                                            <Ionicons name="close-circle" size={20} color="#7f8c8d" />
+                                        </TouchableOpacity>
                                     )}
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    </View>
+                                </View>
+                                
+                                <ScrollView 
+                                    style={styles.optionsList} 
+                                    keyboardShouldPersistTaps="handled"
+                                    showsVerticalScrollIndicator={true}
+                                >
+                                    {/* All option */}
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.optionItem,
+                                            filterLanguage === 'All' && styles.optionItemActive
+                                        ]}
+                                        onPress={() => {
+                                            setFilterLanguage('All');
+                                            setShowLanguageFilter(false);
+                                            setLanguageSearchQuery('');
+                                        }}
+                                    >
+                                        <Text style={[
+                                            styles.optionText,
+                                            filterLanguage === 'All' && styles.optionTextActive
+                                        ]}>All Languages</Text>
+                                        {filterLanguage === 'All' && (
+                                            <Ionicons name="checkmark" size={20} color="#3498db" />
+                                        )}
+                                    </TouchableOpacity>
+                                    
+                                    {/* Filtered languages */}
+                                    {filteredLanguages.map(lang => (
+                                        <TouchableOpacity
+                                            key={lang}
+                                            style={[
+                                                styles.optionItem,
+                                                filterLanguage === lang && styles.optionItemActive
+                                            ]}
+                                            onPress={() => {
+                                                setFilterLanguage(lang);
+                                                setShowLanguageFilter(false);
+                                                setLanguageSearchQuery('');
+                                            }}
+                                        >
+                                            <Text style={[
+                                                styles.optionText,
+                                                filterLanguage === lang && styles.optionTextActive
+                                            ]}>{lang}</Text>
+                                            {filterLanguage === lang && (
+                                                <Ionicons name="checkmark" size={20} color="#3498db" />
+                                            )}
+                                        </TouchableOpacity>
+                                    ))}
+                                    
+                                    {filteredLanguages.length === 0 && (
+                                        <View style={styles.noResultsContainer}>
+                                            <Text style={styles.noResultsText}>No languages found</Text>
+                                        </View>
+                                    )}
+                                </ScrollView>
+                            </Pressable>
+                        </Pressable>
+                    </KeyboardAvoidingView>
                 </View>
             </Modal>
 
@@ -754,42 +900,55 @@ export default function VocabularyScreen() {
                 onRequestClose={() => setShowSortFilter(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Sort by</Text>
-                        
-                        <View style={styles.optionsList}>
-                            {[
-                                { value: 'newest', label: 'Newest First', icon: 'time' },
-                                { value: 'oldest', label: 'Oldest First', icon: 'time-outline' },
-                                { value: 'alphabetical', label: 'Alphabetical', icon: 'text' },
-                                { value: 'proficiency-high', label: 'High Proficiency', icon: 'trending-up' },
-                                { value: 'proficiency-low', label: 'Low Proficiency', icon: 'trending-down' }
-                            ].map(option => (
-                                <TouchableOpacity
-                                    key={option.value}
-                                    style={[
-                                        styles.optionItem,
-                                        sortBy === option.value && styles.optionItemActive
-                                    ]}
-                                    onPress={() => {
-                                        setSortBy(option.value);
-                                        setShowSortFilter(false);
-                                    }}
-                                >
-                                    <View style={styles.optionLeft}>
-                                        <Ionicons name={option.icon as any} size={20} color={sortBy === option.value ? "#3498db" : "#7f8c8d"} />
-                                        <Text style={[
-                                            styles.optionText,
-                                            sortBy === option.value && styles.optionTextActive
-                                        ]}>{option.label}</Text>
-                                    </View>
-                                    {sortBy === option.value && (
-                                        <Ionicons name="checkmark" size={20} color="#3498db" />
-                                    )}
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
+                    <KeyboardAvoidingView 
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={styles.keyboardAvoidingView}
+                    >
+                        <Pressable 
+                            style={styles.modalContentWrapper}
+                            onPress={() => setShowSortFilter(false)}
+                        >
+                            <Pressable 
+                                style={styles.modalContent}
+                                onPress={(e) => e.stopPropagation()}
+                            >
+                                <Text style={styles.modalTitle}>Sort by</Text>
+
+                                <View style={styles.optionsList}>
+                                    {[
+                                        { value: 'newest', label: 'Newest First', icon: 'time' },
+                                        { value: 'oldest', label: 'Oldest First', icon: 'time-outline' },
+                                        { value: 'alphabetical', label: 'Alphabetical', icon: 'text' },
+                                        { value: 'proficiency-high', label: 'High Proficiency', icon: 'trending-up' },
+                                        { value: 'proficiency-low', label: 'Low Proficiency', icon: 'trending-down' }
+                                    ].map(option => (
+                                        <TouchableOpacity
+                                            key={option.value}
+                                            style={[
+                                                styles.optionItem,
+                                                sortBy === option.value && styles.optionItemActive
+                                            ]}
+                                            onPress={() => {
+                                                setSortBy(option.value);
+                                                setShowSortFilter(false);
+                                            }}
+                                        >
+                                            <View style={styles.optionLeft}>
+                                                <Ionicons name={option.icon as keyof typeof Ionicons.glyphMap} size={20} color={sortBy === option.value ? "#3498db" : "#7f8c8d"} />
+                                                <Text style={[
+                                                    styles.optionText,
+                                                    sortBy === option.value && styles.optionTextActive
+                                                ]}>{option.label}</Text>
+                                            </View>
+                                            {sortBy === option.value && (
+                                                <Ionicons name="checkmark" size={20} color="#3498db" />
+                                            )}
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </Pressable>
+                        </Pressable>
+                    </KeyboardAvoidingView>
                 </View>
             </Modal>
         </KeyboardAvoidingView>
@@ -1324,14 +1483,14 @@ const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'flex-end',
     },
     modalContent: {
         backgroundColor: 'white',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         padding: 20,
-        maxHeight: '70%',
+        maxHeight: '80%',
+        paddingBottom: Platform.OS === 'ios' ? 30 : 20,
     },
     modalTitle: {
         fontSize: 20,
@@ -1340,8 +1499,24 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         textAlign: 'center',
     },
+    modalSearchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa',
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        borderRadius: 10,
+        marginBottom: 15,
+    },
+    modalSearchInput: {
+        flex: 1,
+        marginLeft: 10,
+        fontSize: 16,
+        color: '#2c3e50',
+    },
     optionsList: {
-        maxHeight: 400,
+        maxHeight: 350,
+        marginTop: 10,
     },
     optionItem: {
         flexDirection: 'row',
@@ -1400,5 +1575,70 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 15,
         position: 'relative',
-    }
+    },
+    noResultsContainer: {
+        padding: 40,
+        alignItems: 'center',
+    },
+    noResultsText: {
+        fontSize: 16,
+        color: '#95a5a6',
+    },
+    authRequiredContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    authRequiredTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#2c3e50',
+        marginTop: 20,
+        marginBottom: 10,
+    },
+    authRequiredText: {
+        fontSize: 16,
+        color: '#7f8c8d',
+        textAlign: 'center',
+        marginBottom: 30,
+        lineHeight: 22,
+    },
+    loginButton: {
+        backgroundColor: '#3498db',
+        paddingHorizontal: 30,
+        paddingVertical: 15,
+        borderRadius: 25,
+    },
+    loginButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    authRequiredSubtext: {
+        fontSize: 14,
+        color: '#95a5a6',
+        textAlign: 'center',
+        marginBottom: 20,
+        paddingHorizontal: 20,
+        lineHeight: 20,
+    },
+    continueButton: {
+        marginTop: 15,
+        paddingHorizontal: 30,
+        paddingVertical: 12,
+    },
+    continueButtonText: {
+        color: '#3498db',
+        fontSize: 16,
+        fontWeight: '500',
+    },
+    keyboardAvoidingView: {
+        flex: 1,
+        justifyContent: 'flex-end',
+    },
+    modalContentWrapper: {
+        flex: 1,
+        justifyContent: 'flex-end',
+    },
 });

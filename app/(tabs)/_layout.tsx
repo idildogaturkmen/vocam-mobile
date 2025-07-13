@@ -60,9 +60,9 @@ export default function TabLayout() {
       
       {/* 4. Quiz Tab */}
       <Tabs.Screen
-        name="quiz"
+        name="practice"
         options={{
-          title: 'Quiz',
+          title: 'Practice',
           tabBarIcon: ({ color }: { color: string }) => (
             <Entypo name="game-controller" size={24} color={color} />
           ),

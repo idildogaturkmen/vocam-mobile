@@ -4,6 +4,7 @@ import { ReadInputCommandType } from '@/database/dbTypes';
 type LearnedWord = {
     word: string;
     learned_at: string;
+    proficiency: number;
 };
 
 export async function getLearnedWords(): Promise<LearnedWord[]> {
@@ -20,6 +21,7 @@ export async function getLearnedWords(): Promise<LearnedWord[]> {
         learnedWords.push({
             word: word.find((w) => w.word_id === item.word_id)?.original || '',
             learned_at: item.learned_at,
+            proficiency: item.proficiency,
         });
     }
     return learnedWords;

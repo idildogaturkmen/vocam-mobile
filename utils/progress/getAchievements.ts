@@ -5,6 +5,7 @@ type Achievement = {
     id: string;
     description: string;
     earned_at: string;
+    badge_path: string;
 };
 
 export async function getAchievements(): Promise<Record<string, string>[]> {
@@ -26,6 +27,8 @@ export async function getAchievements(): Promise<Record<string, string>[]> {
             description:
                 achievementsData.find((w) => w.id === item.achievement_id)?.description || '',
             earned_at: item.achieved_at,
+            badge_path:
+                achievementsData.find((w) => w.id === item.achievement_id)?.badge_path || '',
         });
     }
     return achievements;

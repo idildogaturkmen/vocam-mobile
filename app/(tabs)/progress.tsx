@@ -1,23 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import { StatBox } from '@/components/Progress/StatBox';
 import { getLearnedWords } from '@/utils/progress/getLearnedWords';
 import { getImageLevel } from '@/utils/progress/getImageLevel';
 import { getImageTrophy } from '@/utils/progress/getImageTrophy';
-import { formatDate } from '@/utils/formatDate';
-import { useRouter } from 'expo-router';
 import { getImageWord } from '@/utils/progress/getImageWord';
 import { getAchievements } from '@/utils/progress/getAchievements';
 import FireStreak from '@/components/Progress/FireStreak';
 import { getStreak } from '@/utils/progress/getStreak';
 import { BadgeCard } from '@/components/Progress/BadgeCard';
+import MaxProficiencyWords from '@/components/Progress/MaxProficiency';
+import { MAX_PROF } from '@/constants/constants';
+import { getAchievementBadge } from '@/utils/progress/getAchievementBadge';
 
 export default function ProgressScreen() {
     const [level, setLevel] = useState<number | 0>(0);
     const [achievements, setAchievements] = useState<Record<string, string>[] | []>([]);
-    const [wordsInfo, setWordsInfo] = useState<Record<string, string>[]>([]);
+    const [wordsInfo, setWordsInfo] = useState<Record<string, any>[]>([]);
     const [streak, setStreak] = useState<number | 0>(0);
-    const router = useRouter();
 
     useEffect(() => {
         const fetchData = async () => {
@@ -54,37 +54,16 @@ export default function ProgressScreen() {
                     image={async () => await getImageWord(wordsInfo.length)}
                 />
             </View>
-            <Text style={styles.subheading}>Words Learned Until Now, Keep Going!</Text>
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 16 }}>
-                <View style={styles.wordTable}>
-                    {wordsInfo.length === 0 ? (
-                        <Text style={styles.emptyText}>
-                            You haven't learned any words yet. Learn some in{' '}
-                            <Text
-                                style={{ color: '#007bff', textDecorationLine: 'underline' }}
-                                onPress={() => router.replace('/(tabs)/detection')}
-                            >
-                                Camera
-                            </Text>{' '}
-                            tab.
-                        </Text>
-                    ) : (
-                        wordsInfo.map((item, idx) => (
-                            <View key={idx} style={styles.wordRow}>
-                                <Text style={styles.wordText}>• {item.word}</Text>
-                                <Text style={styles.wordDate}>{formatDate(item.learned_at)}</Text>
-                            </View>
-                        ))
-                    )}
-                </View>
-            </ScrollView>
+            <MaxProficiencyWords
+                count={wordsInfo.filter((word) => word.proficiency === MAX_PROF).length}
+            />
 
             <Text style={styles.subheading}>Achievements</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {achievements.map((achievement) => (
                     <BadgeCard
                         key={achievement.id}
-                        imageSource={async () => await getImageLevel(level)}
+                        imageSource={async () => await getAchievementBadge(achievement.badge_path)}
                         description={achievement.description}
                         date={achievement.earned_at}
                     />

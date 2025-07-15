@@ -305,6 +305,7 @@ export default function VocabularyScreen() {
     };
 
     const getProficiencyInfo = (level: number) => {
+        const clamped = Math.min(level, 100);
         if (level >= 80) return { color: '#27ae60', label: 'Expert', emoji: '🏆' };
         if (level >= 60) return { color: '#f39c12', label: 'Advanced', emoji: '🌟' };
         if (level >= 40) return { color: '#e67e22', label: 'Intermediate', emoji: '📈' };

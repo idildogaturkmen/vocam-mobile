@@ -5,12 +5,26 @@ import 'dotenv/config';
 async function test() {
     const email = process.env.TEST_EMAIL || '';
     const password = process.env.TEST_PASSWORD || '';
-    await createUser(email, password, 'testuser'); // create a new user for testing
-    const user = await login(email, password); // log in the user
+    
+    // Mock setLoading function for testing
+    const mockSetLoading = (loading: boolean) => {
+        console.log('Loading:', loading);
+    };
+    
+    // Create a new user for testing
+    await createUser(email, password, 'testuser', mockSetLoading);
+    
+    // Log in the user
+    const loginResult = await login(email, password, mockSetLoading);
+    
+    if (!loginResult || !loginResult.user) {
+        console.error('Login failed or no user returned');
+        return;
+    }
 
     await writeUserData({
         TableName: 'user_words',
-        Items: [{ word: 'maçã', user_id: user.id }],
+        Items: [{ word: 'maçã', user_id: loginResult.user.id }],
     });
 
     const items = await readUserData({

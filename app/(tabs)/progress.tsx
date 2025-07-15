@@ -7,7 +7,7 @@ import { getImageTrophy } from '@/utils/progress/getImageTrophy';
 import { getImageWord } from '@/utils/progress/getImageWord';
 import { getAchievements } from '@/utils/progress/getAchievements';
 import FireStreak from '@/components/Progress/FireStreak';
-import { getStreak } from '@/utils/progress/getStreak';
+import { getProfile } from '@/utils/progress/getProfile';
 import { BadgeCard } from '@/components/Progress/BadgeCard';
 import MaxProficiencyWords from '@/components/Progress/MaxProficiency';
 import { MAX_PROF } from '@/constants/constants';
@@ -21,12 +21,13 @@ export default function ProgressScreen() {
 
     useEffect(() => {
         const fetchData = async () => {
+            const profile = await getProfile();
+            setStreak(profile?.streak || 0);
+            setLevel(profile?.level || 0);
             const achievements = await getAchievements();
             setAchievements(achievements);
             const learnedWords = await getLearnedWords();
             setWordsInfo(learnedWords);
-            const streak_num = await getStreak();
-            setStreak(streak_num);
         };
         fetchData();
     }, []);

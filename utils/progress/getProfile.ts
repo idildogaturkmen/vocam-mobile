@@ -8,15 +8,17 @@ type ProfilesTableItems = {
     created_at: string;
     username: string;
     last_login: string;
+    level: number;
+    exp: number;
 };
 
-export async function getStreak(): Promise<number> {
+export async function getProfile(): Promise<ProfilesTableItems | null> {
     const readInput: ReadInputCommandType = {
         TableName: 'profiles',
     };
     const data = (await readUserData(readInput)) as unknown as ProfilesTableItems[];
     if (!data) {
-        return 0;
+        return null;
     }
-    return data[0].streak;
+    return data[0];
 }

@@ -1,8 +1,7 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
 import Entypo from '@expo/vector-icons/Entypo';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function TabLayout() {
@@ -64,7 +63,7 @@ export default function TabLayout() {
         options={{
           title: 'Practice',
           tabBarIcon: ({ color }: { color: string }) => (
-            <Entypo name="game-controller" size={24} color={color} />
+            <FontAwesome6 name="brain" size={24} color={color} />
           ),
         }}
       />

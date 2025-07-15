@@ -1,1 +1,1 @@
-export const MAX_PROF = 25;
+export const MAX_PROF = 100;

@@ -15,11 +15,11 @@ import { getAchievementBadge } from '@/utils/progress/getAchievementBadge';
 import XPBar from '@/components/Progress/XPBar';
 
 export default function ProgressScreen() {
-    const [level, setLevel] = useState<number | 0>(0);
-    const [exp, setExp] = useState<number | 0>(0);
+    const [level, setLevel] = useState<number>(0);
+    const [exp, setExp] = useState<number>(0);
     const [achievements, setAchievements] = useState<Record<string, string>[] | []>([]);
     const [wordsInfo, setWordsInfo] = useState<Record<string, any>[]>([]);
-    const [streak, setStreak] = useState<number | 0>(0);
+    const [streak, setStreak] = useState<number>(0);
 
     useEffect(() => {
         const fetchData = async () => {

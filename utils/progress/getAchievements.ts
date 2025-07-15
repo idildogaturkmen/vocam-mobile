@@ -8,7 +8,7 @@ type Achievement = {
     badge_path: string;
 };
 
-export async function getAchievements(): Promise<Record<string, string>[]> {
+export async function getAchievements(): Promise<Achievement[]> {
     const readInput: ReadInputCommandType = {
         TableName: 'user_achievements',
     };

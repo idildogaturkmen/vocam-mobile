@@ -4,8 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function QuizScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Pronunciation Practice</Text>
-      <Text style={styles.subtitle}>Coming soon</Text>
+      <Text style={styles.title}>🎮 Quiz Mode</Text>
+      <Text style={styles.subtitle}>Quiz features coming soon</Text>
     </View>
   );
 }

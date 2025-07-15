@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system';
-import { Platform } from 'react-native';
+import { Platform, Image } from 'react-native';
 import Constants from 'expo-constants';
+import { manipulateAsync } from 'expo-image-manipulator';
 
 class ObjectDetectionService {
   constructor() {
@@ -56,6 +57,59 @@ class ObjectDetectionService {
     };
   }
 
+  // Add this method after the constructor
+  async resizeImage(imageUri, maxDimension = 1024) {
+    try {
+      // Get image dimensions
+      const imageInfo = await new Promise((resolve, reject) => {
+        Image.getSize(imageUri, (width, height) => {
+          resolve({ width, height });
+        }, reject);
+      });
+
+      const { width, height } = imageInfo;
+      
+      // Check if resize is needed
+      if (width <= maxDimension && height <= maxDimension) {
+        // No resize needed, return original base64
+        return await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+
+      // Calculate new dimensions
+      let newWidth, newHeight;
+      if (width > height) {
+        newWidth = maxDimension;
+        newHeight = Math.floor((height / width) * maxDimension);
+      } else {
+        newHeight = maxDimension;
+        newWidth = Math.floor((width / height) * maxDimension);
+      }
+
+      console.log(`📐 Resizing image from ${width}x${height} to ${newWidth}x${newHeight}`);
+
+      // For Expo, we need to use ImageManipulator
+      // First, import it at the top of the file
+      const { manipulateAsync } = require('expo-image-manipulator');
+      
+      const resizedImage = await manipulateAsync(
+        imageUri,
+        [{ resize: { width: newWidth, height: newHeight } }],
+        { compress: 0.8, format: 'jpeg', base64: true }
+      );
+
+      return resizedImage.base64;
+    } catch (error) {
+      console.error('Image resize error:', error);
+      // Fallback to original
+      return await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+    }
+  }
+
+  GOOGLE_VISION_API_URL = 'https://vision.googleapis.com/v1/images:annotate';
   async initialize() {
     if (this.isInitialized) return true;
     
@@ -86,25 +140,18 @@ class ObjectDetectionService {
   async getSecureApiKey() {
     // Method 1: Try Expo Constants extra field
     if (Constants.expoConfig?.extra?.googleVisionApiKey) {
-      console.log('🔐 Using API key from app.json extra field');
       return Constants.expoConfig.extra.googleVisionApiKey;
     }
 
     // Method 2: Try manifest extra field (older Expo versions)
     if (Constants.manifest?.extra?.googleVisionApiKey) {
-      console.log('🔐 Using API key from manifest extra field');
       return Constants.manifest.extra.googleVisionApiKey;
     }
 
     // Method 3: Try environment variables (works in development)
     if (process.env.GOOGLE_CLOUD_VISION_API_KEY) {
-      console.log('🔐 Using API key from environment variable');
       return process.env.GOOGLE_CLOUD_VISION_API_KEY;
     }
-
-    // Method 4: For development only - hardcoded key (REMOVE IN PRODUCTION)
-    // Uncomment and add your key here for testing:
-    // return 'YOUR_API_KEY_HERE';
 
     console.log('🔍 No API key found in any source');
     return null;
@@ -123,13 +170,11 @@ class ObjectDetectionService {
       console.log('🔍 Starting Google Vision object detection...');
       const startTime = Date.now();
       
-      // Convert image to base64
-      console.log('🖼️ Converting image to base64...');
-      const base64Image = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      // Resize image before converting to base64
+      console.log('🖼️ Resizing and converting image to base64...');
+      const base64Image = await this.resizeImage(imageUri, 800); // Reduced from 1024
       
-      // Call Google Vision API
+      // Rest of the method remains the same...
       console.log('⚡ Calling Google Vision API...');
       const inferenceStart = Date.now();
       const visionResponse = await this.callGoogleVisionAPI(base64Image);
@@ -171,33 +216,48 @@ class ObjectDetectionService {
           features: [
             {
               type: 'OBJECT_LOCALIZATION',
-              maxResults: 50
+              maxResults: 20  // Reduced from 50
             }
           ]
         }
       ]
     };
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
-    });
+    // Add timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    if (!response.ok) {
-            const errorText = await response.text();
-      throw new Error(`Google Vision API error: ${response.status} ${response.statusText} - ${errorText}`);
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Google Vision API error: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.responses[0].error) {
+        throw new Error(`Google Vision API error: ${result.responses[0].error.message}`);
+      }
+
+      return result;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Google Vision API request timed out after 30 seconds');
+      }
+      throw error;
     }
-
-    const result = await response.json();
-    
-    if (result.responses[0].error) {
-      throw new Error(`Google Vision API error: ${result.responses[0].error.message}`);
-    }
-
-        return result;
   }
 
   processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri) {

@@ -171,7 +171,7 @@ export default function PhotoResult({
           {isProcessing && (
             <View style={styles.processingOverlay}>
               <ActivityIndicator size="large" color="white" />
-              <Text style={styles.processingText}>Analyzing image...</Text>
+              <Text style={styles.processingText}>Analyzing image</Text>
             </View>
           )}
           {!isProcessing && detections.length > 0 && (

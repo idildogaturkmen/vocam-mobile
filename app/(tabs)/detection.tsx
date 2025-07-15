@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,16 +9,25 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Pressable
 } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Entypo from '@expo/vector-icons/Entypo';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 // Services
 import ObjectDetectionService from '../../src/services/ObjectDetectionService';
 import TranslationService from '../../src/services/TranslationService';
 import SpeechService from '../../src/services/SpeechService';
 import { getDisplayAndVisionImage } from '../../src/services/ImageUtils';
+import VocabularyService from '../../src/services/VocabularyService';
+import type { SaveWordResult } from '../../src/services/VocabularyService';
+import SessionService from '../../src/services/SessionService';
+
+// Database
+import { supabase } from '../../database/config';
 
 // Components
 import PhotoResult from '../../src/components/detection/PhotoResult';
@@ -40,7 +49,9 @@ export default function DetectionScreen() {
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
-  
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const router = useRouter();
+
   // Detection states
   const [photo, setPhoto] = useState<string | null>(null);
   const [rotatedPhoto, setRotatedPhoto] = useState<string | null>(null); //for normalized image
@@ -54,57 +65,96 @@ export default function DetectionScreen() {
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualWord, setManualWord] = useState('');
+  const [languageSearchQuery, setLanguageSearchQuery] = useState('');
+  const [userStats, setUserStats] = useState<{
+    totalWords: number;
+    masteredWords: number;
+    averageProficiency: number;
+    currentStreak: number;
+  } | null>(null);
 
+  // Sorted languages object
   const languages = {
-    'Spanish': 'es',
-    'French': 'fr',
+    'Arabic': 'ar',
+    'Bengali': 'bn',
+    'Bulgarian': 'bg',
     'Chinese (Simplified)': 'zh-CN',
     'Chinese (Traditional)': 'zh-TW',
+    'Croatian': 'hr',
+    'Czech': 'cs',
+    'Danish': 'da',
+    'Dutch': 'nl',
+    'Filipino': 'tl',
+    'Finnish': 'fi',
+    'French': 'fr',
     'German': 'de',
+    'Greek': 'el',
+    'Gujarati': 'gu',
+    'Hebrew': 'he',
+    'Hindi': 'hi',
+    'Hungarian': 'hu',
+    'Icelandic': 'is',
+    'Indonesian': 'id',
+    'Italian': 'it',
     'Japanese': 'ja',
     'Korean': 'ko',
-    'Italian': 'it',
-    'Portuguese': 'pt',
-    'Russian': 'ru',
-    'Arabic': 'ar',
-    'Hindi': 'hi',
-    'Turkish': 'tr',
-    'Dutch': 'nl',
-    'Swedish': 'sv',
-    'Polish': 'pl',
-    'Greek': 'el',
-    'Hebrew': 'he',
-    'Vietnamese': 'vi',
-    'Indonesian': 'id',
-    'Danish': 'da',
-    'Norwegian': 'no',
-    'Finnish': 'fi',
-    'Thai': 'th',
-    'Czech': 'cs',
-    'Hungarian': 'hu',
-    'Ukrainian': 'uk',
-    'Romanian': 'ro',
-    'Filipino': 'tl',
+    'Latin': 'la',
     'Malay': 'ms',
-    'Swahili': 'sw',
-    'Bengali': 'bn',
-    'Urdu': 'ur',
-    'Serbian': 'sr',
-    'Croatian': 'hr',
-    'Slovak': 'sk',
-    'Bulgarian': 'bg',
+    'Norwegian': 'no',
     'Persian (Farsi)': 'fa',
+    'Polish': 'pl',
+    'Portuguese': 'pt',
+    'Punjabi': 'pa',
+    'Romanian': 'ro',
+    'Russian': 'ru',
+    'Serbian': 'sr',
+    'Slovak': 'sk',
+    'Spanish': 'es',
+    'Swahili': 'sw',
+    'Swedish': 'sv',
     'Tamil': 'ta',
     'Telugu': 'te',
-    'Gujarati': 'gu',
-    'Punjabi': 'pa',
-    'Icelandic': 'is',
-    'Latin': 'la'
+    'Thai': 'th',
+    'Turkish': 'tr',
+    'Ukrainian': 'uk',
+    'Urdu': 'ur',
+    'Vietnamese': 'vi'
   };
 
-  useEffect(() => {
-    initializeServices();
+  // Get sorted language list
+  const sortedLanguages = useMemo(() => {
+    return Object.keys(languages).sort((a, b) => a.localeCompare(b));
   }, []);
+
+  // Filter languages based on search
+  const filteredLanguages = useMemo(() => {
+    if (!languageSearchQuery.trim()) return sortedLanguages;
+    
+    const query = languageSearchQuery.toLowerCase();
+    return sortedLanguages.filter(lang => 
+      lang.toLowerCase().includes(query)
+    );
+  }, [languageSearchQuery, sortedLanguages]);
+
+  useEffect(() => {
+      checkAuthAndInitialize();
+  }, []);
+
+  const checkAuthAndInitialize = async () => {
+      try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+              setIsAuthenticated(false);
+              return; // Don't initialize services if not authenticated
+          }
+          
+          setIsAuthenticated(true);
+          await initializeServices();
+      } catch (error) {
+          console.error('Auth check error:', error);
+          setIsAuthenticated(false);
+      }
+  };
 
   const initializeServices = async () => {
     try {
@@ -128,7 +178,11 @@ export default function DetectionScreen() {
   const takePicture = async () => {
     if (cameraRef.current && modelStatus === 'ready') {
       try {
-        const photoResult = await cameraRef.current.takePictureAsync({ skipProcessing: false });
+        const photoResult = await cameraRef.current.takePictureAsync({ 
+          skipProcessing: false,
+          quality: 0.9,
+          exif: false,
+        });
         
         // Auto-rotate and strip EXIF before using
         const rotatedUri = await getDisplayAndVisionImage(photoResult.uri);
@@ -236,7 +290,7 @@ export default function DetectionScreen() {
   // Enhanced speech function that ensures text is valid
   const handleSpeech = async (text: string, language: string) => {
     try {
-      // Validate text before speaking
+      // Validate text before speaking (Fix for TypeScript error)
       if (!text || typeof text !== 'string' || text.trim() === '') {
         console.warn('⚠️ Invalid text for speech:', text);
         Alert.alert('Speech Error', 'No text available to pronounce.');
@@ -261,22 +315,77 @@ export default function DetectionScreen() {
     try {
       const selectedDetections = Array.from(selectedWords).map(index => detections[index]);
       
-      // TODO: Implement your new database save logic here
-      console.log('Selected words to save:', selectedDetections);
-      
-      Alert.alert(
-        'Words Selected!', 
-        `📚 ${selectedDetections.length} word${selectedDetections.length > 1 ? 's' : ''} selected.`,
-        [{ text: 'Continue Learning', onPress: () => setPhoto(null) }]
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Please log in to save vocabulary');
+        return;
+      }
+
+      // Prepare words for batch save
+      const wordsToSave = selectedDetections.map(detection => ({
+        original: detection.label,
+        translation: detection.translation || '',
+        example: detection.example || '',
+        exampleEnglish: detection.exampleEnglish || ''
+      }));
+
+      // Use batch save for better performance
+      const result = await VocabularyService.saveMultipleWords(
+        wordsToSave,
+        targetLanguage,
+        user.id
       );
-      
+
+      // Get language name for display
+      const languageName = getCurrentLanguageName();
+
+      // Show consolidated message
+      if (result.savedWords.length > 0 || result.existingWords.length > 0) {
+        let message = '';
+        
+        if (result.savedWords.length > 0) {
+          message = `✅ ${result.savedWords.length} word${result.savedWords.length > 1 ? 's' : ''} saved in ${languageName}`;
+        }
+        
+        if (result.existingWords.length > 0) {
+          const existingWordsText = result.existingWords.map(w => `"${w}"`).join(', ');
+          if (message) message += '\n\n';
+          message += `ℹ️ Already in ${languageName}: ${existingWordsText}`;
+        }
+        
+        if (result.errors.length > 0) {
+          const errorWordsText = result.errors.map(w => `"${w}"`).join(', ');
+          if (message) message += '\n\n';
+          message += `❌ Failed to save: ${errorWordsText}`;
+        }
+        
+        Alert.alert(
+          result.savedWords.length > 0 ? 'Vocabulary Updated!' : 'Already Saved',
+          message,
+          [{ 
+            text: 'Continue Learning', 
+            onPress: async () => {
+              setPhoto(null);
+              // Refresh user stats after saving
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                const stats = await SessionService.getUserStats(user.id);
+                setUserStats(stats);
+              }
+            }
+          }]
+        );
+      } else if (result.errors.length > 0) {
+        Alert.alert('Save Failed', `Could not save: ${result.errors.join(', ')}`);
+      }
+
       setSelectedWords(new Set());
       setDetections([]);
-      setPhoto(null);
       
     } catch (error) {
       console.error('Save error:', error);
-      Alert.alert('Error', 'Failed to process selected words.');
+      Alert.alert('Error', 'Failed to save vocabulary. Please try again.');
     }
   };
 
@@ -317,6 +426,30 @@ export default function DetectionScreen() {
         </View>
       </View>
     );
+  }
+
+  // Check authentication
+  if (isAuthenticated === false) {
+      return (
+          <View style={styles.container}>
+              <View style={styles.authCard}>
+                  <Ionicons name="camera-outline" size={64} color="#95a5a6" />
+                  <Text style={styles.authTitle}>Login Required</Text>
+                  <Text style={styles.authText}>
+                      You need to be logged in to use the camera and detect objects.
+                  </Text>
+                  <Text style={styles.authSubtext}>
+                      Login to start learning languages through object detection.
+                  </Text>
+                  <TouchableOpacity
+                      style={styles.loginButton}
+                      onPress={() => router.replace('/App')}
+                  >
+                      <Text style={styles.loginButtonText}>Go to Login</Text>
+                  </TouchableOpacity>
+              </View>
+          </View>
+      );
   }
 
   // Show photo results
@@ -390,13 +523,155 @@ export default function DetectionScreen() {
           visible={showLanguageModal}
           transparent={true}
           animationType="slide"
-          onRequestClose={() => setShowLanguageModal(false)}
+          onRequestClose={() => {
+            setShowLanguageModal(false);
+            setLanguageSearchQuery('');
+          }}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+          <Pressable 
+            style={styles.modalOverlay}
+            onPress={() => {
+              setShowLanguageModal(false);
+              setLanguageSearchQuery('');
+            }}
+          >
+            <Pressable 
+              style={styles.modalContent}
+              onPress={(e) => e.stopPropagation()}
+            >
               <Text style={styles.modalTitle}>Select Language</Text>
+              
+              {/* Language Search Bar */}
+              <View style={styles.modalSearchContainer}>
+                <Ionicons name="search" size={20} color="#7f8c8d" />
+                <TextInput
+                  style={styles.modalSearchInput}
+                  placeholder="Search languages..."
+                  value={languageSearchQuery}
+                  onChangeText={setLanguageSearchQuery}
+                  autoFocus
+                />
+                {languageSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setLanguageSearchQuery('')}>
+                    <Ionicons name="close-circle" size={20} color="#7f8c8d" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              
               <ScrollView style={styles.languageList}>
-                {Object.entries(languages).map(([name, code]) => (
+                {filteredLanguages.map((name) => {
+                  const code = languages[name as keyof typeof languages];
+                  return (
+                    <TouchableOpacity
+                      key={code}
+                      style={[
+                        styles.languageOption,
+                        targetLanguage === code && styles.languageOptionActive
+                      ]}
+                      onPress={async () => {
+                        const previousLanguage = targetLanguage;
+                        setTargetLanguage(code);
+                        setShowLanguageModal(false);
+                        setLanguageSearchQuery('');
+                        
+                        // If we have detections (photo was taken), re-translate them
+                        if (photo && detections.length > 0 && code !== previousLanguage) {
+                          await retranslateDetections(code);
+                        }
+                      }}
+                    >
+                      <Text style={[
+                        styles.languageOptionText,
+                        targetLanguage === code && styles.languageOptionTextActive
+                      ]}>
+                        {name}
+                      </Text>
+                      {targetLanguage === code && (
+                        <Text style={styles.languageOptionCheck}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+                
+                {filteredLanguages.length === 0 && (
+                  <View style={styles.noResultsContainer}>
+                    <Text style={styles.noResultsText}>No languages found</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      </View>
+    );
+  }
+
+  
+  // Camera View with improved settings to prevent zoom
+  return (
+    <View style={styles.container}>
+      <CameraView 
+        style={StyleSheet.absoluteFillObject} 
+        facing={facing} 
+        ref={cameraRef}
+        zoom={0}
+      />
+      {/* Controls are outside CameraView to avoid warning */}
+      <CameraControls
+        facing={facing}
+        onFlipCamera={() => setFacing(facing === 'back' ? 'front' : 'back')}
+        onTakePicture={takePicture}
+        onManualInput={() => setShowManualInput(true)}
+        onLanguagePress={() => setShowLanguageModal(true)}
+        modelStatus={modelStatus}
+        languageName={getCurrentLanguageName()}
+        // userStats={userStats || undefined}
+      />
+
+      {/* Language Selection Modal */}
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowLanguageModal(false);
+          setLanguageSearchQuery('');
+        }}
+      >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => {
+            setShowLanguageModal(false);
+            setLanguageSearchQuery('');
+          }}
+        >
+          <Pressable 
+            style={styles.modalContent}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={styles.modalTitle}>Select Language</Text>
+            
+            {/* Language Search Bar */}
+            <View style={styles.modalSearchContainer}>
+              <Ionicons name="search" size={20} color="#7f8c8d" />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Search languages..."
+                value={languageSearchQuery}
+                onChangeText={setLanguageSearchQuery}
+                autoFocus
+              />
+              {languageSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setLanguageSearchQuery('')}>
+                  <Ionicons name="close-circle" size={20} color="#7f8c8d" />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            <ScrollView style={styles.languageList}>
+              {filteredLanguages.map((name) => {
+                const code = languages[name as keyof typeof languages];
+                return (
                   <TouchableOpacity
                     key={code}
                     style={[
@@ -407,6 +682,7 @@ export default function DetectionScreen() {
                       const previousLanguage = targetLanguage;
                       setTargetLanguage(code);
                       setShowLanguageModal(false);
+                      setLanguageSearchQuery('');
                       
                       // If we have detections (photo was taken), re-translate them
                       if (photo && detections.length > 0 && code !== previousLanguage) {
@@ -424,74 +700,17 @@ export default function DetectionScreen() {
                       <Text style={styles.languageOptionCheck}>✓</Text>
                     )}
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-      </View>
-    );
-  }
-
-  
-  // Camera View
-  return (
-    <View style={styles.container}>
-      <CameraView style={styles.camera} facing={facing} ref={cameraRef} />
-      {/* Controls are outside CameraView to avoid warning */}
-      <CameraControls
-        facing={facing}
-        onFlipCamera={() => setFacing(facing === 'back' ? 'front' : 'back')}
-        onTakePicture={takePicture}
-        onManualInput={() => setShowManualInput(true)}
-        onLanguagePress={() => setShowLanguageModal(true)}
-        modelStatus={modelStatus}
-        languageName={getCurrentLanguageName()}
-      />
-
-      {/* Language Selection Modal */}
-      <Modal
-        visible={showLanguageModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLanguageModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Language</Text>
-            <ScrollView style={styles.languageList}>
-              {Object.entries(languages).map(([name, code]) => (
-                <TouchableOpacity
-                  key={code}
-                  style={[
-                    styles.languageOption,
-                    targetLanguage === code && styles.languageOptionActive
-                  ]}
-                  onPress={async () => {
-                    const previousLanguage = targetLanguage;
-                    setTargetLanguage(code);
-                    setShowLanguageModal(false);
-                    
-                    // If we have detections (photo was taken), re-translate them
-                    if (photo && detections.length > 0 && code !== previousLanguage) {
-                      await retranslateDetections(code);
-                    }
-                  }}
-                >
-                  <Text style={[
-                    styles.languageOptionText,
-                    targetLanguage === code && styles.languageOptionTextActive
-                  ]}>
-                    {name}
-                  </Text>
-                  {targetLanguage === code && (
-                    <Text style={styles.languageOptionCheck}>✓</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
+                );
+              })}
+              
+              {filteredLanguages.length === 0 && (
+                <View style={styles.noResultsContainer}>
+                  <Text style={styles.noResultsText}>No languages found</Text>
+                </View>
+              )}
             </ScrollView>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Manual Input Modal */}
@@ -499,10 +718,22 @@ export default function DetectionScreen() {
         visible={showManualInput}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowManualInput(false)}
+        onRequestClose={() => {
+          setShowManualInput(false);
+          setManualWord('');
+        }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => {
+            setShowManualInput(false);
+            setManualWord('');
+          }}
+        >
+          <Pressable 
+            style={styles.modalContent}
+            onPress={(e) => e.stopPropagation()}
+          >
             <Text style={styles.modalTitle}>Add Word Manually</Text>
             <TextInput
               style={styles.manualInput}
@@ -526,6 +757,13 @@ export default function DetectionScreen() {
                 onPress={async () => {
                   if (manualWord.trim()) {
                     try {
+                      // Get current user
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (!user) {
+                        Alert.alert('Error', 'Please log in to save vocabulary');
+                        return;
+                      }
+
                       // Translate manual word
                       const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
                       const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
@@ -533,17 +771,43 @@ export default function DetectionScreen() {
                       // Test pronunciation
                       await handleSpeech(translation, targetLanguage);
                       
-                      // TODO: Implement your new database save logic here
-                      console.log('Manual word to save:', {
-                        word: manualWord.trim(),
+                      // Save to vocabulary
+                      const result: SaveWordResult = await VocabularyService.saveWord(
+                        manualWord.trim(),
                         translation,
-                        example
-                      });
+                        example.translated || '',
+                        example.english || '',
+                        targetLanguage,
+                        user.id
+                      );
                       
                       setShowManualInput(false);
                       setManualWord('');
                       
-                      Alert.alert('Word Added!', `"${translation}" has been processed.`);
+                      // Get language name for display
+                      const languageName = getCurrentLanguageName();
+                      
+                      if (result === 'success') {
+                        Alert.alert(
+                          'Word Added!', 
+                          `✅ "${manualWord.trim()}" saved in ${languageName}\nTranslation: "${translation}"`,
+                          [{
+                            text: 'OK',
+                            onPress: async () => {
+                              // Refresh user stats
+                              const stats = await SessionService.getUserStats(user.id);
+                              setUserStats(stats);
+                            }
+                          }]
+                        );
+                      } else if (result === 'exists') {
+                        Alert.alert(
+                          'Already Saved', 
+                          `ℹ️ "${manualWord.trim()}" is already in your ${languageName} vocabulary!`
+                        );
+                      } else {
+                        Alert.alert('Error', 'Failed to save word. Please try again.');
+                      }
                     } catch (error) {
                       console.error('Manual word error:', error);
                       Alert.alert('Error', 'Failed to add word. Please try again.');
@@ -554,8 +818,8 @@ export default function DetectionScreen() {
                 <Text style={styles.manualAddText}>Add Word</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
@@ -568,6 +832,8 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   permissionCard: {
     backgroundColor: 'white',
@@ -672,6 +938,7 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '100%',
     maxWidth: 400,
+    maxHeight: '70%',
   },
   modalTitle: {
     fontSize: 20,
@@ -679,6 +946,21 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
     marginBottom: 20,
     textAlign: 'center',
+  },
+  modalSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  modalSearchInput: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#2c3e50',
   },
   languageList: {
     maxHeight: 300,
@@ -707,6 +989,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#3498db',
     fontWeight: 'bold',
+  },
+  noResultsContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 16,
+    color: '#95a5a6',
   },
   // Manual input styles
   manualInput: {
@@ -746,5 +1036,50 @@ const styles = StyleSheet.create({
   },
   resultsScrollContent: {
     flexGrow: 1,
-  }
+  },
+  authCard: {
+    backgroundColor: 'white',
+    padding: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    margin: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  authTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: '#2c3e50',
+      marginTop: 20,
+      marginBottom: 10,
+  },
+  authText: {
+      fontSize: 16,
+      color: '#7f8c8d',
+      textAlign: 'center',
+      marginBottom: 10,
+      lineHeight: 22,
+  },
+  authSubtext: {
+      fontSize: 14,
+      color: '#95a5a6',
+      textAlign: 'center',
+      marginBottom: 30,
+      paddingHorizontal: 20,
+      lineHeight: 20,
+  },
+  loginButton: {
+      backgroundColor: '#3498db',
+      paddingHorizontal: 30,
+      paddingVertical: 15,
+      borderRadius: 25,
+  },
+  loginButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '600',
+  },
 });

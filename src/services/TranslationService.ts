@@ -163,14 +163,26 @@ class TranslationService {
   private async fallbackTranslation(text: string, targetLanguage: string, sourceLanguage: string = 'en'): Promise<string> {
     try {
       console.log('📱 Using fallback translation (MyMemory API)');
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLanguage}|${targetLanguage}`;
+      
+      // Properly encode the text
+      const encodedText = encodeURIComponent(text);
+      const url = `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=${sourceLanguage}|${targetLanguage}`;
+      
       const response = await fetch(url);
       
       if (response.ok) {
         const data: MyMemoryResponse = await response.json();
         const translation = data.responseData?.translatedText || text;
-        console.log(`✅ Fallback translation: "${text}" → "${translation}"`);
-        return translation;
+        
+        // Clean up any HTML entities or encoding issues
+        const cleanTranslation = translation
+          .replace(/%20/g, ' ')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&amp;/g, '&');
+          
+        console.log(`✅ Fallback translation: "${text}" → "${cleanTranslation}"`);
+        return cleanTranslation;
       }
     } catch (error) {
       console.error('Fallback translation error:', error);

@@ -12,9 +12,11 @@ import { BadgeCard } from '@/components/Progress/BadgeCard';
 import MaxProficiencyWords from '@/components/Progress/MaxProficiency';
 import { MAX_PROF } from '@/constants/constants';
 import { getAchievementBadge } from '@/utils/progress/getAchievementBadge';
+import XPBar from '@/components/Progress/XPBar';
 
 export default function ProgressScreen() {
     const [level, setLevel] = useState<number | 0>(0);
+    const [exp, setExp] = useState<number | 0>(0);
     const [achievements, setAchievements] = useState<Record<string, string>[] | []>([]);
     const [wordsInfo, setWordsInfo] = useState<Record<string, any>[]>([]);
     const [streak, setStreak] = useState<number | 0>(0);
@@ -24,6 +26,7 @@ export default function ProgressScreen() {
             const profile = await getProfile();
             setStreak(profile?.streak || 0);
             setLevel(profile?.level || 0);
+            setExp(profile?.exp || 0);
             const achievements = await getAchievements();
             setAchievements(achievements);
             const learnedWords = await getLearnedWords();
@@ -55,6 +58,8 @@ export default function ProgressScreen() {
                     image={async () => await getImageWord(wordsInfo.length)}
                 />
             </View>
+            <XPBar currentXP={exp} xpToNextLevel={100} />
+
             <MaxProficiencyWords
                 count={wordsInfo.filter((word) => word.proficiency === MAX_PROF).length}
             />

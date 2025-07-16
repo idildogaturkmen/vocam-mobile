@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -7,6 +7,7 @@ import {
     TextInput,
     KeyboardAvoidingView,
     Platform,
+    Animated,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -33,6 +34,10 @@ export default function PracticeQuestionRenderer({
     onTypeAnswer,
     onPlayAudio,
 }: PracticeQuestionRendererProps) {
+    const [hintExpanded, setHintExpanded] = useState(false);
+    const rotateAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
     // Auto-play audio for listening questions
     useEffect(() => {
         if ((currentQuestion.type === 'listening' || currentQuestion.type === 'pronunciation') && !showAnswer) {
@@ -43,6 +48,70 @@ export default function PracticeQuestionRenderer({
             return () => clearTimeout(timer);
         }
     }, [currentQuestion.id, currentQuestion.type]);
+
+    // Reset hint when question changes
+    useEffect(() => {
+        setHintExpanded(false);
+    }, [currentQuestion.id]);
+
+    const toggleHint = () => {
+        setHintExpanded(!hintExpanded);
+        Animated.timing(rotateAnim, {
+            toValue: hintExpanded ? 0 : 1,
+            duration: 200,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    const animateSpeaker = () => {
+        Animated.sequence([
+            Animated.timing(scaleAnim, {
+                toValue: 0.8,
+                duration: 100,
+                useNativeDriver: true,
+            }),
+            Animated.timing(scaleAnim, {
+                toValue: 1,
+                duration: 100,
+                useNativeDriver: true,
+            }),
+        ]).start();
+    };
+
+    const renderHint = () => {
+        if (!currentQuestion.word.example) return null;
+
+        const rotation = rotateAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: ['0deg', '90deg'],
+        });
+
+        return (
+            <View style={styles.hintContainer}>
+                <TouchableOpacity 
+                    style={styles.hintHeader}
+                    onPress={toggleHint}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.hintTitleContainer}>
+                        <FontAwesome name="key" size={16} color="#2980b9" />
+                        <Text style={styles.hintTitle}>Hint</Text>
+                    </View>
+                    <Animated.View style={{ transform: [{ rotate: rotation }] }}>
+                        <Ionicons name="chevron-forward" size={20} color="#2980b9" />
+                    </Animated.View>
+                </TouchableOpacity>
+                
+                {hintExpanded && (
+                    <View style={styles.hintContent}>
+                        <Text style={styles.hintText}>
+                            {currentQuestion.word.example.split('|')[1] || currentQuestion.word.example}
+                        </Text>
+                    </View>
+                )}
+            </View>
+        );
+    };
 
     const renderMultipleChoiceOptions = () => (
         <View style={styles.optionsContainer}>
@@ -76,7 +145,7 @@ export default function PracticeQuestionRenderer({
                             disabled={audioPlaying}
                         >
                             <Ionicons 
-                                name={audioPlaying ? "volume-mute" : "volume-medium"} 
+                                name={audioPlaying ? "volume-medium": "volume-medium"} 
                                 size={20} 
                                 color="#3498db" 
                             />
@@ -96,17 +165,7 @@ export default function PracticeQuestionRenderer({
                         {currentQuestion.displayQuestion}
                     </Text>
                     
-                    {currentQuestion.word.example && (
-                        <View style={styles.exampleContainer}>
-                            <View style={styles.exampleHeader}>
-                                <FontAwesome name="key" size={16} color="#2980b9" />
-                                <Text style={styles.exampleLabel}>Hint:</Text>
-                            </View>
-                            <Text style={styles.exampleText}>
-                                {currentQuestion.word.example.split('|')[1] || currentQuestion.word.example}
-                            </Text>
-                        </View>
-                    )}
+                    {renderHint()}
 
                     {renderMultipleChoiceOptions()}
                 </View>
@@ -121,10 +180,15 @@ export default function PracticeQuestionRenderer({
                     
                     <TouchableOpacity
                         style={styles.playButton}
-                        onPress={() => onPlayAudio(currentQuestion.word.translation, currentQuestion.word.language)}
+                        onPress={() => {
+                            animateSpeaker();
+                            onPlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
+                        }}
                         activeOpacity={0.7}
                     >
-                        <Ionicons name="volume-high" size={audioPlaying ? 28 : 32} color="#3498db" />
+                        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                            <Ionicons name="volume-high" size={32} color="#3498db" />
+                        </Animated.View>
                         <Text style={styles.playText}>Play pronunciation</Text>
                     </TouchableOpacity>
 
@@ -180,14 +244,19 @@ export default function PracticeQuestionRenderer({
                     
                     <TouchableOpacity
                         style={[styles.bigPlayButton, audioPlaying && styles.bigPlayButtonActive]}
-                        onPress={() => onPlayAudio(currentQuestion.word.translation, currentQuestion.word.language)}
+                        onPress={() => {
+                            animateSpeaker();
+                            onPlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
+                        }}
                         activeOpacity={0.8}
                     >
-                        <Ionicons 
-                            name="volume-high" 
-                            size={audioPlaying ? 44 : 48} 
-                            color="white" 
-                        />
+                        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                            <Ionicons 
+                                name="volume-high" 
+                                size={48} 
+                                color="white" 
+                            />
+                        </Animated.View>
                     </TouchableOpacity>
 
                     <View style={styles.optionsContainer}>
@@ -218,7 +287,7 @@ export default function PracticeQuestionRenderer({
         case 'typing':
             return (
                 <KeyboardAvoidingView 
-                    style={styles.questionContainer}
+                    style={styles.typingQuestionContainer}
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
                     <Text style={styles.questionText}>
@@ -253,14 +322,19 @@ export default function PracticeQuestionRenderer({
                             <Text style={styles.correctAnswerLabel}>Correct answer:</Text>
                             <Text style={styles.correctAnswerText}>{currentQuestion.correctAnswer}</Text>
                             <TouchableOpacity
-                                onPress={() => onPlayAudio(currentQuestion.correctAnswer, currentQuestion.word.language)}
+                                onPress={() => {
+                                    animateSpeaker();
+                                    onPlayAudio(currentQuestion.correctAnswer, currentQuestion.word.language);
+                                }}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons 
-                                    name="volume-medium" 
-                                    size={audioPlaying ? 22 : 24} 
-                                    color="#3498db" 
-                                />
+                                <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                                    <Ionicons 
+                                        name="volume-medium" 
+                                        size={24} 
+                                        color="#3498db" 
+                                    />
+                                </Animated.View>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -283,6 +357,18 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 4,
     },
+    typingQuestionContainer: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 24,
+        paddingBottom: 32,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+        minHeight: 300,
+    },
     questionText: {
         fontSize: 20,
         fontWeight: '600',
@@ -291,24 +377,34 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 28,
     },
-    exampleContainer: {
+    hintContainer: {
+        marginBottom: 20,
+    },
+    hintHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         backgroundColor: '#f0f8ff',
         padding: 12,
         borderRadius: 8,
-        marginBottom: 20,
     },
-    exampleHeader: {
+    hintTitleContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        marginBottom: 4,
     },
-    exampleLabel: {
+    hintTitle: {
         fontSize: 14,
         fontWeight: '600',
         color: '#2980b9',
     },
-    exampleText: {
+    hintContent: {
+        backgroundColor: '#f8fbff',
+        padding: 12,
+        borderRadius: 8,
+        marginTop: 8,
+    },
+    hintText: {
         fontSize: 14,
         color: '#34495e',
         fontStyle: 'italic',

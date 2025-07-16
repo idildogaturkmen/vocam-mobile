@@ -1,4 +1,3 @@
-// src/components/practice/PracticeFeedback.tsx
 import React, { useEffect, useRef } from 'react';
 import {
     View,
@@ -8,7 +7,6 @@ import {
     Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import LottieView from 'lottie-react-native';
 
 const { width } = Dimensions.get('window');
 

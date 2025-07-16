@@ -37,7 +37,7 @@ const quizOptions: QuizOption[] = [
     },
     {
         questions: 10,
-        icon: 'fire',
+        icon: 'flame',
         title: 'Standard Session',
         subtitle: '5-7 minutes',
         color: '#e74c3c',

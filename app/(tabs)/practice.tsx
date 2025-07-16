@@ -138,11 +138,12 @@ export default function PracticeScreen() {
         try {
             const isCorrect = await PracticeService.submitAnswer(answer);
             
-            // Play haptic feedback
+            // Play haptic feedback with different patterns
             if (isCorrect) {
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } else {
-                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                // Different pattern for wrong answers
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             }
 
             // Animate feedback

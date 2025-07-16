@@ -1,10 +1,11 @@
+// src/services/PracticeService.ts
 import { supabase } from '../../database/config';
 import VocabularyService, { SavedWord } from './VocabularyService';
 import SpeechService from './SpeechService';
 
 export interface QuizQuestion {
     id: string;
-    type: 'translation' | 'reverse_translation' | 'multiple_choice' | 'listening' | 'typing' | 'context' | 'pronunciation' | 'category_match';
+    type: 'translation' | 'reverse_translation' | 'multiple_choice' | 'listening' | 'typing' | 'context' | 'pronunciation'| 'category_match';
     word: SavedWord;
     options?: string[];
     correctAnswer: string;
@@ -34,6 +35,7 @@ export interface PracticeStats {
     streak: number;
     lastPracticeDate: string | null;
     languageStats: Record<string, { practiced: number; correct: number }>;
+    totalXP: number;
 }
 
 class PracticeService {
@@ -167,8 +169,8 @@ class PracticeService {
             let type = getRandomQuestionType();
             
             // Validate question type for the word
-            if (type === 'context' && !word.example) {
-                type = 'translation'; // Fallback if no example
+            if (type === 'context' && (!word.example || !word.example.includes('|'))) {
+                type = 'translation'; // Fallback if no proper example
             }
             
             if (type === 'typing' && word.translation.length > 20) {
@@ -253,22 +255,23 @@ class PracticeService {
      * Create context question using example sentences
      */
     private createContextQuestion(word: SavedWord, vocabulary: SavedWord[]): QuizQuestion {
-        const options = this.generateOptions(word.translation, vocabulary, 'translation');
+        // For context questions, we need to show options in English and context in target language
+        const options = this.generateOptions(word.original, vocabulary, 'original');
         let contextSentence = '';
+        let displayQuestion = '';
         
-        if (word.example) {
+        // Check if we have a properly formatted example
+        if (word.example && word.example.includes('|')) {
             const parts = word.example.split('|');
-            if (parts.length === 2) {
-                const englishExample = parts[1];
-                // Safely replace the word with blank
-                contextSentence = englishExample.replace(new RegExp(word.original, 'gi'), '_____');
-            } else {
-                // Use category-specific context
-                contextSentence = this.generateContextSentence(word);
-            }
+            // parts[0] is in target language, parts[1] is in English
+            const targetExample = parts[0];
+            
+            // Replace the translated word with blank in the target language sentence
+            contextSentence = targetExample.replace(new RegExp(word.translation, 'gi'), '_____');
+            displayQuestion = `Complete the sentence in ${this.getLanguageName(word.language)}:`;
         } else {
-            // Create category-specific context if no example exists
-            contextSentence = this.generateContextSentence(word);
+            // If no example, skip this question type
+            return this.createTranslationQuestion(word, vocabulary);
         }
         
         return {
@@ -276,9 +279,9 @@ class PracticeService {
             type: 'context',
             word,
             options,
-            correctAnswer: word.translation,
+            correctAnswer: word.original,
             contextSentence,
-            displayQuestion: 'Fill in the blank with the correct translation:'
+            displayQuestion
         };
     }
 
@@ -359,84 +362,108 @@ class PracticeService {
         // Special handling for specific words that need very clear context
         const specificWordTemplates: Record<string, string[]> = {
             'pen': [
-                `I need a _____ to sign this important document.`,
-                `The student forgot to bring a _____ to write the exam.`
+                `I need a blue ink _____ to sign this important document.`,
+                `The student forgot to bring a _____ to write the exam with ink.`
             ],
             'pencil': [
-                `The artist used a _____ to sketch the portrait.`,
-                `Please use a _____ so you can erase mistakes.`
+                `The artist used a graphite _____ to sketch the portrait.`,
+                `Please use a _____ so you can erase mistakes with an eraser.`
             ],
             'book': [
-                `I'm reading an interesting _____ about world history.`,
-                `The library has thousands of _____ on every subject.`
+                `I'm reading a 500-page _____ about world history.`,
+                `The library has leather-bound _____ on every shelf.`
             ],
             'phone': [
-                `My _____ is ringing but I can't find it anywhere.`,
-                `She's talking on her _____ with her mother.`
+                `My cellular _____ is ringing but I can't find it anywhere.`,
+                `She's making a call on her mobile _____ with her mother.`
             ],
             'computer': [
-                `I need to restart my _____ because it's running slowly.`,
-                `The programmer works on her _____ all day long.`
+                `I need to restart my laptop _____ because it's running slowly.`,
+                `The programmer types code on her _____ all day long.`
             ],
             'water': [
-                `I'm thirsty, can I have a glass of _____ please?`,
-                `The plants need _____ every day during summer.`
+                `I'm thirsty, can I have a glass of cold _____ to drink?`,
+                `The plants need liquid _____ every day during summer.`
             ],
             'coffee': [
-                `I always drink a cup of _____ in the morning.`,
-                `This _____ is too hot, let it cool down first.`
+                `I always drink a hot cup of brown _____ in the morning.`,
+                `This caffeinated _____ is too hot, let it cool down first.`
             ],
             'tea': [
-                `Would you prefer _____ or coffee with your breakfast?`,
-                `British people traditionally drink _____ at 4 o'clock.`
+                `Would you prefer herbal _____ or coffee with breakfast?`,
+                `British people traditionally drink hot _____ at 4 o'clock.`
             ],
             'milk': [
-                `The baby needs warm _____ from the bottle.`,
-                `Please add _____ to my cereal bowl.`
+                `The baby needs warm white _____ from the bottle.`,
+                `Please pour dairy _____ on my cereal bowl.`
             ],
             'bread': [
-                `I bought fresh _____ from the bakery this morning.`,
-                `We need _____ to make sandwiches for lunch.`
+                `I bought a fresh baked loaf of _____ from the bakery.`,
+                `We need sliced _____ to make sandwiches for lunch.`
             ],
             'door': [
-                `Please close the _____ when you leave the room.`,
-                `Someone is knocking at the front _____.`
+                `Please close the wooden _____ when you leave the room.`,
+                `Someone is knocking at the front entrance _____.`
             ],
             'window': [
-                `Open the _____ to let fresh air into the room.`,
-                `The bird flew into the closed _____ by accident.`
+                `Open the glass _____ to let fresh air into the room.`,
+                `The bird flew into the transparent _____ by accident.`
             ],
             'table': [
-                `Put the dishes on the dining _____ for dinner.`,
-                `The students sit around the _____ during class.`
+                `Put the plates on the wooden dining _____ for dinner.`,
+                `The students write on the flat surface of the _____.`
             ],
             'chair': [
-                `Pull up a _____ and join us at the table.`,
-                `This office _____ has wheels and adjustable height.`
+                `Pull up a four-legged _____ and sit down at the table.`,
+                `This wheeled office _____ has adjustable height.`
             ],
             'bed': [
-                `I'm tired and want to go to _____ early tonight.`,
-                `The hotel room has a comfortable king-size _____.`
+                `I'm tired and want to sleep in my soft _____ tonight.`,
+                `The hotel room has a comfortable mattress on the _____.`
             ],
             'car': [
-                `I drive my _____ to work every morning.`,
-                `The _____ won't start because the battery is dead.`
+                `I drive my four-wheeled _____ to work on the highway.`,
+                `The automobile _____ won't start because the battery died.`
             ],
             'bicycle': [
-                `She rides her _____ to school every day.`,
-                `My _____ has a flat tire that needs fixing.`
+                `She pedals her two-wheeled _____ to school every day.`,
+                `My _____ has pedals and a flat tire that needs fixing.`
             ],
             'airplane': [
-                `The _____ will land at the airport in 20 minutes.`,
-                `We boarded the _____ for our flight to Paris.`
+                `The flying _____ will land at the airport runway soon.`,
+                `We boarded the jet _____ for our flight to Paris.`
             ],
             'train': [
-                `The _____ arrives at platform 3 at 10:15 AM.`,
-                `We took the fast _____ from London to Edinburgh.`
+                `The railway _____ arrives on steel tracks at platform 3.`,
+                `We took the locomotive _____ from London to Edinburgh.`
             ],
             'bus': [
-                `The school _____ picks up children at 7:30 AM.`,
-                `I missed the _____ and had to wait 30 minutes.`
+                `The yellow school _____ picks up students at 7:30 AM.`,
+                `I missed the public transport _____ at the bus stop.`
+            ],
+            'keyboard': [
+                `I type letters on my computer _____ with all the keys.`,
+                `The QWERTY _____ is connected to my PC via USB cable.`
+            ],
+            'laptop': [
+                `My portable _____ computer fits in my backpack easily.`,
+                `The foldable _____ has a screen and keyboard built together.`
+            ],
+            'remote': [
+                `Press the buttons on the TV _____ control to change channels.`,
+                `The wireless _____ controller needs new batteries to work.`
+            ],
+            'glasses': [
+                `I wear prescription _____ on my face to see clearly.`,
+                `These optical _____ help me read small text better.`
+            ],
+            'sunglasses': [
+                `I wear dark _____ to protect my eyes from UV rays.`,
+                `These tinted _____ block the bright sunlight outside.`
+            ],
+            'fragile': [
+                `The glass vase is very _____ and breaks easily.`,
+                `Handle the delicate china carefully as it's extremely _____.`
             ]
         };
         
@@ -691,13 +718,41 @@ class PracticeService {
         
         this.currentSession.isCompleted = true;
         
-        // Update session in database
-        await supabase
+        // Calculate XP earned
+        const correctAnswers = this.currentSession.correctAnswers;
+        const totalQuestions = this.currentSession.totalQuestions;
+        const baseXP = correctAnswers * 10;
+        const bonusXP = totalQuestions === 20 ? 100 : totalQuestions === 10 ? 20 : 0;
+        const totalXP = baseXP + bonusXP;
+        
+        // Update session in database with correct score and total questions
+        const { error: sessionError } = await supabase
             .from('quiz_sessions')
             .update({
-                score: this.currentSession.correctAnswers
+                score: correctAnswers,
+                total_questions: totalQuestions
             })
             .eq('id', this.currentSession.id);
+
+        if (sessionError) {
+            console.error('Error updating session:', sessionError);
+        }
+        
+        // Record XP earned
+        if (totalXP > 0) {
+            const { error: xpError } = await supabase
+                .from('user_xp')
+                .insert({
+                    user_id: this.currentSession.userId,
+                    xp_earned: totalXP,
+                    source: 'practice',
+                    session_id: this.currentSession.id
+                });
+            
+            if (xpError) {
+                console.error('Error recording XP:', xpError);
+            }
+        }
         
         // Update user streak
         await this.updateUserStreak(this.currentSession.userId);
@@ -747,7 +802,7 @@ class PracticeService {
         
         const { data: profile } = await supabase
             .from('profiles')
-            .select('streak, last_login')
+            .select('streak, last_login, total_xp')
             .eq('user_id', userId)
             .single();
         
@@ -760,8 +815,7 @@ class PracticeService {
         
         sessions?.forEach(session => {
             correctAnswers += session.score || 0;
-            // Assuming average 10 questions per session
-            totalQuestions += 10;
+            totalQuestions += session.total_questions || 10;
         });
         
         return {
@@ -771,7 +825,8 @@ class PracticeService {
             accuracy: totalQuestions > 0 ? (correctAnswers / totalQuestions) * 100 : 0,
             streak: profile?.streak || 0,
             lastPracticeDate: profile?.last_login || null,
-            languageStats
+            languageStats,
+            totalXP: profile?.total_xp || 0
         };
     }
 

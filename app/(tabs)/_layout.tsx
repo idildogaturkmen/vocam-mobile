@@ -2,10 +2,13 @@ import { Stack, Tabs } from 'expo-router';
 import Entypo from '@expo/vector-icons/Entypo';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Ionicons } from '@expo/vector-icons';
+import { AchievementsProvider } from '@/context/AchievementsContext';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/ToastConfig';
 
 export default function TabLayout() {
     return (
-        <>
+        <AchievementsProvider>
             {/* This removes the (tabs) text on top of the page */}
             <Stack.Screen options={{ headerShown: false }} />
             <Tabs
@@ -89,6 +92,7 @@ export default function TabLayout() {
                     }}
                 />
             </Tabs>
-        </>
+            <Toast config={toastConfig} />
+        </AchievementsProvider>
     );
 }

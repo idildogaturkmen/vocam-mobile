@@ -13,6 +13,8 @@ import MaxProficiencyWords from '@/components/Progress/MaxProficiency';
 import { MAX_PROF } from '@/constants/constants';
 import { getAchievementBadge } from '@/utils/progress/getAchievementBadge';
 import XPBar from '@/components/Progress/XPBar';
+import { Button } from '@rneui/base';
+import { useAchievements } from '@/context/AchievementsContext';
 
 export default function ProgressScreen() {
     const [level, setLevel] = useState<number>(0);
@@ -34,6 +36,12 @@ export default function ProgressScreen() {
         };
         fetchData();
     }, []);
+
+    const { checkAchievement } = useAchievements();
+
+    const onUserAction = () => {
+        checkAchievement('first_login');
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -75,6 +83,7 @@ export default function ProgressScreen() {
                     />
                 ))}
             </ScrollView>
+            <Button title="Simulate Unlocking an Achievement" onPress={onUserAction} />
         </SafeAreaView>
     );
 }

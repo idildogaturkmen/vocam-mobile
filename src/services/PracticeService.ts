@@ -271,74 +271,38 @@ class PracticeService {
         let contextSentence = '';
         let displayQuestion = `Complete the sentence in ${this.getLanguageName(word.language)}:`;
         
-        // First, try to get a sentence that contains the exact word
-        let attempts = 0;
-        let foundValidSentence = false;
-        
-        while (attempts < 3 && !foundValidSentence) {
-            attempts++;
-            
-            // Generate a simple sentence that will definitely contain the word
-            const templateSentences = {
-                'de': [
-                    `Ich brauche ${word.original === 'glasses' ? 'eine' : 'einen'} ${word.translation}.`,
-                    `Das ist ${word.original === 'glasses' ? 'eine' : 'ein'} ${word.translation}.`,
-                    `Wo ist ${word.original === 'glasses' ? 'die' : 'der'} ${word.translation}?`
-                ],
-                'fr': [
-                    `J'ai besoin ${this.getFrenchArticle(word.translation)} ${word.translation}.`,
-                    `C'est ${this.getFrenchArticle(word.translation)} ${word.translation}.`,
-                    `Où est ${this.getFrenchArticle(word.translation)} ${word.translation}?`
-                ],
-                'es': [
-                    `Necesito ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
-                    `Esto es ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
-                    `¿Dónde está ${this.getSpanishArticle(word.translation)} ${word.translation}?`
-                ],
-                'it': [
-                    `Ho bisogno di ${this.getItalianArticle(word.translation)} ${word.translation}.`,
-                    `Questo è ${this.getItalianArticle(word.translation)} ${word.translation}.`,
-                    `Dov'è ${this.getItalianArticle(word.translation)} ${word.translation}?`
-                ]
-            };
-            
-            const templates = templateSentences[word.language as keyof typeof templateSentences] || [
-                `This is a ${word.translation}.`,
-                `I need a ${word.translation}.`,
-                `Where is the ${word.translation}?`
-            ];
-            
-            // Use a template sentence
-            contextSentence = templates[Math.floor(Math.random() * templates.length)];
-            
-            // For non-template languages, translate
-            if (!templateSentences[word.language as keyof typeof templateSentences]) {
-                try {
-                    const englishSentence = contextSentence.replace(word.translation, word.original);
-                    contextSentence = await TranslationService.translateText(
-                        englishSentence,
-                        word.language,
-                        'en'
-                    );
-                } catch (error) {
-                    console.error('Translation error:', error);
+        try {
+            // First try to get a proper example from the API
+            const example = await ExampleSentenceGenerator.getExampleSentence(
+                word.original,
+                word.language,
+                async (text: string, targetLang: string) => {
+                    return await TranslationService.translateText(text, targetLang, 'en');
                 }
+            );
+            
+            if (example && example.source !== 'error_fallback' && example.translated.includes(word.translation)) {
+                contextSentence = example.translated;
+                // Store the full example for hint audio
+                word.example = `${example.translated}|${example.english}`;
+            } else {
+                // Fallback to template-based sentences
+                contextSentence = await this.generateTargetLanguageSentenceWithWord(word);
             }
             
-            // Check if the sentence contains the exact word
+            // Replace the word with blank
             if (contextSentence.toLowerCase().includes(word.translation.toLowerCase())) {
-                foundValidSentence = true;
-                // Replace the word with blank
                 contextSentence = contextSentence.replace(
                     new RegExp(`\\b${this.escapeRegex(word.translation)}\\b`, 'gi'),
                     '_____'
                 );
+            } else {
+                // If word not found, generate a simpler sentence
+                contextSentence = await this.generateTargetLanguageSentenceWithBlank(word);
             }
-        }
-        
-        // If we still don't have a valid sentence, use a fallback
-        if (!foundValidSentence) {
-            console.warn(`Could not generate valid sentence for "${word.translation}"`);
+            
+        } catch (error) {
+            console.error('Error creating context question:', error);
             contextSentence = await this.generateTargetLanguageSentenceWithBlank(word);
         }
         
@@ -356,20 +320,28 @@ class PracticeService {
         };
     }
 
-    private getFrenchArticle(word: string): string {
-        // Simple heuristic - you might want to expand this
-        if (word.endsWith('e')) return 'une';
-        return 'un';
-    }
-
-    private getSpanishArticle(word: string): string {
-        if (word.endsWith('a')) return 'una';
-        return 'un';
-    }
-
-    private getItalianArticle(word: string): string {
-        if (word.endsWith('a')) return 'una';
-        return 'un';
+    // Add this helper method
+    private async generateTargetLanguageSentenceWithWord(word: SavedWord): Promise<string> {
+        const contextTemplates = [
+            `Yesterday I bought a beautiful ${word.original} at the market.`,
+            `My friend gave me this ${word.original} as a birthday present.`,
+            `I always keep my ${word.original} in a safe place.`,
+            `The ${word.original} on the shelf belongs to my sister.`,
+            `We need to find a new ${word.original} before the party.`
+        ];
+        
+        const template = contextTemplates[Math.floor(Math.random() * contextTemplates.length)];
+        
+        try {
+            const translated = await TranslationService.translateText(
+                template, 
+                word.language,
+                'en'
+            );
+            return translated;
+        } catch (error) {
+            return this.generateTargetLanguageContext(word);
+        }
     }
 
     private async generateTargetLanguageSentenceWithBlank(word: SavedWord): Promise<string> {
@@ -435,71 +407,47 @@ class PracticeService {
     
     private async generateProperHint(word: SavedWord): Promise<string | undefined> {
         try {
-            // First, try to generate a simple sentence that definitely contains the exact word
-            const simpleExamples = [
-                `I see a ${word.original}.`,
-                `This is a ${word.original}.`,
-                `I need a ${word.original}.`,
-                `Where is the ${word.original}?`,
-                `The ${word.original} is here.`
+            // Use the ExampleSentenceGenerator to get a proper example
+            const example = await ExampleSentenceGenerator.getExampleSentence(
+                word.original,
+                word.language,
+                async (text: string, targetLang: string) => {
+                    return await TranslationService.translateText(text, targetLang, 'en');
+                }
+            );
+            
+            // If we got a good example from the API
+            if (example && example.source !== 'error_fallback' && example.source !== 'template_general_basic') {
+                return `${example.translated}|${example.english}`;
+            }
+            
+            // If API failed, try to get from word's existing example
+            if (word.example && word.example.includes('|')) {
+                return word.example;
+            }
+            
+            // Last resort: create a context-rich sentence
+            const contextTemplates = [
+                `I need to buy a new ${word.original} from the store.`,
+                `My favorite ${word.original} is the one I got last year.`,
+                `Can you help me find my ${word.original}? I think I left it in the kitchen.`,
+                `This ${word.original} looks really nice on you.`,
+                `The ${word.original} is on the table next to the window.`
             ];
             
-            // Pick a random simple example
-            const simpleExample = simpleExamples[Math.floor(Math.random() * simpleExamples.length)];
-            
-            // Translate it to get the exact word in context
-            const translatedExample = await TranslationService.translateText(
-                simpleExample,
+            const template = contextTemplates[Math.floor(Math.random() * contextTemplates.length)];
+            const translatedTemplate = await TranslationService.translateText(
+                template,
                 word.language,
                 'en'
             );
             
-            // Verify the translated example contains the EXACT word
-            if (translatedExample.toLowerCase().includes(word.translation.toLowerCase())) {
-                return `${translatedExample}|${simpleExample}`;
-            }
-            
-            // If simple translation didn't work, try with forced word insertion
-            const forcedTemplates: Record<string, string[]> = {
-                'de': [
-                    `Ich sehe ${this.getGermanArticle(word)} ${word.translation}.`,
-                    `Das ist ${this.getGermanArticle(word)} ${word.translation}.`,
-                    `Ich brauche ${this.getGermanArticle(word)} ${word.translation}.`,
-                    `Wo ist ${this.getGermanArticle(word)} ${word.translation}?`
-                ],
-                'fr': [
-                    `Je vois ${this.getFrenchArticle(word.translation)} ${word.translation}.`,
-                    `C'est ${this.getFrenchArticle(word.translation)} ${word.translation}.`,
-                    `J'ai besoin ${this.getFrenchArticleWithDe(word.translation)} ${word.translation}.`,
-                    `Où est ${this.getFrenchArticle(word.translation)} ${word.translation}?`
-                ],
-                'es': [
-                    `Veo ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
-                    `Esto es ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
-                    `Necesito ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
-                    `¿Dónde está ${this.getSpanishArticleWithEl(word.translation)} ${word.translation}?`
-                ],
-                'it': [
-                    `Vedo ${this.getItalianArticle(word.translation)} ${word.translation}.`,
-                    `Questo è ${this.getItalianArticle(word.translation)} ${word.translation}.`,
-                    `Ho bisogno di ${this.getItalianArticle(word.translation)} ${word.translation}.`,
-                    `Dov'è ${this.getItalianArticleWithIl(word.translation)} ${word.translation}?`
-                ]
-            };
-            
-            if (forcedTemplates[word.language]) {
-                const templates = forcedTemplates[word.language];
-                const forcedExample = templates[Math.floor(Math.random() * templates.length)];
-                const englishEquivalent = simpleExample;
-                return `${forcedExample}|${englishEquivalent}`;
-            }
-            
-            // Ultimate fallback - just create a basic sentence with the word
-            return `${word.translation}.|This is ${word.original}.`;
+            return `${translatedTemplate}|${template}`;
             
         } catch (error) {
             console.error('Error generating hint:', error);
-            return word.example;
+            // Fallback to existing example or simple sentence
+            return word.example || `${word.translation}.|This is ${word.original}.`;
         }
     }
 

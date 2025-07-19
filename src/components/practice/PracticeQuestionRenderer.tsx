@@ -39,22 +39,12 @@ export default function PracticeQuestionRenderer({
     onTypeAnswer,
     onPlayAudio,
 }: PracticeQuestionRendererProps) {
-
-    // Add logging
-    useEffect(() => {
-        console.log('PracticeQuestionRenderer - Current question:', {
-            type: currentQuestion?.type,
-            id: currentQuestion?.id,
-            displayQuestion: currentQuestion?.displayQuestion,
-            contextSentence: currentQuestion?.contextSentence,
-            options: currentQuestion?.options
-        });
-    }, [currentQuestion]);
     
     const [hintExpanded, setHintExpanded] = useState(false);
     const rotateAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const [lastAudioTime, setLastAudioTime] = useState(0);
+    const [audioLoading, setAudioLoading] = useState(false)
 
     // Auto-play audio for listening questions
     useEffect(() => {
@@ -169,20 +159,24 @@ export default function PracticeQuestionRenderer({
             // Prevent rapid successive plays
             const now = Date.now();
             if (now - lastAudioTime < 500) {
-                console.log('Audio play throttled');
                 return;
             }
             setLastAudioTime(now);
             
+            setAudioLoading(true);
+            
             // Stop any current audio
             await SpeechService.stop();
             
-            // Wait for audio system to be ready
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Extra delay to ensure audio system is ready
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
             // Play with full volume
             await onPlayAudio(text, language);
         } catch (error) {
             console.error('Error playing audio:', error);
+        } finally {
+            setAudioLoading(false);
         }
     };
 
@@ -282,6 +276,7 @@ export default function PracticeQuestionRenderer({
                             handlePlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
                         }}
                         activeOpacity={0.7}
+                        disabled={audioLoading}
                     >
                         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
                             <Ionicons name="volume-high" size={32} color="#3498db" />
@@ -332,6 +327,7 @@ export default function PracticeQuestionRenderer({
                             handlePlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
                         }}
                         activeOpacity={0.7}
+                        disabled={audioLoading}
                     >
                         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
                             <Ionicons name="volume-high" size={32} color="#3498db" />
@@ -413,6 +409,7 @@ export default function PracticeQuestionRenderer({
                             handlePlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
                         }}
                         activeOpacity={0.8}
+                        disabled={audioLoading}
                     >
                         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
                             <Ionicons 

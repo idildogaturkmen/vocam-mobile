@@ -22,19 +22,12 @@ class ExampleSentenceGenerator {
       const originalWord = word;
       word = word.trim().toLowerCase();
       
-      if (this.debug) {
-        console.log(`\n>>> Getting example for: '${word}' <<<\n`);
-      }
-      
       // Try to get example from API with filter pipeline
       const examples = await this.getApiExamplesWithPipeline(word, category);
       
       // If we have valid examples, choose one randomly and return
       if (examples && examples.length > 0) {
         const example = this.selectDiverseExample(examples, word);
-        if (this.debug) {
-          console.log(`>>> Selected API example: '${example}'`);
-        }
         
         // Clean up the example
         const cleanedExample = this.cleanSentence(example);
@@ -49,16 +42,8 @@ class ExampleSentenceGenerator {
         };
       }
       
-      // If no valid API examples, use templates with complex selection
-      if (this.debug) {
-        console.log(`>>> No valid API examples found, using enhanced templates`);
-      }
-      
       // Use category if provided, otherwise determine category
       const wordCategory = category || WordCategorizer.getWordCategory(word);
-      if (this.debug) {
-        console.log(`>>> Word category: ${wordCategory}`);
-      }
       
       // Get appropriate templates and select a diverse one
       const { template, complexity } = await this.selectDiverseTemplate(word, wordCategory);
@@ -105,13 +90,6 @@ class ExampleSentenceGenerator {
     const myMemoryExamples = await this.getMyMemoryExamples(word);
     if (myMemoryExamples) {
       rawExamples.push(...myMemoryExamples);
-    }
-    
-    if (!rawExamples || rawExamples.length === 0) {
-      if (this.debug) {
-        console.log(">>> No examples found from APIs");
-      }
-      return [];
     }
     
     // Apply enhanced filter pipeline to raw examples
@@ -167,9 +145,6 @@ class ExampleSentenceGenerator {
       
       return examples;
     } catch (error) {
-      if (this.debug) {
-        console.log(`>>> Free Dictionary API error: ${error}`);
-      }
       return [];
     }
   }

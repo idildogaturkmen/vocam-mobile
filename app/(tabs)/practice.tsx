@@ -17,6 +17,7 @@ import SpeechService from '../../src/services/SpeechService';
 import PracticeQuestionRenderer from '../../src/components/practice/PracticeQuestionRenderer';
 import PracticeStartScreen from '../../src/components/practice/PracticeStartScreen';
 import RecordingService from '../../src/services/RecordingService';
+import AudioManager from '../../src/services/AudioManager';
 import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
@@ -49,13 +50,19 @@ export default function PracticeScreen() {
     const progressAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
+        initializeServices();
         loadInitialData();
-        RecordingService.initialize();
-
         return () => {
             RecordingService.cleanup();
         };
     }, []);
+
+    const initializeServices = async () => {
+        await RecordingService.initialize();
+        await SpeechService.initialize();
+        // Reset audio to playback mode on screen load
+        await AudioManager.reset();
+    };
 
     const loadInitialData = async () => {
         setLoading(true);

@@ -7,6 +7,9 @@ import {
     Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+
+
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +26,11 @@ export default function PracticeFeedback({ isCorrect, show, message }: PracticeF
 
     useEffect(() => {
         if (show) {
+            if (isCorrect) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } else {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
             Animated.parallel([
                 Animated.timing(fadeAnim, {
                     toValue: 1,

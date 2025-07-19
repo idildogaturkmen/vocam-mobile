@@ -142,94 +142,112 @@ class SpeechService {
   }
 
   async speak(text, language = 'en') {
-    try {
-      if (!text || typeof text !== 'string' || text.trim() === '') {
-        console.warn('❌ No valid text to speak:', text);
-        return;
-      }
+      try {
+          if (!text || typeof text !== 'string' || text.trim() === '') {
+              console.warn('❌ No valid text to speak:', text);
+              return;
+          }
 
-      if (!this.isInitialized) {
-        await this.initialize();
-      }
+          if (!this.isInitialized) {
+              await this.initialize();
+          }
 
-      // Force silent mode override before each speech
-      if (Platform.OS === 'ios' && !this.audioConfigured) {
-        await this.configureSilentModeOverride();
-      }
+          // Reset audio configuration before each play
+          await this.resetAudioConfiguration();
 
-      if (this.isSpeaking) {
-        await this.stop();
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+          // Force a small delay to ensure audio system is ready
+          await new Promise(resolve => setTimeout(resolve, 100));
 
-      const cleanText = this.cleanTextForSpeech(text);
-      
-      if (!cleanText || cleanText.trim() === '') {
-        console.error('❌ Text became empty after cleaning. Using original text.');
-        const finalText = text.trim();
-        if (!finalText) return;
-        return await this.performSpeechWithForce(finalText, language);
-      }
+          const cleanText = this.cleanTextForSpeech(text);
+          
+          if (!cleanText || cleanText.trim() === '') {
+              console.error('❌ Text became empty after cleaning. Using original text.');
+              const finalText = text.trim();
+              if (!finalText) return;
+              return await this.performSpeechWithForce(finalText, language);
+          }
 
-      console.log(`🔊 Attempting to speak: "${cleanText}" in language: ${language}`);
-      return await this.performSpeechWithForce(cleanText, language);
-      
-    } catch (error) {
-      console.error('❌ Speech error:', error);
-      await this.emergencyFallback(text, language);
-    }
+          console.log(`🔊 Attempting to speak: "${cleanText}" in language: ${language}`);
+          return await this.performSpeechWithForce(cleanText, language);
+          
+      } catch (error) {
+          console.error('❌ Speech error:', error);
+          await this.emergencyFallback(text, language);
+      }
+  }
+
+
+  async prepareIOSAudioSessionWithMaxVolume() {
+      try {
+          // Try to set system volume to maximum (if available)
+          const { Audio } = require('expo-av');
+          
+          await Audio.setAudioModeAsync({
+              playsInSilentModeIOS: true,
+              allowsRecordingIOS: false,
+              staysActiveInBackground: false,
+              shouldDuckAndroid: false,
+              playThroughEarpieceAndroid: false,
+              interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+              interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+          });
+          
+          console.log('🎯 iOS audio session prepared with max volume settings');
+      } catch (error) {
+          console.log('⚠️ iOS audio preparation completed with warnings');
+      }
   }
 
   async performSpeechWithForce(text, language) {
-    const voice = await this.getBestVoice(language);
-    console.log(`🎤 Selected voice:`, voice?.identifier || 'default');
+      const voice = await this.getBestVoice(language);
+      console.log(`🎤 Selected voice:`, voice?.identifier || 'default');
 
-    // MAXIMUM FORCE speech options for silent mode override
-    const options = {
-      language: voice?.language || this.languageMapping[language] || language,
-      pitch: 1.0,
-      rate: this.getOptimalRate(language),
-      volume: 1.0, // Maximum volume
-      quality: Speech.VoiceQuality.Enhanced,
-      
-      // Force iOS to treat this as important system audio
-      ...(Platform.OS === 'ios' && {
-        iosCategory: 'playback', // Try to force playback category
-        iosMode: 'default',
-        iosAllowBluetooth: true,
-        iosAllowBluetoothA2DP: true,
-        iosAllowAirPlay: true,
-      }),
-      
-      onStart: () => {
-        this.isSpeaking = true;
-        console.log('✅ Speech started successfully');
-      },
-      onDone: () => {
-        this.isSpeaking = false;
-        console.log('✅ Speech completed successfully');
-        this.processQueue();
-      },
-      onError: (error) => {
-        this.isSpeaking = false;
-        console.error('❌ Speech error:', error);
-        this.handleSpeechError(text, language, error);
+      // MAXIMUM FORCE speech options for consistent volume
+      const options = {
+          language: voice?.language || this.languageMapping[language] || language,
+          pitch: 1.0,
+          rate: this.getOptimalRate(language),
+          volume: 1.0, // Always maximum volume
+          quality: Speech.VoiceQuality.Enhanced,
+          
+          // Force iOS to treat this as important system audio
+          ...(Platform.OS === 'ios' && {
+              iosCategory: 'playback',
+              iosMode: 'default',
+              iosAllowBluetooth: true,
+              iosAllowBluetoothA2DP: true,
+              iosAllowAirPlay: true,
+          }),
+          
+          onStart: () => {
+              this.isSpeaking = true;
+              console.log('✅ Speech started successfully at max volume');
+          },
+          onDone: () => {
+              this.isSpeaking = false;
+              console.log('✅ Speech completed successfully');
+              this.processQueue();
+          },
+          onError: (error) => {
+              this.isSpeaking = false;
+              console.error('❌ Speech error:', error);
+              this.handleSpeechError(text, language, error);
+          }
+      };
+
+      if (voice?.identifier) {
+          options.voice = voice.identifier;
       }
-    };
 
-    if (voice?.identifier) {
-      options.voice = voice.identifier;
-    }
+      console.log('🔊 Speech options with max volume:', JSON.stringify(options, null, 2));
 
-    console.log('🔊 Speech options:', JSON.stringify(options, null, 2));
+      // iOS-specific: Force audio session preparation with max volume
+      if (Platform.OS === 'ios') {
+          await this.prepareIOSAudioSessionWithMaxVolume();
+      }
 
-    // iOS-specific: Force audio session preparation
-    if (Platform.OS === 'ios') {
-      await this.prepareIOSAudioSession();
-    }
-
-    // Execute speech with force
-    await Speech.speak(text, options);
+      // Execute speech with force
+      await Speech.speak(text, options);
   }
 
   async prepareIOSAudioSession() {
@@ -451,15 +469,24 @@ class SpeechService {
     }
   }
 
-  async testSpeech() {
-    console.log('🧪 Testing speech system...');
-    
+  async resetAudioConfiguration() {
     try {
-      await this.speak('Testing speech system', 'en');
-      return true;
+      // Stop any current speech
+        if (this.isSpeaking) {
+            await this.stop();
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+          
+        // Reconfigure audio for maximum volume
+        if (Platform.OS === 'ios') {
+            await this.configureSilentModeOverride();
+        }
+        
+        // Reset volume to maximum
+        this.audioConfigured = true;
+        console.log('🔊 Audio configuration reset');
     } catch (error) {
-      console.error('❌ Speech test failed:', error);
-      return false;
+        console.error('Error resetting audio:', error);
     }
   }
 
@@ -472,6 +499,10 @@ class SpeechService {
       platform: Platform.OS
     };
   }
+  
+  isAvailable() {
+    return this.isInitialized && this.availableVoices.length > 0;
+}
 }
 
 export default new SpeechService();

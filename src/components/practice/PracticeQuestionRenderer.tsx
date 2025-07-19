@@ -12,6 +12,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { QuizQuestion } from '../../services/PracticeService';
+import SpeechService from '../../services/SpeechService';
 
 interface PracticeQuestionRendererProps {
     currentQuestion: QuizQuestion;
@@ -19,6 +20,8 @@ interface PracticeQuestionRendererProps {
     selectedAnswer: string | null;
     typedAnswer: string;
     audioPlaying: boolean;
+    isRecording?: boolean;
+    recordingResult?: { isCorrect: boolean; confidence: number; feedback: string } | null;
     onAnswer: (answer: string) => void;
     onTypeAnswer: (text: string) => void;
     onPlayAudio: (text: string, language: string) => void;
@@ -30,24 +33,43 @@ export default function PracticeQuestionRenderer({
     selectedAnswer,
     typedAnswer,
     audioPlaying,
+    isRecording,
+    recordingResult,
     onAnswer,
     onTypeAnswer,
     onPlayAudio,
 }: PracticeQuestionRendererProps) {
+
+    // Add logging
+    useEffect(() => {
+        console.log('PracticeQuestionRenderer - Current question:', {
+            type: currentQuestion?.type,
+            id: currentQuestion?.id,
+            displayQuestion: currentQuestion?.displayQuestion,
+            contextSentence: currentQuestion?.contextSentence,
+            options: currentQuestion?.options
+        });
+    }, [currentQuestion]);
+    
     const [hintExpanded, setHintExpanded] = useState(false);
     const rotateAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(1)).current;
+    const [lastAudioTime, setLastAudioTime] = useState(0);
 
     // Auto-play audio for listening questions
     useEffect(() => {
         if ((currentQuestion.type === 'listening' || currentQuestion.type === 'pronunciation') && !showAnswer) {
             // Small delay to ensure component is mounted
             const timer = setTimeout(() => {
-                onPlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
+                if (currentQuestion.word && currentQuestion.word.translation && currentQuestion.word.language) {
+                    handlePlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
+                } else {
+                    console.error('Missing audio data for listening question:', currentQuestion);
+                }
             }, 500);
             return () => clearTimeout(timer);
         }
-    }, [currentQuestion.id, currentQuestion.type]);
+    }, [currentQuestion?.id, currentQuestion?.type]);
 
     // Reset hint when question changes
     useEffect(() => {
@@ -86,6 +108,19 @@ export default function PracticeQuestionRenderer({
             outputRange: ['0deg', '90deg'],
         });
 
+        // Parse the example - it should be in format "target_language|english"
+        let hintText = currentQuestion.word.example;
+        let targetLanguageHint = '';
+        let englishTranslation = '';
+        
+        if (currentQuestion.word.example.includes('|')) {
+            const parts = currentQuestion.word.example.split('|');
+            targetLanguageHint = parts[0]; // Target language
+            englishTranslation = parts[1]; // English translation
+            // Show the target language as primary hint
+            hintText = targetLanguageHint;
+        }
+
         return (
             <View style={styles.hintContainer}>
                 <TouchableOpacity 
@@ -105,12 +140,50 @@ export default function PracticeQuestionRenderer({
                 {hintExpanded && (
                     <View style={styles.hintContent}>
                         <Text style={styles.hintText}>
-                            {currentQuestion.word.example.split('|')[1] || currentQuestion.word.example}
+                            {hintText}
                         </Text>
+                        {englishTranslation && (
+                            <Text style={styles.hintTranslation}>
+                                ({englishTranslation})
+                            </Text>
+                        )}
+                        {targetLanguageHint && (
+                            <TouchableOpacity
+                                style={styles.hintAudioButton}
+                                onPress={() => {
+                                    handlePlayAudio(targetLanguageHint, currentQuestion.word.language);
+                                }}
+                            >
+                                <Ionicons name="volume-medium" size={20} color="#2980b9" />
+                                <Text style={styles.hintAudioText}>Listen to example</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 )}
             </View>
         );
+    };
+
+    const handlePlayAudio = async (text: string, language: string) => {
+        try {
+            // Prevent rapid successive plays
+            const now = Date.now();
+            if (now - lastAudioTime < 500) {
+                console.log('Audio play throttled');
+                return;
+            }
+            setLastAudioTime(now);
+            
+            // Stop any current audio
+            await SpeechService.stop();
+            
+            // Wait for audio system to be ready
+            await new Promise(resolve => setTimeout(resolve, 200));
+            // Play with full volume
+            await onPlayAudio(text, language);
+        } catch (error) {
+            console.error('Error playing audio:', error);
+        }
     };
 
     const renderMultipleChoiceOptions = () => (
@@ -140,7 +213,7 @@ export default function PracticeQuestionRenderer({
                             style={styles.optionSpeaker}
                             onPress={(e) => {
                                 e.stopPropagation();
-                                onPlayAudio(option, currentQuestion.word.language);
+                                handlePlayAudio(option, currentQuestion.word.language);
                             }}
                             disabled={audioPlaying}
                         >
@@ -171,6 +244,80 @@ export default function PracticeQuestionRenderer({
                 </View>
             );
 
+        case 'recording':
+            return (
+                <View style={styles.questionContainer}>
+                    <Text style={styles.questionText}>
+                        {currentQuestion.displayQuestion}
+                    </Text>
+                    
+                    <View style={styles.recordingContainer}>
+                        <TouchableOpacity
+                            style={[
+                                styles.bigRecordButton,
+                                isRecording && styles.recordingActive
+                            ]}
+                            onPress={() => onAnswer('recording')}
+                            activeOpacity={0.8}
+                            disabled={showAnswer}
+                        >
+                            <Ionicons 
+                                name={isRecording ? "stop" : "mic"} 
+                                size={48} 
+                                color="white" 
+                            />
+                        </TouchableOpacity>
+                        <Text style={styles.recordingHint}>
+                            {isRecording 
+                                ? "Recording... Tap to stop" 
+                                : "Tap to record your pronunciation"
+                            }
+                        </Text>
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.playButton}
+                        onPress={() => {
+                            animateSpeaker();
+                            handlePlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                            <Ionicons name="volume-high" size={32} color="#3498db" />
+                        </Animated.View>
+                        <Text style={styles.playText}>Listen to correct pronunciation</Text>
+                    </TouchableOpacity>
+
+                    {showAnswer && recordingResult && (
+                        <View style={[
+                            styles.recordingFeedback,
+                            recordingResult.isCorrect ? styles.correctFeedback : styles.incorrectFeedback
+                        ]}>
+                            <View style={styles.feedbackHeader}>
+                                <Ionicons 
+                                    name={recordingResult.isCorrect ? "checkmark-circle" : "close-circle"} 
+                                    size={24} 
+                                    color={recordingResult.isCorrect ? "#27ae60" : "#e74c3c"} 
+                                />
+                                <Text style={[
+                                    styles.feedbackTitle,
+                                    recordingResult.isCorrect ? styles.correctText : styles.incorrectText
+                                ]}>
+                                    {recordingResult.isCorrect ? "Excellent!" : "Keep Practicing!"}
+                                </Text>
+                            </View>
+                            <Text style={styles.confidenceText}>
+                                Confidence: {recordingResult.confidence.toFixed(0)}%
+                            </Text>
+                            <Text style={styles.recordingFeedbackText}>
+                                {recordingResult.feedback}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            );
+
         case 'reverse_translation':
             return (
                 <View style={styles.questionContainer}>
@@ -182,7 +329,7 @@ export default function PracticeQuestionRenderer({
                         style={styles.playButton}
                         onPress={() => {
                             animateSpeaker();
-                            onPlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
+                            handlePlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
                         }}
                         activeOpacity={0.7}
                     >
@@ -229,13 +376,30 @@ export default function PracticeQuestionRenderer({
                             {currentQuestion.contextSentence || 'Context not available'}
                         </Text>
                     </View>
+                    
+                    {/* Move audio button outside of sentenceContainer */}
+                    {currentQuestion.word.example && currentQuestion.word.example.includes('|') && (
+                        <TouchableOpacity
+                            style={styles.contextAudioButtonBelow}
+                            onPress={() => {
+                                const fullSentence = currentQuestion.word.example.split('|')[0];
+                                const sentenceWithWord = currentQuestion.contextSentence?.replace(
+                                    '_____', 
+                                    currentQuestion.correctAnswer
+                                ) || fullSentence;
+                                handlePlayAudio(sentenceWithWord, currentQuestion.word.language);
+                            }}
+                        >
+                            <Ionicons name="volume-high" size={24} color="#3498db" />
+                            <Text style={styles.contextAudioText}>Listen to complete sentence</Text>
+                        </TouchableOpacity>
+                    )}
 
                     {renderMultipleChoiceOptions()}
                 </View>
             );
 
         case 'listening':
-        case 'pronunciation':
             return (
                 <View style={styles.questionContainer}>
                     <Text style={styles.questionText}>
@@ -246,7 +410,7 @@ export default function PracticeQuestionRenderer({
                         style={[styles.bigPlayButton, audioPlaying && styles.bigPlayButtonActive]}
                         onPress={() => {
                             animateSpeaker();
-                            onPlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
+                            handlePlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
                         }}
                         activeOpacity={0.8}
                     >
@@ -324,7 +488,7 @@ export default function PracticeQuestionRenderer({
                             <TouchableOpacity
                                 onPress={() => {
                                     animateSpeaker();
-                                    onPlayAudio(currentQuestion.correctAnswer, currentQuestion.word.language);
+                                    handlePlayAudio(currentQuestion.correctAnswer, currentQuestion.word.language);
                                 }}
                                 activeOpacity={0.7}
                             >
@@ -444,6 +608,10 @@ const styles = StyleSheet.create({
         color: '#27ae60',
         fontWeight: '600',
     },
+    incorrectText: {
+        color: '#e74c3c',
+        fontWeight: '600',
+    },
     optionSpeaker: {
         padding: 4,
     },
@@ -542,5 +710,108 @@ const styles = StyleSheet.create({
         color: '#27ae60',
         fontWeight: '600',
         flex: 1,
+    },
+    recordingContainer: {
+        alignItems: 'center',
+        marginVertical: 30,
+    },
+    bigRecordButton: {
+        backgroundColor: '#e74c3c',
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    recordingHint: {
+        fontSize: 16,
+        color: '#7f8c8d',
+        textAlign: 'center',
+    },
+    recordingFeedback: {
+        backgroundColor: '#f0f8ff',
+        padding: 16,
+        borderRadius: 8,
+        marginTop: 20,
+    },
+    recordingFeedbackText: {
+        fontSize: 14,
+        color: '#2980b9',
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    recordingActive: {
+        backgroundColor: '#c0392b',
+        transform: [{ scale: 0.95 }],
+    },
+    correctFeedback: {
+        backgroundColor: '#d5f4e6',
+        borderColor: '#27ae60',
+        borderWidth: 1,
+    },
+    incorrectFeedback: {
+        backgroundColor: '#fadbd8',
+        borderColor: '#e74c3c',
+        borderWidth: 1,
+    },
+    feedbackHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+    },
+    feedbackTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+    },
+    confidenceText: {
+        fontSize: 14,
+        color: '#7f8c8d',
+        marginBottom: 4,
+    },
+    hintAudioButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 8,
+        padding: 4,
+    },
+    hintAudioText: {
+        fontSize: 12,
+        color: '#2980b9',
+        fontWeight: '500',
+    },
+    contextAudioButton: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        padding: 8,
+    },
+    hintTranslation: {
+        fontSize: 12,
+        color: '#7f8c8d',
+        fontStyle: 'italic',
+        marginTop: 4,
+    },
+    contextAudioButtonBelow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        padding: 12,
+        marginBottom: 16,
+        backgroundColor: '#ebf5fb',
+        borderRadius: 8,
+    },
+    contextAudioText: {
+        fontSize: 14,
+        color: '#3498db',
+        fontWeight: '500',
     },
 });

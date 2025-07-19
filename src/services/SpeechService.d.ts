@@ -4,6 +4,7 @@ declare class SpeechService {
   stop(): Promise<void>;
   checkAvailability(language: string): Promise<boolean>;
   speakQueue(textArray: string[], language?: string): Promise<void>;
+  isAvailable(): boolean; 
   getAudioStatus(): {
     audioLibrary: string;
     audioConfigured: boolean;

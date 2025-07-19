@@ -16,6 +16,7 @@ import PracticeService, { PracticeSession, QuizQuestion, PracticeStats } from '.
 import SpeechService from '../../src/services/SpeechService';
 import PracticeQuestionRenderer from '../../src/components/practice/PracticeQuestionRenderer';
 import PracticeStartScreen from '../../src/components/practice/PracticeStartScreen';
+import RecordingService from '../../src/services/RecordingService';
 import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
@@ -33,6 +34,13 @@ export default function PracticeScreen() {
     const [showResults, setShowResults] = useState(false);
     const [audioPlaying, setAudioPlaying] = useState(false);
     const [isProcessingAnswer, setIsProcessingAnswer] = useState(false);
+
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingResult, setRecordingResult] = useState<{
+        isCorrect: boolean;
+        confidence: number;
+        feedback: string;
+    } | null>(null);
     
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -42,6 +50,11 @@ export default function PracticeScreen() {
 
     useEffect(() => {
         loadInitialData();
+        RecordingService.initialize();
+
+        return () => {
+            RecordingService.cleanup();
+        };
     }, []);
 
     const loadInitialData = async () => {
@@ -132,6 +145,27 @@ export default function PracticeScreen() {
     const handleAnswer = async (answer: string) => {
         if (!currentQuestion || showAnswer || isProcessingAnswer) return;
 
+        // Handle recording type questions
+        if (answer === 'recording' && currentQuestion.type === 'recording') {
+            if (!isRecording) {
+                // Start recording
+                const started = await RecordingService.startRecording();
+                if (started) {
+                    setIsRecording(true);
+                    // Auto-stop after 5 seconds
+                    setTimeout(async () => {
+                        if (isRecording) {
+                            await handleStopRecording();
+                        }
+                    }, 5000);
+                }
+            } else {
+                // Stop recording
+                await handleStopRecording();
+            }
+            return;
+        }
+
         setIsProcessingAnswer(true);
         setSelectedAnswer(answer);
         
@@ -168,6 +202,39 @@ export default function PracticeScreen() {
         }
     };
 
+    const handleStopRecording = async () => {
+        setIsRecording(false);
+        setIsProcessingAnswer(true);
+        
+        const uri = await RecordingService.stopRecording();
+        if (uri && currentQuestion) {
+            const evaluation = await RecordingService.evaluatePronunciation(
+                uri,
+                currentQuestion.word.translation,
+                currentQuestion.word.language
+            );
+            
+            setRecordingResult(evaluation);
+            
+            // Submit the answer based on evaluation
+            await PracticeService.submitAnswer(
+                evaluation.isCorrect ? currentQuestion.correctAnswer : 'incorrect'
+            );
+            
+            // Haptic feedback
+            if (evaluation.isCorrect) {
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } else {
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            }
+            
+            setShowAnswer(true);
+            setIsProcessingAnswer(false);
+        } else {
+            setIsProcessingAnswer(false);
+        }
+    };
+
     const handleSpeech = async (text: string, language: string) => {
         try {
             setAudioPlaying(true);
@@ -190,6 +257,8 @@ export default function PracticeScreen() {
             setShowAnswer(false);
             setSelectedAnswer(null);
             setTypedAnswer('');
+            setRecordingResult(null);
+            setIsRecording(false);
             
             // Animate transition
             Animated.sequence([
@@ -207,9 +276,13 @@ export default function PracticeScreen() {
             
             animateProgress();
         } else {
-            // Session completed
+            // Session completed - show results immediately
+            // Don't set session to null here!
             setShowResults(true);
-            loadInitialData(); // Reload stats
+            // Load stats after a short delay to ensure results are visible
+            setTimeout(() => {
+                loadInitialData();
+            }, 100);
         }
     };
 
@@ -266,6 +339,8 @@ export default function PracticeScreen() {
                                 setShowAnswer(false);
                                 setSelectedAnswer(null);
                                 setTypedAnswer('');
+                                setRecordingResult(null);
+                                setIsRecording(false);
                             }}
                         >
                             <Text style={styles.continueButtonText}>Continue</Text>
@@ -342,17 +417,29 @@ export default function PracticeScreen() {
                         }
                     ]}
                 >
-                    {currentQuestion && (
+                    {currentQuestion ? (
                         <PracticeQuestionRenderer
                             currentQuestion={currentQuestion}
                             showAnswer={showAnswer}
                             selectedAnswer={selectedAnswer}
                             typedAnswer={typedAnswer}
                             audioPlaying={audioPlaying}
+                            isRecording={isRecording}
+                            recordingResult={recordingResult}
                             onAnswer={handleAnswer}
                             onTypeAnswer={setTypedAnswer}
                             onPlayAudio={handleSpeech}
                         />
+                    ) : (
+                        <View style={styles.errorContainer}>
+                            <Text style={styles.errorText}>Error loading question</Text>
+                            <TouchableOpacity 
+                                style={styles.skipButton}
+                                onPress={nextQuestion}
+                            >
+                                <Text style={styles.skipButtonText}>Skip Question</Text>
+                            </TouchableOpacity>
+                        </View>
                     )}
                 </Animated.View>
 
@@ -530,6 +617,27 @@ const styles = StyleSheet.create({
     continueButtonText: {
         color: 'white',
         fontSize: 18,
+        fontWeight: '600',
+    },
+    errorContainer: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 24,
+        alignItems: 'center',
+    },
+    errorText: {
+        fontSize: 16,
+        color: '#e74c3c',
+        marginBottom: 16,
+    },
+    skipButton: {
+        backgroundColor: '#3498db',
+        padding: 12,
+        borderRadius: 8,
+    },
+    skipButtonText: {
+        color: 'white',
+        fontSize: 14,
         fontWeight: '600',
     },
 });

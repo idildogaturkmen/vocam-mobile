@@ -1,11 +1,13 @@
-// src/services/PracticeService.ts
 import { supabase } from '../../database/config';
 import VocabularyService, { SavedWord } from './VocabularyService';
 import SpeechService from './SpeechService';
+import ExampleSentenceGenerator from 'src/services/example-sentences/ExampleSentenceGenerator.js';
+import WordCategorizer from 'src/services/example-sentences/WordCategorizer.js';
+import TranslationService from './TranslationService';
 
 export interface QuizQuestion {
     id: string;
-    type: 'translation' | 'reverse_translation' | 'multiple_choice' | 'listening' | 'typing' | 'context' | 'pronunciation'| 'category_match';
+    type: 'translation' | 'reverse_translation' | 'multiple_choice' | 'listening' | 'typing' | 'context' | 'pronunciation' | 'recording';
     word: SavedWord;
     options?: string[];
     correctAnswer: string;
@@ -14,6 +16,7 @@ export interface QuizQuestion {
     timeSpent?: number;
     contextSentence?: string;
     displayQuestion?: string;
+    recordingUri?: string;
 }
 
 export interface PracticeSession {
@@ -103,7 +106,7 @@ class PracticeService {
             }
 
             // Generate questions with variety
-            const questions = this.generateVariedQuestions(vocabulary, questionCount);
+            const questions = await this.generateVariedQuestions(vocabulary, questionCount);
 
             this.currentSession = {
                 id: sessionData.id,
@@ -126,19 +129,20 @@ class PracticeService {
     /**
      * Generate varied questions for engagement
      */
-    private generateVariedQuestions(vocabulary: SavedWord[], count: number): QuizQuestion[] {
+    private async generateVariedQuestions(vocabulary: SavedWord[], count: number): Promise<QuizQuestion[]> {
         const questions: QuizQuestion[] = [];
         const usedWords = new Set<string>();
         
         // Define question type distribution for variety
         const questionTypeDistribution = [
-            { type: 'translation' as const, weight: 0.25 },
-            { type: 'reverse_translation' as const, weight: 0.25 },
+            { type: 'translation' as const, weight: 0.2 },
+            { type: 'reverse_translation' as const, weight: 0.2 },
             { type: 'multiple_choice' as const, weight: 0.15 },
-            { type: 'listening' as const, weight: 0.15 },
-            { type: 'context' as const, weight: 0.1 },
+            { type: 'listening' as const, weight: 0.1 },
+            { type: 'context' as const, weight: 0.2 },
             { type: 'pronunciation' as const, weight: 0.05 },
-            { type: 'typing' as const, weight: 0.05 }
+            { type: 'typing' as const, weight: 0.05 },
+            { type: 'recording' as const, weight: 0.05 }
         ];
 
         // Helper to get random question type based on weights
@@ -169,15 +173,15 @@ class PracticeService {
             let type = getRandomQuestionType();
             
             // Validate question type for the word
-            if (type === 'context' && (!word.example || !word.example.includes('|'))) {
-                type = 'translation'; // Fallback if no proper example
+            if (type === 'recording' && !SpeechService.isAvailable()) {
+                type = 'pronunciation'; // Fallback if recording not available
             }
-            
+
             if (type === 'typing' && word.translation.length > 20) {
                 type = 'multiple_choice'; // Fallback for very long words
             }
             
-            const question = this.createQuestion(word, type, vocabulary);
+            const question = await this.createQuestion(word, type, vocabulary);
             questions.push(question);
         }
 
@@ -187,35 +191,37 @@ class PracticeService {
     /**
      * Create a question based on type
      */
-    private createQuestion(
+    private async createQuestion(
         word: SavedWord, 
         type: QuizQuestion['type'], 
         vocabulary: SavedWord[]
-    ): QuizQuestion {
+    ): Promise<QuizQuestion> {
+        // Generate proper example that includes the actual word
+        const properExample = await this.generateProperHint(word);
+        const fixedWord = {
+            ...word,
+            example: properExample || word.example
+        };
+        
         switch (type) {
             case 'translation':
-                return this.createTranslationQuestion(word, vocabulary);
-            
+                return this.createTranslationQuestion(fixedWord, vocabulary);
             case 'reverse_translation':
-                return this.createReverseTranslationQuestion(word, vocabulary);
-            
+                return this.createReverseTranslationQuestion(fixedWord, vocabulary);
             case 'multiple_choice':
-                return this.createMultipleChoiceQuestion(word, vocabulary);
-            
+                return this.createMultipleChoiceQuestion(fixedWord, vocabulary);
             case 'listening':
-                return this.createListeningQuestion(word, vocabulary);
-            
+                return this.createListeningQuestion(fixedWord, vocabulary);
             case 'context':
-                return this.createContextQuestion(word, vocabulary);
-            
+                return await this.createContextQuestionWithAPI(fixedWord, vocabulary);
             case 'pronunciation':
-                return this.createPronunciationQuestion(word, vocabulary);
-            
+                return this.createRecordingQuestion(fixedWord, vocabulary);
             case 'typing':
-                return this.createTypingQuestion(word);
-            
+                return this.createTypingQuestion(fixedWord);
+            case 'recording':
+                return this.createRecordingQuestion(fixedWord, vocabulary);
             default:
-                return this.createTranslationQuestion(word, vocabulary);
+                return this.createTranslationQuestion(fixedWord, vocabulary);
         }
     }
 
@@ -251,289 +257,287 @@ class PracticeService {
         };
     }
 
+    // Helper method for regex escaping:
+    private escapeRegex(string: string): string {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
     /**
      * Create context question using example sentences
      */
-    private createContextQuestion(word: SavedWord, vocabulary: SavedWord[]): QuizQuestion {
-        // For context questions, we need to show options in English and context in target language
-        const options = this.generateOptions(word.original, vocabulary, 'original');
-        let contextSentence = '';
-        let displayQuestion = '';
+    private async createContextQuestionWithAPI(word: SavedWord, vocabulary: SavedWord[]): Promise<QuizQuestion> {
+        const category = WordCategorizer.getWordCategory(word.original);
         
-        // Check if we have a properly formatted example
-        if (word.example && word.example.includes('|')) {
-            const parts = word.example.split('|');
-            // parts[0] is in target language, parts[1] is in English
-            const targetExample = parts[0];
+        let contextSentence = '';
+        let displayQuestion = `Complete the sentence in ${this.getLanguageName(word.language)}:`;
+        
+        // First, try to get a sentence that contains the exact word
+        let attempts = 0;
+        let foundValidSentence = false;
+        
+        while (attempts < 3 && !foundValidSentence) {
+            attempts++;
             
-            // Replace the translated word with blank in the target language sentence
-            contextSentence = targetExample.replace(new RegExp(word.translation, 'gi'), '_____');
-            displayQuestion = `Complete the sentence in ${this.getLanguageName(word.language)}:`;
-        } else {
-            // If no example, skip this question type
-            return this.createTranslationQuestion(word, vocabulary);
+            // Generate a simple sentence that will definitely contain the word
+            const templateSentences = {
+                'de': [
+                    `Ich brauche ${word.original === 'glasses' ? 'eine' : 'einen'} ${word.translation}.`,
+                    `Das ist ${word.original === 'glasses' ? 'eine' : 'ein'} ${word.translation}.`,
+                    `Wo ist ${word.original === 'glasses' ? 'die' : 'der'} ${word.translation}?`
+                ],
+                'fr': [
+                    `J'ai besoin ${this.getFrenchArticle(word.translation)} ${word.translation}.`,
+                    `C'est ${this.getFrenchArticle(word.translation)} ${word.translation}.`,
+                    `Où est ${this.getFrenchArticle(word.translation)} ${word.translation}?`
+                ],
+                'es': [
+                    `Necesito ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
+                    `Esto es ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
+                    `¿Dónde está ${this.getSpanishArticle(word.translation)} ${word.translation}?`
+                ],
+                'it': [
+                    `Ho bisogno di ${this.getItalianArticle(word.translation)} ${word.translation}.`,
+                    `Questo è ${this.getItalianArticle(word.translation)} ${word.translation}.`,
+                    `Dov'è ${this.getItalianArticle(word.translation)} ${word.translation}?`
+                ]
+            };
+            
+            const templates = templateSentences[word.language as keyof typeof templateSentences] || [
+                `This is a ${word.translation}.`,
+                `I need a ${word.translation}.`,
+                `Where is the ${word.translation}?`
+            ];
+            
+            // Use a template sentence
+            contextSentence = templates[Math.floor(Math.random() * templates.length)];
+            
+            // For non-template languages, translate
+            if (!templateSentences[word.language as keyof typeof templateSentences]) {
+                try {
+                    const englishSentence = contextSentence.replace(word.translation, word.original);
+                    contextSentence = await TranslationService.translateText(
+                        englishSentence,
+                        word.language,
+                        'en'
+                    );
+                } catch (error) {
+                    console.error('Translation error:', error);
+                }
+            }
+            
+            // Check if the sentence contains the exact word
+            if (contextSentence.toLowerCase().includes(word.translation.toLowerCase())) {
+                foundValidSentence = true;
+                // Replace the word with blank
+                contextSentence = contextSentence.replace(
+                    new RegExp(`\\b${this.escapeRegex(word.translation)}\\b`, 'gi'),
+                    '_____'
+                );
+            }
         }
+        
+        // If we still don't have a valid sentence, use a fallback
+        if (!foundValidSentence) {
+            console.warn(`Could not generate valid sentence for "${word.translation}"`);
+            contextSentence = await this.generateTargetLanguageSentenceWithBlank(word);
+        }
+        
+        // Generate options in target language
+        const options = this.generateOptions(word.translation, vocabulary, 'translation');
         
         return {
             id: `${word.id}_context`,
             type: 'context',
             word,
             options,
-            correctAnswer: word.original,
+            correctAnswer: word.translation,
             contextSentence,
             displayQuestion
         };
     }
 
-    /**
-     * Generate context-specific sentences based on word category
-     */
-    private generateContextSentence(word: SavedWord): string {
-        const category = word.category?.toLowerCase() || 'general';
-        const original = word.original.toLowerCase();
-        
-        // Category-specific templates with very specific contexts
-        const templates: Record<string, string[]> = {
-            food: [
-                `The waiter brought me a delicious _____ with tomato sauce and cheese.`,
-                `I ordered _____ and a salad for lunch at the Italian restaurant.`,
-                `My grandmother's homemade _____ is the best I've ever tasted.`,
-                `The chef is preparing fresh _____ in the kitchen right now.`,
-                `Would you like to try some _____ from our special menu today?`
-            ],
-            animal: [
-                `The _____ was barking loudly at the mailman this morning.`,
-                `I saw a beautiful _____ flying above the trees in the park.`,
-                `The farmer has many _____ grazing in the field behind the barn.`,
-                `At the zoo, the _____ was sleeping peacefully in its enclosure.`,
-                `My neighbor's pet _____ escaped and we helped catch it.`
-            ],
-            clothing: [
-                `She wore her favorite blue _____ to the job interview yesterday.`,
-                `I need to buy a warm winter _____ before the snow arrives.`,
-                `The _____ perfectly matched her shoes and handbag.`,
-                `He forgot to bring his _____ to the gym for basketball practice.`,
-                `This silk _____ needs to be dry cleaned, not machine washed.`
-            ],
-            furniture: [
-                `Please help me move this heavy wooden _____ to the other room.`,
-                `We bought a comfortable leather _____ for the living room.`,
-                `The antique _____ has been in our family for three generations.`,
-                `I assembled the new _____ from IKEA in just two hours.`,
-                `The _____ is too big to fit through the apartment door.`
-            ],
-            vehicle: [
-                `I parked my red _____ in the underground garage.`,
-                `The _____ broke down on the highway during rush hour.`,
-                `She's learning to drive her father's old _____ this summer.`,
-                `We rented a _____ for our vacation road trip to California.`,
-                `The mechanic is repairing the engine of my _____ today.`
-            ],
-            electronics: [
-                `My _____ battery died during the important video call.`,
-                `I dropped my new _____ and cracked the screen yesterday.`,
-                `The _____ stopped working after the software update.`,
-                `Can you help me connect my _____ to the Wi-Fi network?`,
-                `I forgot to charge my _____ overnight and now it's dead.`
-            ],
-            nature: [
-                `The tall _____ provides shade for our backyard picnic area.`,
-                `Beautiful _____ are blooming in the garden this spring.`,
-                `We climbed to the top of the _____ to see the sunset.`,
-                `The _____ flows through the valley towards the ocean.`,
-                `During autumn, the _____ change color from green to gold.`
-            ],
-            household: [
-                `I used the _____ to cut the vegetables for dinner.`,
-                `Please put the dirty dishes in the _____ after eating.`,
-                `The _____ is making strange noises and needs repair.`,
-                `We keep the _____ in the kitchen drawer with other utensils.`,
-                `Mom asked me to turn off the _____ before leaving home.`
-            ],
-            default: [
-                `I need to use the _____ to complete this specific task.`,
-                `The store manager said the _____ is currently out of stock.`,
-                `Please handle the _____ carefully because it's very fragile.`,
-                `We found an old _____ in the attic while cleaning yesterday.`,
-                `The instruction manual explains how to operate the _____ properly.`
-            ]
-        };
-        
-        // Special handling for specific words that need very clear context
-        const specificWordTemplates: Record<string, string[]> = {
-            'pen': [
-                `I need a blue ink _____ to sign this important document.`,
-                `The student forgot to bring a _____ to write the exam with ink.`
-            ],
-            'pencil': [
-                `The artist used a graphite _____ to sketch the portrait.`,
-                `Please use a _____ so you can erase mistakes with an eraser.`
-            ],
-            'book': [
-                `I'm reading a 500-page _____ about world history.`,
-                `The library has leather-bound _____ on every shelf.`
-            ],
-            'phone': [
-                `My cellular _____ is ringing but I can't find it anywhere.`,
-                `She's making a call on her mobile _____ with her mother.`
-            ],
-            'computer': [
-                `I need to restart my laptop _____ because it's running slowly.`,
-                `The programmer types code on her _____ all day long.`
-            ],
-            'water': [
-                `I'm thirsty, can I have a glass of cold _____ to drink?`,
-                `The plants need liquid _____ every day during summer.`
-            ],
-            'coffee': [
-                `I always drink a hot cup of brown _____ in the morning.`,
-                `This caffeinated _____ is too hot, let it cool down first.`
-            ],
-            'tea': [
-                `Would you prefer herbal _____ or coffee with breakfast?`,
-                `British people traditionally drink hot _____ at 4 o'clock.`
-            ],
-            'milk': [
-                `The baby needs warm white _____ from the bottle.`,
-                `Please pour dairy _____ on my cereal bowl.`
-            ],
-            'bread': [
-                `I bought a fresh baked loaf of _____ from the bakery.`,
-                `We need sliced _____ to make sandwiches for lunch.`
-            ],
-            'door': [
-                `Please close the wooden _____ when you leave the room.`,
-                `Someone is knocking at the front entrance _____.`
-            ],
-            'window': [
-                `Open the glass _____ to let fresh air into the room.`,
-                `The bird flew into the transparent _____ by accident.`
-            ],
-            'table': [
-                `Put the plates on the wooden dining _____ for dinner.`,
-                `The students write on the flat surface of the _____.`
-            ],
-            'chair': [
-                `Pull up a four-legged _____ and sit down at the table.`,
-                `This wheeled office _____ has adjustable height.`
-            ],
-            'bed': [
-                `I'm tired and want to sleep in my soft _____ tonight.`,
-                `The hotel room has a comfortable mattress on the _____.`
-            ],
-            'car': [
-                `I drive my four-wheeled _____ to work on the highway.`,
-                `The automobile _____ won't start because the battery died.`
-            ],
-            'bicycle': [
-                `She pedals her two-wheeled _____ to school every day.`,
-                `My _____ has pedals and a flat tire that needs fixing.`
-            ],
-            'airplane': [
-                `The flying _____ will land at the airport runway soon.`,
-                `We boarded the jet _____ for our flight to Paris.`
-            ],
-            'train': [
-                `The railway _____ arrives on steel tracks at platform 3.`,
-                `We took the locomotive _____ from London to Edinburgh.`
-            ],
-            'bus': [
-                `The yellow school _____ picks up students at 7:30 AM.`,
-                `I missed the public transport _____ at the bus stop.`
-            ],
-            'keyboard': [
-                `I type letters on my computer _____ with all the keys.`,
-                `The QWERTY _____ is connected to my PC via USB cable.`
-            ],
-            'laptop': [
-                `My portable _____ computer fits in my backpack easily.`,
-                `The foldable _____ has a screen and keyboard built together.`
-            ],
-            'remote': [
-                `Press the buttons on the TV _____ control to change channels.`,
-                `The wireless _____ controller needs new batteries to work.`
-            ],
-            'glasses': [
-                `I wear prescription _____ on my face to see clearly.`,
-                `These optical _____ help me read small text better.`
-            ],
-            'sunglasses': [
-                `I wear dark _____ to protect my eyes from UV rays.`,
-                `These tinted _____ block the bright sunlight outside.`
-            ],
-            'fragile': [
-                `The glass vase is very _____ and breaks easily.`,
-                `Handle the delicate china carefully as it's extremely _____.`
-            ]
-        };
-        
-        // Check if we have specific templates for this word
-        if (specificWordTemplates[original]) {
-            const templates = specificWordTemplates[original];
-            return templates[Math.floor(Math.random() * templates.length)];
+    private getFrenchArticle(word: string): string {
+        // Simple heuristic - you might want to expand this
+        if (word.endsWith('e')) return 'une';
+        return 'un';
+    }
+
+    private getSpanishArticle(word: string): string {
+        if (word.endsWith('a')) return 'una';
+        return 'un';
+    }
+
+    private getItalianArticle(word: string): string {
+        if (word.endsWith('a')) return 'una';
+        return 'un';
+    }
+
+    private async generateTargetLanguageSentenceWithBlank(word: SavedWord): Promise<string> {
+        // Generate a simple sentence with blank in target language
+        const simpleTemplate = `I need a ${word.original}.`;
+        try {
+            const translated = await TranslationService.translateText(
+                simpleTemplate, 
+                word.language,
+                'en'
+            );
+            // Replace the translated word with blank
+            return translated.replace(
+                new RegExp(`\\b${this.escapeRegex(word.translation)}\\b`, 'gi'),
+                '_____'
+            );
+        } catch (error) {
+            // Ultimate fallback
+            return this.generateTargetLanguageContext(word);
         }
-        
-        // Otherwise use category templates
-        const categoryTemplates = templates[category] || templates.default;
-        return categoryTemplates[Math.floor(Math.random() * categoryTemplates.length)];
     }
 
     /**
-     * Create pronunciation question
+     * Generate context sentences in target language
      */
-    private createPronunciationQuestion(word: SavedWord, vocabulary: SavedWord[]): QuizQuestion {
-        const options = this.generateOptions(word.original, vocabulary, 'original');
-        
-        return {
-            id: `${word.id}_pronunciation`,
-            type: 'pronunciation',
-            word,
-            options,
-            correctAnswer: word.original,
-            displayQuestion: 'Listen and select the word you hear:'
+    private generateTargetLanguageContext(word: SavedWord): string {
+        // Common sentence patterns that work across languages
+        // The blank will be replaced with the translated word
+        const patterns: Record<string, string[]> = {
+            'es': [ // Spanish
+                `El _____ está aquí.`,
+                `Necesito un _____.`,
+                `¿Dónde está el _____?`,
+                `Me gusta el _____.`
+            ],
+            'fr': [ // French
+                `Le _____ est ici.`,
+                `J'ai besoin d'un _____.`,
+                `Où est le _____ ?`,
+                `J'aime le _____.`
+            ],
+            'de': [ // German
+                `Der _____ ist hier.`,
+                `Ich brauche einen _____.`,
+                `Wo ist der _____?`,
+                `Ich mag den _____.`
+            ],
+            'it': [ // Italian
+                `Il _____ è qui.`,
+                `Ho bisogno di un _____.`,
+                `Dov'è il _____?`,
+                `Mi piace il _____.`
+            ],
+            'default': [ // Default pattern
+                `_____ [${word.translation}]`, // Show translation as hint
+            ]
         };
+        
+        const langPatterns = patterns[word.language] || patterns['default'];
+        return langPatterns[Math.floor(Math.random() * langPatterns.length)];
     }
 
-    /**
-     * Create category matching question
-     */
-    private createCategoryMatchQuestion(word: SavedWord, vocabulary: SavedWord[]): QuizQuestion {
-        // Find other words in the same category
-        const sameCategory = vocabulary.filter(w => 
-            w.category === word.category && w.id !== word.id
-        );
-        
-        const differentCategory = vocabulary.filter(w => 
-            w.category !== word.category && w.category && w.category !== 'other'
-        );
-        
-        const options = [word.translation];
-        
-        // Add 2 from same category if available
-        for (let i = 0; i < 2 && i < sameCategory.length; i++) {
-            options.push(sameCategory[i].translation);
-        }
-        
-        // Add 1 from different category
-        if (differentCategory.length > 0) {
-            options.push(differentCategory[0].translation);
-        }
-        
-        // Fill remaining with random if needed
-        while (options.length < 4) {
-            const randomWord = vocabulary[Math.floor(Math.random() * vocabulary.length)];
-            if (!options.includes(randomWord.translation)) {
-                options.push(randomWord.translation);
+    
+    private async generateProperHint(word: SavedWord): Promise<string | undefined> {
+        try {
+            // First, try to generate a simple sentence that definitely contains the exact word
+            const simpleExamples = [
+                `I see a ${word.original}.`,
+                `This is a ${word.original}.`,
+                `I need a ${word.original}.`,
+                `Where is the ${word.original}?`,
+                `The ${word.original} is here.`
+            ];
+            
+            // Pick a random simple example
+            const simpleExample = simpleExamples[Math.floor(Math.random() * simpleExamples.length)];
+            
+            // Translate it to get the exact word in context
+            const translatedExample = await TranslationService.translateText(
+                simpleExample,
+                word.language,
+                'en'
+            );
+            
+            // Verify the translated example contains the EXACT word
+            if (translatedExample.toLowerCase().includes(word.translation.toLowerCase())) {
+                return `${translatedExample}|${simpleExample}`;
             }
+            
+            // If simple translation didn't work, try with forced word insertion
+            const forcedTemplates: Record<string, string[]> = {
+                'de': [
+                    `Ich sehe ${this.getGermanArticle(word)} ${word.translation}.`,
+                    `Das ist ${this.getGermanArticle(word)} ${word.translation}.`,
+                    `Ich brauche ${this.getGermanArticle(word)} ${word.translation}.`,
+                    `Wo ist ${this.getGermanArticle(word)} ${word.translation}?`
+                ],
+                'fr': [
+                    `Je vois ${this.getFrenchArticle(word.translation)} ${word.translation}.`,
+                    `C'est ${this.getFrenchArticle(word.translation)} ${word.translation}.`,
+                    `J'ai besoin ${this.getFrenchArticleWithDe(word.translation)} ${word.translation}.`,
+                    `Où est ${this.getFrenchArticle(word.translation)} ${word.translation}?`
+                ],
+                'es': [
+                    `Veo ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
+                    `Esto es ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
+                    `Necesito ${this.getSpanishArticle(word.translation)} ${word.translation}.`,
+                    `¿Dónde está ${this.getSpanishArticleWithEl(word.translation)} ${word.translation}?`
+                ],
+                'it': [
+                    `Vedo ${this.getItalianArticle(word.translation)} ${word.translation}.`,
+                    `Questo è ${this.getItalianArticle(word.translation)} ${word.translation}.`,
+                    `Ho bisogno di ${this.getItalianArticle(word.translation)} ${word.translation}.`,
+                    `Dov'è ${this.getItalianArticleWithIl(word.translation)} ${word.translation}?`
+                ]
+            };
+            
+            if (forcedTemplates[word.language]) {
+                const templates = forcedTemplates[word.language];
+                const forcedExample = templates[Math.floor(Math.random() * templates.length)];
+                const englishEquivalent = simpleExample;
+                return `${forcedExample}|${englishEquivalent}`;
+            }
+            
+            // Ultimate fallback - just create a basic sentence with the word
+            return `${word.translation}.|This is ${word.original}.`;
+            
+        } catch (error) {
+            console.error('Error generating hint:', error);
+            return word.example;
         }
-        
+    }
+
+    // Add these helper methods for proper article handling:
+    private getGermanArticle(word: SavedWord): string {
+        // Special cases for German
+        if (word.original.toLowerCase() === 'glasses') return 'eine';
+        if (word.original.toLowerCase() === 'person') return 'eine';
+        if (word.original.toLowerCase() === 'top') return 'ein';
+        // Default
+        return 'ein';
+    }
+
+    private getFrenchArticleWithDe(word: string): string {
+        if (word.endsWith('e')) return "d'une";
+        return "d'un";
+    }
+
+    private getSpanishArticleWithEl(word: string): string {
+        if (word.endsWith('a')) return 'la';
+        return 'el';
+    }
+
+    private getItalianArticleWithIl(word: string): string {
+        if (word.endsWith('a')) return 'la';
+        return 'il';
+    }
+
+    /**
+     * Create recording pronunciation question
+     */
+    private createRecordingQuestion(word: SavedWord, vocabulary: SavedWord[]): QuizQuestion {
         return {
-            id: `${word.id}_category`,
-            type: 'category_match',
+            id: `${word.id}_recording`,
+            type: 'recording',
             word,
-            options: options.sort(() => Math.random() - 0.5),
             correctAnswer: word.translation,
-            displayQuestion: `Which word is NOT in the category "${word.category}"?`
+            displayQuestion: `Record yourself saying "${word.translation}" in ${this.getLanguageName(word.language)}`
         };
     }
 
@@ -789,6 +793,8 @@ class PracticeService {
                 .eq('user_id', userId);
         }
     }
+
+
 
     /**
      * Get user's practice statistics

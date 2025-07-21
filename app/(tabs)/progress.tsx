@@ -40,7 +40,7 @@ export default function ProgressScreen() {
     const { checkAchievement } = useAchievements();
 
     const onUserAction = () => {
-        checkAchievement('first_login');
+        checkAchievement('streak_7');
     };
 
     return (

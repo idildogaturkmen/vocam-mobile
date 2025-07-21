@@ -6,6 +6,7 @@ type Achievement = {
     description: string;
     earned_at: string;
     badge_path: string;
+    slug: string;
 };
 
 export async function getAchievements(): Promise<Achievement[]> {
@@ -18,17 +19,20 @@ export async function getAchievements(): Promise<Achievement[]> {
     }
     const achievementsData = await readUserData({
         TableName: 'achievements',
-        Filters: [{ column: 'id', operator: 'in', value: data.map((item) => item.achievement_id) }],
+        Filters: [
+            { column: 'slug', operator: 'in', value: data.map((item) => item.achievement_slug) },
+        ],
     });
     let achievements: Achievement[] = [];
     for (const item of data) {
         achievements.push({
-            id: item.achievement_id,
+            id: item.id,
             description:
-                achievementsData.find((w) => w.id === item.achievement_id)?.description || '',
+                achievementsData.find((w) => w.slug === item.achievement_slug)?.description || '',
+            slug: item.achievement_slug,
             earned_at: item.achieved_at,
             badge_path:
-                achievementsData.find((w) => w.id === item.achievement_id)?.badge_path || '',
+                achievementsData.find((w) => w.slug === item.achievement_slug)?.badge_path || '',
         });
     }
     return achievements;

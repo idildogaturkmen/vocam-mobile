@@ -1,21 +1,8 @@
 import React, { createContext, useContext, ReactNode, useRef } from 'react';
 import Toast from 'react-native-toast-message';
+import { achievementHandlers, Trophy } from './achievementHandler';
 
-type Trophy = 'first_login' | '100_words' | 'max_proficiency';
 const unlocked = useRef<Set<string>>(new Set());
-
-const achievementHandlers: Record<Trophy, () => Promise<{ title: string; achieved: boolean }>> = {
-    first_login: async () => {
-        return { title: 'First Login', achieved: true };
-    },
-    '100_words': async () => {
-        const count = 10;
-        return { title: '100 Words Learned', achieved: (count ?? 0) >= 100 };
-    },
-    max_proficiency: async () => {
-        return { title: 'First Max Proficiency', achieved: true };
-    },
-};
 
 interface AchievementsContextType {
     checkAchievement: (trophy: Trophy) => void;
@@ -32,7 +19,7 @@ export const AchievementsProvider = ({ children }: { children: ReactNode }) => {
 
         const achieved = await handler();
         if (achieved.achieved) {
-            // unlocked.current.add(trophy);
+            unlocked.current.add(trophy);
             Toast.show({
                 type: 'success',
                 text1: 'Achievement Unlocked',

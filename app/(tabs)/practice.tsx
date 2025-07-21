@@ -305,6 +305,18 @@ export default function PracticeScreen() {
         }
     };
 
+    // Shared function to handle continuing from results
+    const handleContinueFromResults = () => {
+        setShowResults(false);
+        setSession(null);
+        setCurrentQuestion(null);
+        setShowAnswer(false);
+        setSelectedAnswer(null);
+        setTypedAnswer('');
+        setRecordingResult(null);
+        setIsRecording(false);
+    };
+
     const renderResults = () => {
         if (!session) return null;
 
@@ -316,10 +328,18 @@ export default function PracticeScreen() {
                 animationType="slide"
                 transparent={true}
                 visible={showResults}
-                onRequestClose={() => setShowResults(false)}
+                onRequestClose={handleContinueFromResults}
             >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.resultsContainer}>
+                <TouchableOpacity
+                    activeOpacity={1}
+                    style={styles.modalOverlay}
+                    onPress={handleContinueFromResults}
+                >
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={styles.resultsContainer}
+                        onPress={() => {}}
+                    >
                         <View style={styles.resultsTitleContainer}>
                             <Text style={styles.resultsTitle}>Practice Complete!</Text>
                             <MaterialIcons name="celebration" size={32} color="#f39c12" />
@@ -350,22 +370,13 @@ export default function PracticeScreen() {
                         </View>
 
                         <TouchableOpacity
-                            style={styles.continueButton}
-                            onPress={() => {
-                                setShowResults(false);
-                                setSession(null);
-                                setCurrentQuestion(null);
-                                setShowAnswer(false);
-                                setSelectedAnswer(null);
-                                setTypedAnswer('');
-                                setRecordingResult(null);
-                                setIsRecording(false);
-                            }}
+                            style={[styles.continueButton, { backgroundColor: '#3498db', borderRadius: 12 }]}
+                            onPress={handleContinueFromResults}
                         >
                             <Text style={styles.continueButtonText}>Continue</Text>
                         </TouchableOpacity>
-                    </View>
-                </View>
+                    </TouchableOpacity>
+                </TouchableOpacity>
             </Modal>
         );
     };

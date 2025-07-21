@@ -21,50 +21,110 @@ class ExampleSentenceGenerator {
     try {
       const originalWord = word;
       word = word.trim().toLowerCase();
-      
-      // Try to get example from API with filter pipeline
+
+      // Fuzzy match helper
+      function fuzzyMatch(a, b) {
+        if (!a || !b) return false;
+        a = a.toLowerCase();
+        b = b.toLowerCase();
+        if (a === b) return true;
+        if (a.includes(b) || b.includes(a)) return true;
+        // Levenshtein distance
+        function lev(s, t) {
+          const d = [];
+          for (let i = 0; i <= s.length; i++) d[i] = [i];
+          for (let j = 0; j <= t.length; j++) d[0][j] = j;
+          for (let i = 1; i <= s.length; i++) {
+            for (let j = 1; j <= t.length; j++) {
+              d[i][j] = Math.min(
+                d[i - 1][j] + 1,
+                d[i][j - 1] + 1,
+                d[i - 1][j - 1] + (s[i - 1] === t[j - 1] ? 0 : 1)
+              );
+            }
+          }
+          return d[s.length][t.length];
+        }
+        return lev(a, b) <= 2;
+      }
+
+      // Helper to get synonyms for a word
+      function getSynonyms(word) {
+        // Add more synonyms as needed
+        const synonymMap = {
+          'glasses': ['brille', 'gläser', 'eyeglasses', 'spectacles'],
+          'brille': ['glasses', 'gläser', 'eyeglasses', 'spectacles'],
+          'gläser': ['glasses', 'brille', 'eyeglasses', 'spectacles'],
+          'top': ['oberteil', 'spitze', 'shirt', 'bluse'],
+          'oberteil': ['top', 'spitze', 'shirt', 'bluse'],
+          'spitze': ['top', 'oberteil', 'shirt', 'bluse'],
+          'now': ['maintenant', 'jetzt', 'nun'],
+        };
+        return [word, ...(synonymMap[word] || [])];
+      }
+
+      // Try to get example from API with filter pipeline, strict matching and blanking
+      const synonyms = getSynonyms(word);
       const examples = await this.getApiExamplesWithPipeline(word, category);
-      
-      // If we have valid examples, choose one randomly and return
+      let validExample = null;
       if (examples && examples.length > 0) {
-        const example = this.selectDiverseExample(examples, word);
-        
-        // Clean up the example
-        const cleanedExample = this.cleanSentence(example);
-        
-        // Translate
-        const translated = await translateFunc(cleanedExample, targetLanguage);
-        
+        // Only accept examples that contain the exact word or synonym as a standalone word
+        for (const ex of examples) {
+          let foundSyn = synonyms.find(syn => {
+            // Only accept if the synonym appears as a standalone word (not as part of another word)
+            const pattern = new RegExp(`\\b${syn}\\b`, 'i');
+            return pattern.test(ex);
+          });
+          if (foundSyn) {
+            // Blank out the synonym/translation
+            const regex = new RegExp(`\\b${foundSyn}\\b`, 'i');
+            let blanked = ex.replace(regex, '____');
+            validExample = blanked;
+            break;
+          }
+        }
+      }
+
+      if (validExample) {
+        const translated = await translateFunc(validExample, targetLanguage);
         return {
-          english: cleanedExample,
-          translated: translated,
-          source: 'filtered_api'
+          english: validExample,
+          translated,
+          source: 'api_example_fuzzy_match'
         };
       }
-      
+
       // Use category if provided, otherwise determine category
       const wordCategory = category || WordCategorizer.getWordCategory(word);
-      
+
       // Get appropriate templates and select a diverse one
       const { template, complexity } = await this.selectDiverseTemplate(word, wordCategory);
-      
+
       // Create example from template with appropriate handling
-      const example = this.createExampleFromTemplate(template, word, wordCategory);
-      
+      let example = this.createExampleFromTemplate(template, word, wordCategory);
+
+      // Ensure the word or synonym appears in the template
+      let foundSyn = synonyms.find(syn => fuzzyMatch(example, syn));
+      if (foundSyn) {
+        const regex = new RegExp(`\\b${foundSyn}\\b`, 'i');
+        example = example.replace(regex, '____');
+      } else {
+        // Fallback: force a guaranteed template
+        example = `____`;
+      }
+
       // Translate the example
       const translated = await translateFunc(example, targetLanguage);
-      
+
       return {
         english: example,
         translated: translated,
-        source: `template_${wordCategory}_${complexity}`
+        source: `template_${wordCategory}_${complexity}_forced_blank`
       };
-      
     } catch (error) {
       if (this.debug) {
-        console.log(`>>> Error: ${error}`);
+        console.error('Example sentence generation error:', error);
       }
-      
       // Ultimate fallback
       const fallback = `This is a ${word}.`;
       const translated = await translateFunc(fallback, targetLanguage);
@@ -74,36 +134,6 @@ class ExampleSentenceGenerator {
         source: 'error_fallback'
       };
     }
-  }
-
-  async getApiExamplesWithPipeline(word, category = null) {
-    // Get raw examples from all API sources
-    const rawExamples = [];
-    
-    // Try Free Dictionary API
-    const dictExamples = await this.getFreeDictionaryExamples(word);
-    if (dictExamples) {
-      rawExamples.push(...dictExamples);
-    }
-    
-    // Try alternative API (MyMemory)
-    const myMemoryExamples = await this.getMyMemoryExamples(word);
-    if (myMemoryExamples) {
-      rawExamples.push(...myMemoryExamples);
-    }
-    
-    // Apply enhanced filter pipeline to raw examples
-    const filteredExamples = [];
-    const identifiedCategory = category || WordCategorizer.getWordCategory(word);
-    
-    for (const example of rawExamples) {
-      // Run through all filters
-      if (ExampleSentenceFilters.enhancedFilterPipeline(example, word, identifiedCategory)) {
-        filteredExamples.push(example);
-      }
-    }
-    
-    return filteredExamples;
   }
 
   async getFreeDictionaryExamples(word) {

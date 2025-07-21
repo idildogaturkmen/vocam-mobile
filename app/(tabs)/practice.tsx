@@ -401,7 +401,8 @@ export default function PracticeScreen() {
             {/* Question Counter */}
             <View style={styles.questionHeader}>
                 <Text style={styles.questionCounter}>
-                    Question {session.currentQuestion + 1} of {session.totalQuestions}
+                    Question {Math.min(session.currentQuestion + 1, session.totalQuestions)} of {session.totalQuestions}
+        stopAudioPlayback();
                 </Text>
                 <TouchableOpacity onPress={() => setShowResults(true)}>
                     <Ionicons name="close" size={28} color="#7f8c8d" />

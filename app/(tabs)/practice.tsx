@@ -19,6 +19,7 @@ import PracticeStartScreen from '../../src/components/practice/PracticeStartScre
 import RecordingService from '../../src/services/RecordingService';
 import AudioManager from '../../src/services/AudioManager';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
@@ -35,6 +36,7 @@ export default function PracticeScreen() {
     const [showResults, setShowResults] = useState(false);
     const [audioPlaying, setAudioPlaying] = useState(false);
     const [isProcessingAnswer, setIsProcessingAnswer] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
     const [isRecording, setIsRecording] = useState(false);
     const [recordingResult, setRecordingResult] = useState<{
@@ -48,6 +50,8 @@ export default function PracticeScreen() {
     const slideAnim = useRef(new Animated.Value(50)).current;
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const progressAnim = useRef(new Animated.Value(0)).current;
+
+    const router = useRouter();
 
     useEffect(() => {
         initializeServices();
@@ -69,6 +73,7 @@ export default function PracticeScreen() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
+                setIsAuthenticated(true);
                 // Load available languages
                 const languages = await PracticeService.getAvailableLanguages(user.id);
                 setAvailableLanguages(languages);
@@ -81,8 +86,11 @@ export default function PracticeScreen() {
                 // Load user stats
                 const userStats = await PracticeService.getUserStats(user.id);
                 setStats(userStats);
+            } else {
+                setIsAuthenticated(false);
             }
         } catch (error) {
+            setIsAuthenticated(false);
             console.error('Error loading initial data:', error);
         } finally {
             setLoading(false);
@@ -253,8 +261,11 @@ export default function PracticeScreen() {
         }
     };
 
-    const nextQuestion = () => {
+    const nextQuestion = async () => {
         if (!session) return;
+
+        // Stop any ongoing speech before moving to next question
+        await SpeechService.stop();
 
         const next = PracticeService.nextQuestion();
         
@@ -285,6 +296,7 @@ export default function PracticeScreen() {
         } else {
             // Session completed - show results immediately
             // Don't set session to null here!
+            await SpeechService.stop(); // Also stop audio when finishing
             setShowResults(true);
             // Load stats after a short delay to ensure results are visible
             setTimeout(() => {
@@ -358,6 +370,41 @@ export default function PracticeScreen() {
         );
     };
 
+    // Show login warning if not authenticated
+    if (isAuthenticated === false) {
+        // Full white background, top header, and centered card
+        return (
+            <View style={[styles.container, { backgroundColor: 'white' }]}> 
+                <View style={styles.header}> 
+                    <View>
+                        <Text style={styles.title}>Practice</Text>
+                    </View>
+                </View>
+                <View style={styles.authRequiredContainer}>
+                    <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
+                    <Text style={styles.authRequiredTitle}>Login Required</Text>
+                    <Text style={styles.authRequiredText}>
+                        You must be logged in to practice. Please log in to continue and unlock all features.
+                    </Text>
+                    <Text style={styles.authRequiredSubtext}>
+                        Login to save words, track progress, and access your vocabulary across devices.
+                    </Text>
+                    <TouchableOpacity
+                        style={styles.loginButton}
+                        onPress={() => router.replace('/App')}
+                    >
+                        <Text style={styles.loginButtonText}>Go to Login</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.continueButton}
+                        onPress={() => router.replace('/(tabs)/detection')}
+                    >
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
+
     if (!session) {
         return (
             <View style={styles.container}>
@@ -402,9 +449,11 @@ export default function PracticeScreen() {
             <View style={styles.questionHeader}>
                 <Text style={styles.questionCounter}>
                     Question {Math.min(session.currentQuestion + 1, session.totalQuestions)} of {session.totalQuestions}
-        stopAudioPlayback();
                 </Text>
-                <TouchableOpacity onPress={() => setShowResults(true)}>
+                <TouchableOpacity onPress={async () => {
+                    await SpeechService.stop();
+                    setShowResults(true);
+                }}>
                     <Ionicons name="close" size={28} color="#7f8c8d" />
                 </TouchableOpacity>
             </View>
@@ -480,15 +529,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 60,
         paddingHorizontal: 20,
+        paddingTop: 50,
         paddingBottom: 20,
         backgroundColor: 'white',
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowRadius: 3,
+        elevation: 5,
     },
     title: {
         fontSize: 32,
@@ -616,11 +667,9 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     continueButton: {
-        backgroundColor: '#3498db',
-        paddingVertical: 16,
-        paddingHorizontal: 48,
-        borderRadius: 12,
-        alignItems: 'center',
+        marginTop: 15,
+        paddingHorizontal: 30,
+        paddingVertical: 12,
     },
     continueButtonText: {
         color: 'white',
@@ -647,5 +696,56 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 14,
         fontWeight: '600',
+    },
+    authRequiredContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    authRequiredTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#2c3e50',
+        marginTop: 20,
+        marginBottom: 10,
+    },
+    authRequiredText: {
+        fontSize: 16,
+        color: '#7f8c8d',
+        textAlign: 'center',
+        marginBottom: 30,
+        lineHeight: 22,
+    },
+    loginButton: {
+        backgroundColor: '#3498db',
+        paddingHorizontal: 30,
+        paddingVertical: 15,
+        borderRadius: 25,
+    },
+    loginButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    authRequiredSubtext: {
+        fontSize: 14,
+        color: '#95a5a6',
+        textAlign: 'center',
+        marginBottom: 20,
+        paddingHorizontal: 20,
+        lineHeight: 20,
+    },
+    authCard: {
+        backgroundColor: 'white',
+        padding: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        margin: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
     },
 });

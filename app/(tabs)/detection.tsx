@@ -428,29 +428,40 @@ export default function DetectionScreen() {
     );
   }
 
-  // Check authentication
-  if (isAuthenticated === false) {
-      return (
-          <View style={styles.container}>
-              <View style={styles.authCard}>
-                  <Ionicons name="camera-outline" size={64} color="#95a5a6" />
-                  <Text style={styles.authTitle}>Login Required</Text>
-                  <Text style={styles.authText}>
-                      You need to be logged in to use the camera and detect objects.
-                  </Text>
-                  <Text style={styles.authSubtext}>
-                      Login to start learning languages through object detection.
-                  </Text>
-                  <TouchableOpacity
-                      style={styles.loginButton}
-                      onPress={() => router.replace('/App')}
-                  >
-                      <Text style={styles.loginButtonText}>Go to Login</Text>
-                  </TouchableOpacity>
-              </View>
-          </View>
-      );
-  }
+    // Show login warning if not authenticated
+     if (isAuthenticated === false) {
+         // Full white background, top header, and centered card
+         return (
+             <View style={[styles.container, { backgroundColor: 'white' }]}> 
+                 <View style={styles.header}> 
+                     <View>
+                         <Text style={styles.title}>Camera</Text>
+                     </View>
+                 </View>
+                 <View style={styles.authRequiredContainer}>
+                     <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
+                     <Text style={styles.authRequiredTitle}>Login Required</Text>
+                     <Text style={styles.authRequiredText}>
+                         You must be logged in to use the camera and detect objects.
+                     </Text>
+                     <Text style={styles.authRequiredSubtext}>
+                         Login to start learning languages through object detection.
+                     </Text>
+                     <TouchableOpacity
+                         style={styles.loginButton}
+                         onPress={() => router.replace('/App')}
+                     >
+                         <Text style={styles.loginButtonText}>Go to Login</Text>
+                     </TouchableOpacity>
+                     <TouchableOpacity
+                         style={styles.continueButton}
+                         onPress={() => router.replace('/(tabs)/detection')}
+                     >
+                     </TouchableOpacity>
+                 </View>
+             </View>
+         );
+     }
 
   // Show photo results
   if (photo) {
@@ -1082,4 +1093,58 @@ const styles = StyleSheet.create({
       fontSize: 16,
       fontWeight: '600',
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
+    backgroundColor: 'white',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  authRequiredContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  authRequiredTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  authRequiredText: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 22,
+  },
+  authRequiredSubtext: {
+    fontSize: 14,
+    color: '#95a5a6',
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+    lineHeight: 20,
+  },
+  continueButton: {
+    marginTop: 15,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+  }
 });

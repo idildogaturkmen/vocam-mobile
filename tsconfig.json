@@ -5,6 +5,7 @@
       "dom",
       "esnext"
     ],
+    "types": [],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -47,6 +48,5 @@
   ],
   "exclude": [
     "node_modules"
-  ],
-  "extends": "expo/tsconfig.base"
+  ]
 }

@@ -34,7 +34,7 @@ export default function App() {
         const inAuthGroup = segments[0] === '(auth)';
 
         if (session && !inAuthGroup) {
-            router.replace('/(tabs)/progress');
+            router.replace('/(tabs)/detection');
         } else if (!session && inAuthGroup) {
             router.replace('/App');
         }

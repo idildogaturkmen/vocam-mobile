@@ -1,32 +1,85 @@
 import * as Speech from 'expo-speech';
 import { Platform, Alert } from 'react-native';
+import { Audio } from 'expo-av';
+import AudioManager from './AudioManager';
+
+interface VoiceInfo {
+  identifier: string;
+  language: string;
+  quality: Speech.VoiceQuality;
+  name: string;
+}
+
+interface SpeechOptions {
+  language: string;
+  pitch: number;
+  rate: number;
+  volume: number;
+  quality: Speech.VoiceQuality;
+  voice?: string;
+  onStart?: () => void;
+  onDone?: () => void;
+  onError?: (error: Error) => void;
+}
 
 class SpeechService {
-  constructor() {
-    this.isSpeaking = false;
-    this.speechQueue = [];
-    this.isInitialized = false;
-    this.availableVoices = [];
-    this.audioConfigured = false;
-    this.silentModeOverrideAttempted = false;
-    this.languageMapping = {
-      'es': 'es-ES',
-      'fr': 'fr-FR',
-      'de': 'de-DE',
-      'it': 'it-IT',
-      'pt': 'pt-PT',
-      'ru': 'ru-RU',
-      'ja': 'ja-JP',
-      'zh-CN': 'zh-CN',
-      'zh': 'zh-CN',
-      'en': 'en-US'
-    };
-  }
+  private isSpeaking: boolean = false;
+  private speechQueue: string[] = [];
+  private isInitialized: boolean = false;
+  private availableVoices: VoiceInfo[] = [];
+  private audioConfigured: boolean = false;
+  private silentModeOverrideAttempted: boolean = false;
+  
+  private languageMapping: Record<string, string> = {
+    'ar': 'ar-SA',      // Arabic
+    'bn': 'bn-BD',      // Bengali
+    'bg': 'bg-BG',      // Bulgarian
+    'zh-CN': 'zh-CN',   // Chinese (Simplified)
+    'zh-TW': 'zh-TW',   // Chinese (Traditional)
+    'hr': 'hr-HR',      // Croatian
+    'cs': 'cs-CZ',      // Czech
+    'da': 'da-DK',      // Danish
+    'nl': 'nl-NL',      // Dutch
+    'tl': 'fil-PH',     // Filipino (Tagalog)
+    'fi': 'fi-FI',      // Finnish
+    'fr': 'fr-FR',      // French
+    'de': 'de-DE',      // German
+    'el': 'el-GR',      // Greek
+    'gu': 'gu-IN',      // Gujarati
+    'he': 'he-IL',      // Hebrew
+    'hi': 'hi-IN',      // Hindi
+    'hu': 'hu-HU',      // Hungarian
+    'is': 'is-IS',      // Icelandic
+    'id': 'id-ID',      // Indonesian
+    'it': 'it-IT',      // Italian
+    'ja': 'ja-JP',      // Japanese
+    'ko': 'ko-KR',      // Korean
+    'la': 'la',         // Latin
+    'ms': 'ms-MY',      // Malay
+    'no': 'nb-NO',      // Norwegian
+    'fa': 'fa-IR',      // Persian (Farsi)
+    'pl': 'pl-PL',      // Polish
+    'pt': 'pt-PT',      // Portuguese
+    'pa': 'pa-IN',      // Punjabi
+    'ro': 'ro-RO',      // Romanian
+    'ru': 'ru-RU',      // Russian
+    'sr': 'sr-RS',      // Serbian
+    'sk': 'sk-SK',      // Slovak
+    'es': 'es-ES',      // Spanish
+    'sw': 'sw-KE',      // Swahili
+    'sv': 'sv-SE',      // Swedish
+    'ta': 'ta-IN',      // Tamil
+    'te': 'te-IN',      // Telugu
+    'th': 'th-TH',      // Thai
+    'tr': 'tr-TR',      // Turkish
+    'uk': 'uk-UA',      // Ukrainian
+    'ur': 'ur-PK',      // Urdu
+    'vi': 'vi-VN',      // Vietnamese
+    'en': 'en-US'       // English (default)
+  };
 
-  async initialize() {
+  async initialize(): Promise<boolean> {
     try {
-      console.log('🔊 Initializing Speech Service...');
-      
       // Configure iOS audio for silent mode override
       if (Platform.OS === 'ios') {
         await this.configureSilentModeOverride();
@@ -34,16 +87,8 @@ class SpeechService {
 
       // Get available voices
       this.availableVoices = await Speech.getAvailableVoicesAsync();
-      console.log(`🔊 Speech Service initialized with ${this.availableVoices.length} voices available`);
-      
-      const availableLanguages = [...new Set(this.availableVoices.map(v => v.language))];
-      console.log('🌍 Available languages:', availableLanguages);
-      
       this.isInitialized = true;
-      
-      // NO TEST AUDIO - removed as requested
-      console.log('✅ Speech Service ready (test audio disabled)');
-      
+
       return true;
     } catch (error) {
       console.error('❌ Speech Service initialization failed:', error);
@@ -51,39 +96,34 @@ class SpeechService {
     }
   }
 
-  async configureSilentModeOverride() {
+  private async prepareForPlayback(): Promise<void> {
+    try {
+      // Use the centralized AudioManager
+      await AudioManager.configureForPlayback();
+    } catch (error: any) {
+      console.log('⚠️ Audio preparation warning:', error.message);
+    }
+  }
+
+  private async configureSilentModeOverride(): Promise<void> {
     if (this.silentModeOverrideAttempted) {
       return; // Don't repeat if already attempted
     }
-    
-    console.log('🔧 Configuring silent mode override...');
     this.silentModeOverrideAttempted = true;
     
-    // Strategy 1: Try expo-audio
-    const audioSuccess = await this.tryExpoAudio();
-    if (audioSuccess) {
-      console.log('✅ Silent mode override configured via expo-audio');
-      this.audioConfigured = true;
-      return;
-    }
-    
-    // Strategy 2: Try expo-av
+    // Try expo-av directly since expo-audio is not commonly available
     const avSuccess = await this.tryExpoAV();
     if (avSuccess) {
-      console.log('✅ Silent mode override configured via expo-av');
       this.audioConfigured = true;
       return;
     }
     
-    // Strategy 3: iOS-specific speech configuration
+    // iOS-specific speech configuration
     await this.tryIOSSpeechConfig();
-    console.log('✅ Using iOS speech-specific configuration');
   }
 
-  async tryExpoAudio() {
+  private async tryExpoAV(): Promise<boolean> {
     try {
-      const { Audio } = require('expo-audio');
-      
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         allowsRecordingIOS: false,
@@ -91,38 +131,14 @@ class SpeechService {
         shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
       });
-      
-      console.log('✅ expo-audio configuration successful');
       return true;
-    } catch (error) {
-      console.log('⚠️ expo-audio configuration failed:', error.message);
-      return false;
-    }
-  }
-
-  async tryExpoAV() {
-    try {
-      const { Audio } = require('expo-av');
-      
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: false,
-        playThroughEarpieceAndroid: false,
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-      });
-      
-      console.log('✅ expo-av configuration successful');
-      return true;
-    } catch (error) {
+    } catch (error: any) {
       console.log('⚠️ expo-av configuration failed:', error.message);
       return false;
     }
   }
 
-  async tryIOSSpeechConfig() {
+  private async tryIOSSpeechConfig(): Promise<void> {
     // iOS-specific: Use speech synthesis with maximum force settings
     try {
       // Pre-configure speech with a silent utterance to "wake up" the audio system
@@ -130,18 +146,16 @@ class SpeechService {
         language: 'en-US',
         rate: 10,
         volume: 0.001, // Nearly silent
-        quality: Speech.VoiceQuality.Enhanced,
         onError: () => {}, // Ignore errors
         onDone: () => {}
       });
-      
-      console.log('✅ iOS speech system primed');
-    } catch (error) {
+
+    } catch (error: any) {
       console.log('⚠️ iOS speech priming failed:', error.message);
     }
   }
 
-  async speak(text, language = 'en') {
+  async speak(text: string, language: string = 'en'): Promise<void> {
     try {
       if (!text || typeof text !== 'string' || text.trim() === '') {
         console.warn('❌ No valid text to speak:', text);
@@ -152,15 +166,11 @@ class SpeechService {
         await this.initialize();
       }
 
-      // Force silent mode override before each speech
-      if (Platform.OS === 'ios' && !this.audioConfigured) {
-        await this.configureSilentModeOverride();
-      }
-
-      if (this.isSpeaking) {
-        await this.stop();
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      // IMPORTANT: Always prepare audio for playback before speaking
+      await this.prepareForPlayback();
+      
+      // Add extra delay to ensure audio system is ready
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       const cleanText = this.cleanTextForSpeech(text);
       
@@ -170,8 +180,6 @@ class SpeechService {
         if (!finalText) return;
         return await this.performSpeechWithForce(finalText, language);
       }
-
-      console.log(`🔊 Attempting to speak: "${cleanText}" in language: ${language}`);
       return await this.performSpeechWithForce(cleanText, language);
       
     } catch (error) {
@@ -180,37 +188,27 @@ class SpeechService {
     }
   }
 
-  async performSpeechWithForce(text, language) {
+  private async performSpeechWithForce(text: string, language: string): Promise<void> {
     const voice = await this.getBestVoice(language);
-    console.log(`🎤 Selected voice:`, voice?.identifier || 'default');
 
-    // MAXIMUM FORCE speech options for silent mode override
-    const options = {
+    // Store quality for internal logic, but do not include in SpeechOptions
+    const quality = voice?.quality || Speech.VoiceQuality.Default;
+
+    const options: Speech.SpeechOptions = {
       language: voice?.language || this.languageMapping[language] || language,
       pitch: 1.0,
       rate: this.getOptimalRate(language),
-      volume: 1.0, // Maximum volume
-      quality: Speech.VoiceQuality.Enhanced,
-      
-      // Force iOS to treat this as important system audio
-      ...(Platform.OS === 'ios' && {
-        iosCategory: 'playback', // Try to force playback category
-        iosMode: 'default',
-        iosAllowBluetooth: true,
-        iosAllowBluetoothA2DP: true,
-        iosAllowAirPlay: true,
-      }),
+      volume: 1.0,
+      // quality: quality, // Not included in SpeechOptions, but available for logic
       
       onStart: () => {
         this.isSpeaking = true;
-        console.log('✅ Speech started successfully');
       },
       onDone: () => {
         this.isSpeaking = false;
-        console.log('✅ Speech completed successfully');
         this.processQueue();
       },
-      onError: (error) => {
+      onError: (error: Error) => {
         this.isSpeaking = false;
         console.error('❌ Speech error:', error);
         this.handleSpeechError(text, language, error);
@@ -220,52 +218,26 @@ class SpeechService {
     if (voice?.identifier) {
       options.voice = voice.identifier;
     }
-
-    console.log('🔊 Speech options:', JSON.stringify(options, null, 2));
-
-    // iOS-specific: Force audio session preparation
-    if (Platform.OS === 'ios') {
-      await this.prepareIOSAudioSession();
-    }
-
-    // Execute speech with force
+    // Execute speech
     await Speech.speak(text, options);
   }
 
-  async prepareIOSAudioSession() {
-    try {
-      // Strategy: Use multiple silent utterances to force iOS audio system activation
-      const prepTasks = [
-        // Different languages to activate voice synthesis system
-        Speech.speak(' ', { language: 'en-US', rate: 10, volume: 0.001 }),
-        Speech.speak(' ', { language: 'es-ES', rate: 10, volume: 0.001 }),
-      ];
-      
-      await Promise.allSettled(prepTasks);
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      console.log('🎯 iOS audio session prepared');
-    } catch (error) {
-      console.log('⚠️ iOS audio preparation completed with warnings');
-    }
-  }
-
-  async emergencyFallback(text, language) {
-    console.log('🚨 Emergency fallback for speech...');
-    
+  private async emergencyFallback(text: string, language: string): Promise<void> {
     try {
       // Most basic speech possible with iOS silent mode hints
-      const basicOptions = {
+      const basicOptions: Partial<Speech.SpeechOptions> = {
         language: this.languageMapping[language] || language,
         rate: 0.7,
         volume: 1.0,
+        pitch: 1.0,
+        quality: Speech.VoiceQuality.Enhanced,
         // Try to hint to iOS that this is important
         ...(Platform.OS === 'ios' && {
           quality: Speech.VoiceQuality.Enhanced,
         }),
         onStart: () => console.log('🔄 Emergency speech started'),
         onDone: () => console.log('✅ Emergency speech completed'),
-        onError: (e) => console.error('❌ Emergency speech failed:', e)
+        onError: (e: any) => console.error('❌ Emergency speech failed:', e)
       };
 
       await Speech.speak(text, basicOptions);
@@ -287,7 +259,7 @@ class SpeechService {
     }
   }
 
-  cleanTextForSpeech(text) {
+  private cleanTextForSpeech(text: string): string {
     if (!text || typeof text !== 'string') {
       return '';
     }
@@ -316,7 +288,7 @@ class SpeechService {
       .trim();
   }
 
-  getBestVoice(language) {
+  private getBestVoice(language: string): VoiceInfo | null {
     try {
       const targetLang = this.languageMapping[language] || language;
       const langPrefix = targetLang.split('-')[0];
@@ -343,11 +315,8 @@ class SpeechService {
           );
           
           if (enhanced.length > 0) {
-            console.log(`🎤 Using enhanced non-eloquence voice for ${language}:`, enhanced[0].identifier);
             return enhanced[0];
           }
-          
-          console.log(`🎤 Using non-eloquence voice for ${language}:`, nonEloquenceVoices[0].identifier);
           return nonEloquenceVoices[0];
         }
         
@@ -356,12 +325,11 @@ class SpeechService {
           v.quality === Speech.VoiceQuality.Enhanced
         );
         if (enhanced.length > 0) {
-          console.log(`🎤 Using enhanced voice for ${language}:`, enhanced[0].identifier);
           return enhanced[0];
         }
       }
 
-      console.log(`🎤 Using standard voice for ${language}:`, matchingVoices[0].identifier);
+      // If no non-eloquence voices, return the first matching voice
       return matchingVoices[0];
     } catch (error) {
       console.error('Error selecting voice:', error);
@@ -369,29 +337,33 @@ class SpeechService {
     }
   }
 
-  getOptimalRate(language) {
-    const rates = {
-      'zh-CN': Platform.select({ ios: 0.4, android: 0.5, default: 0.45 }),
-      'zh': Platform.select({ ios: 0.4, android: 0.5, default: 0.45 }),
-      'ja': Platform.select({ ios: 0.45, android: 0.55, default: 0.5 }),
-      'ru': Platform.select({ ios: 0.5, android: 0.6, default: 0.55 }),
-      'de': Platform.select({ ios: 0.55, android: 0.65, default: 0.6 }),
-      'es': Platform.select({ ios: 0.6, android: 0.7, default: 0.65 }),
-      'fr': Platform.select({ ios: 0.6, android: 0.7, default: 0.65 }),
-      'pt': Platform.select({ ios: 0.55, android: 0.65, default: 0.6 }),
-      'en': Platform.select({ ios: 0.55, android: 0.7, default: 0.6 })
+  private getOptimalRate(language: string): number {
+    const rates: Record<string, number> = {
+      'zh-CN': Platform.select({ ios: 0.4, android: 0.5, default: 0.45 }) || 0.45,
+      'zh-TW': Platform.select({ ios: 0.4, android: 0.5, default: 0.45 }) || 0.45,
+      'ja': Platform.select({ ios: 0.45, android: 0.55, default: 0.5 }) || 0.5,
+      'ko': Platform.select({ ios: 0.45, android: 0.55, default: 0.5 }) || 0.5,
+      'ar': Platform.select({ ios: 0.5, android: 0.6, default: 0.55 }) || 0.55,
+      'he': Platform.select({ ios: 0.5, android: 0.6, default: 0.55 }) || 0.55,
+      'ru': Platform.select({ ios: 0.5, android: 0.6, default: 0.55 }) || 0.55,
+      'de': Platform.select({ ios: 0.55, android: 0.65, default: 0.6 }) || 0.6,
+      'es': Platform.select({ ios: 0.6, android: 0.7, default: 0.65 }) || 0.65,
+      'fr': Platform.select({ ios: 0.6, android: 0.7, default: 0.65 }) || 0.65,
+      'pt': Platform.select({ ios: 0.55, android: 0.65, default: 0.6 }) || 0.6,
+      'it': Platform.select({ ios: 0.6, android: 0.7, default: 0.65 }) || 0.65,
+      'hi': Platform.select({ ios: 0.55, android: 0.65, default: 0.6 }) || 0.6,
+      'bn': Platform.select({ ios: 0.55, android: 0.65, default: 0.6 }) || 0.6,
+      'en': Platform.select({ ios: 0.55, android: 0.7, default: 0.6 }) || 0.6
     };
 
     return rates[language] || Platform.select({ 
       ios: 0.55, 
       android: 0.7, 
       default: 0.6 
-    });
+    }) || 0.6;
   }
 
-  async handleSpeechError(text, language, error) {
-    console.log('🔄 Handling speech error, attempting recovery...');
-    
+  private async handleSpeechError(text: string, language: string, error: Error): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 200));
     
     try {
@@ -400,37 +372,38 @@ class SpeechService {
         rate: 0.7,
         volume: 1.0,
         onStart: () => console.log('🔄 Recovery speech started'),
-        onError: () => this.emergencyFallback(text, language)
+        onError: () => { this.emergencyFallback(text, language); }
       });
     } catch (recoveryError) {
       await this.emergencyFallback(text, language);
     }
   }
 
-  async speakQueue(textArray, language = 'en') {
+  async speakQueue(textArray: string[], language: string = 'en'): Promise<void> {
     this.speechQueue = [...textArray];
     await this.processQueue(language);
   }
 
-  async processQueue(language = 'en') {
+  private async processQueue(language: string = 'en'): Promise<void> {
     if (this.speechQueue.length > 0 && !this.isSpeaking) {
       const nextText = this.speechQueue.shift();
-      await this.speak(nextText, language);
+      if (nextText) {
+        await this.speak(nextText, language);
+      }
     }
   }
 
-  async stop() {
+  async stop(): Promise<void> {
     try {
       await Speech.stop();
       this.isSpeaking = false;
       this.speechQueue = [];
-      console.log('🔇 Speech stopped successfully');
     } catch (error) {
       console.error('Error stopping speech:', error);
     }
   }
 
-  async checkAvailability(language) {
+  async checkAvailability(language: string): Promise<boolean> {
     try {
       if (!this.isInitialized) {
         await this.initialize();
@@ -442,8 +415,6 @@ class SpeechService {
       const available = this.availableVoices.some(voice => 
         voice.language.toLowerCase().startsWith(langPrefix.toLowerCase())
       );
-      
-      console.log(`🔊 Language ${language} (${langCode}) availability: ${available}`);
       return available;
     } catch (error) {
       console.error('Error checking language availability:', error);
@@ -451,26 +422,44 @@ class SpeechService {
     }
   }
 
-  async testSpeech() {
-    console.log('🧪 Testing speech system...');
-    
+  private async resetAudioConfiguration(): Promise<void> {
     try {
-      await this.speak('Testing speech system', 'en');
-      return true;
+      // Stop any current speech
+      if (this.isSpeaking) {
+        await this.stop();
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+        
+      // Reconfigure audio for maximum volume
+      if (Platform.OS === 'ios') {
+        await this.configureSilentModeOverride();
+      }
+      
+      // Reset volume to maximum
+      this.audioConfigured = true;
     } catch (error) {
-      console.error('❌ Speech test failed:', error);
-      return false;
+      console.error('Error resetting audio:', error);
     }
   }
 
-  getAudioStatus() {
+  getAudioStatus(): {
+    audioLibrary: string;
+    audioConfigured: boolean;
+    initialized: boolean;
+    voicesAvailable: number;
+    forceMode: boolean;
+  } {
     return {
+      audioLibrary: 'expo-av',
       initialized: this.isInitialized,
       audioConfigured: this.audioConfigured,
-      silentModeOverrideAttempted: this.silentModeOverrideAttempted,
       voicesAvailable: this.availableVoices.length,
-      platform: Platform.OS
+      forceMode: true
     };
+  }
+  
+  isAvailable(): boolean {
+    return this.isInitialized && this.availableVoices.length > 0;
   }
 }
 

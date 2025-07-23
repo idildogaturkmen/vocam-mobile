@@ -279,7 +279,7 @@ export default function PracticeQuestionRenderer({
                         disabled={audioLoading}
                     >
                         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                            <Ionicons name="volume-high" size={32} color="#3498db" />
+                            <Ionicons name="volume-high" size={25} color="#3498db" />
                         </Animated.View>
                         <Text style={styles.playText}>Listen to correct pronunciation</Text>
                     </TouchableOpacity>
@@ -330,7 +330,7 @@ export default function PracticeQuestionRenderer({
                         disabled={audioLoading}
                     >
                         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                            <Ionicons name="volume-high" size={32} color="#3498db" />
+                            <Ionicons name="volume-high" size={25} color="#3498db" />
                         </Animated.View>
                         <Text style={styles.playText}>Play pronunciation</Text>
                     </TouchableOpacity>
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
     questionContainer: {
         backgroundColor: 'white',
         borderRadius: 16,
-        padding: 24,
+        padding: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
@@ -531,12 +531,12 @@ const styles = StyleSheet.create({
         minHeight: 300,
     },
     questionText: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '600',
         color: '#2c3e50',
-        marginBottom: 20,
+        marginBottom: 16,
         textAlign: 'center',
-        lineHeight: 28,
+        lineHeight: 24,
     },
     hintContainer: {
         marginBottom: 20,
@@ -572,13 +572,13 @@ const styles = StyleSheet.create({
         lineHeight: 20,
     },
     optionsContainer: {
-        gap: 12,
+        gap: 8,
     },
     optionButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 16,
+        padding: 14,
         borderRadius: 12,
         borderWidth: 2,
         borderColor: '#ecf0f1',
@@ -617,25 +617,25 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#ebf5fb',
-        padding: 16,
-        borderRadius: 12,
+        padding: 10,
+        borderRadius: 15,
         marginBottom: 20,
         gap: 8,
     },
     playText: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#3498db',
         fontWeight: '500',
     },
     bigPlayButton: {
         alignSelf: 'center',
         backgroundColor: '#3498db',
-        width: 100,
-        height: 100,
-        borderRadius: 50,
+        width: 80,
+        height: 80,
+        borderRadius: 40,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 30,
+        marginBottom: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
@@ -714,9 +714,9 @@ const styles = StyleSheet.create({
     },
     bigRecordButton: {
         backgroundColor: '#e74c3c',
-        width: 100,
-        height: 100,
-        borderRadius: 50,
+        width: 80,
+        height: 80,
+        borderRadius: 40,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 16,
@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     recordingHint: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#7f8c8d',
         textAlign: 'center',
     },

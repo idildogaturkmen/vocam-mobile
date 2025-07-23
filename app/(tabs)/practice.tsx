@@ -575,8 +575,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: 60,
-        paddingBottom: 20,
+        paddingTop: 50,
+        paddingBottom: 10,
         backgroundColor: 'white',
         borderBottomWidth: 1,
         borderBottomColor: '#ecf0f1',
@@ -591,6 +591,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 20,
+        paddingBottom: 100,
     },
     nextButton: {
         flexDirection: 'row',
@@ -684,7 +685,7 @@ const styles = StyleSheet.create({
     },
     continueButtonText: {
         color: 'white',
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: '600',
     },
     errorContainer: {

@@ -273,43 +273,45 @@ class PracticeService {
         
         try {
             // First try to get a proper example from the API
+            // Use the actual quiz option (word.translation) for blanking
             const example = await ExampleSentenceGenerator.getExampleSentence(
-                word.original,
-                word.language,
-                async (text: string, targetLang: string) => {
-                    return await TranslationService.translateText(text, targetLang, 'en');
-                }
+            word.translation, // always blank the correct answer/option
+            word.language,
+            async (text: string, targetLang: string) => {
+            return await TranslationService.translateText(text, targetLang, 'en');
+            }
             );
             
-            if (example && example.source !== 'error_fallback' && example.translated.includes(word.translation)) {
-                contextSentence = example.translated;
-                // Store the full example for hint audio
-                word.example = `${example.translated}|${example.english}`;
-            } else {
-                // Fallback to template-based sentences
-                contextSentence = await this.generateTargetLanguageSentenceWithWord(word);
-            }
-            
-            // Replace the word with blank
-            if (contextSentence.toLowerCase().includes(word.translation.toLowerCase())) {
-                contextSentence = contextSentence.replace(
+            if (
+                example &&
+                example.source !== 'error_fallback' &&
+                new RegExp(`\\b${this.escapeRegex(word.translation)}\\b`, 'i').test(example.translated)
+            ) {
+                // Blank the correct answer in the translated sentence
+                const blanked = example.translated.replace(
                     new RegExp(`\\b${this.escapeRegex(word.translation)}\\b`, 'gi'),
-                    '_____'
+                    '_____' 
                 );
+                contextSentence = blanked;
+                // Store the blanked sentence for both display and audio
+                word.example = `${blanked}|${example.english}`;
             } else {
-                // If word not found, generate a simpler sentence
+                // Always fall back to a template-based sentence with the correct answer if not found
                 contextSentence = await this.generateTargetLanguageSentenceWithBlank(word);
+                // Store the blanked sentence for both display and audio
+                word.example = `${contextSentence}|`;
             }
-            
-        } catch (error) {
+            } catch (error) {
             console.error('Error creating context question:', error);
             contextSentence = await this.generateTargetLanguageSentenceWithBlank(word);
-        }
-        
-        // Generate options in target language
-        const options = this.generateOptions(word.translation, vocabulary, 'translation');
-        
-        return {
+            // Store the blanked sentence for both display and audio
+            word.example = `${contextSentence}|`;
+            }
+            
+            // Generate options in target language
+            const options = this.generateOptions(word.translation, vocabulary, 'translation');
+            
+            return {
             id: `${word.id}_context`,
             type: 'context',
             word,
@@ -317,7 +319,7 @@ class PracticeService {
             correctAnswer: word.translation,
             contextSentence,
             displayQuestion
-        };
+            };
     }
 
     // Add this helper method
@@ -408,8 +410,9 @@ class PracticeService {
     private async generateProperHint(word: SavedWord): Promise<string | undefined> {
         try {
             // Use the ExampleSentenceGenerator to get a proper example
+            // Always use the correct answer (word.translation) for hint generation
             const example = await ExampleSentenceGenerator.getExampleSentence(
-                word.original,
+                word.translation,
                 word.language,
                 async (text: string, targetLang: string) => {
                     return await TranslationService.translateText(text, targetLang, 'en');
@@ -428,21 +431,24 @@ class PracticeService {
             
             // Last resort: create a context-rich sentence
             const contextTemplates = [
-                `I need to buy a new ${word.original} from the store.`,
-                `My favorite ${word.original} is the one I got last year.`,
-                `Can you help me find my ${word.original}? I think I left it in the kitchen.`,
-                `This ${word.original} looks really nice on you.`,
-                `The ${word.original} is on the table next to the window.`
+                `I need to buy a new {word} from the store.`,
+                `My favorite {word} is the one I got last year.`,
+                `Can you help me find my {word}? I think I left it in the kitchen.`,
+                `This {word} looks really nice on you.`,
+                `The {word} is on the table next to the window.`
             ];
             
             const template = contextTemplates[Math.floor(Math.random() * contextTemplates.length)];
+            // English sentence uses the original English word
+            const englishSentence = template.replace(/{word}/g, word.original);
+            // Translated sentence uses the correct answer (target language word)
             const translatedTemplate = await TranslationService.translateText(
-                template,
+                template.replace(/{word}/g, word.translation),
                 word.language,
                 'en'
             );
             
-            return `${translatedTemplate}|${template}`;
+            return `${translatedTemplate}|${englishSentence}`;
             
         } catch (error) {
             console.error('Error generating hint:', error);

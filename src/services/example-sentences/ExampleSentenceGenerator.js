@@ -68,19 +68,68 @@ class ExampleSentenceGenerator {
       const examples = await this.getApiExamplesWithPipeline(word, category);
       let validExample = null;
       if (examples && examples.length > 0) {
-        // Only accept examples that contain the exact word or synonym as a standalone word
-        for (const ex of examples) {
-          let foundSyn = synonyms.find(syn => {
-            // Only accept if the synonym appears as a standalone word (not as part of another word)
-            const pattern = new RegExp(`\\b${syn}\\b`, 'i');
-            return pattern.test(ex);
+        // Only accept examples that contain the exact word as a standalone word
+        const validExactExamples = examples.filter(ex => {
+          const exactPattern = new RegExp(`\\b${word}\\b`, 'i');
+          return exactPattern.test(ex);
+        });
+        // Track recently used examples for this word
+        const recentKey = `recent_${word}`;
+        if (!this.recentTemplates[recentKey]) this.recentTemplates[recentKey] = [];
+        // Filter out recently used examples
+        const unusedExamples = validExactExamples.filter(ex => !this.recentTemplates[recentKey].includes(ex));
+        let chosenExample = null;
+        if (unusedExamples.length > 0) {
+          chosenExample = unusedExamples[Math.floor(Math.random() * unusedExamples.length)];
+        } else if (validExactExamples.length > 0) {
+          // All have been used, reset history and pick randomly
+          this.recentTemplates[recentKey] = [];
+          chosenExample = validExactExamples[Math.floor(Math.random() * validExactExamples.length)];
+        }
+        if (chosenExample) {
+          // Blank out the exact word only
+          const regex = new RegExp(`\\b${word}\\b`, 'i');
+          let blanked = chosenExample.replace(regex, '____');
+          validExample = blanked;
+          // Track as recently used
+          this.recentTemplates[recentKey].push(chosenExample);
+          if (this.recentTemplates[recentKey].length > this.maxRecentTemplates) {
+            this.recentTemplates[recentKey] = this.recentTemplates[recentKey].slice(-this.maxRecentTemplates);
+          }
+        }
+        // If no example with the exact word, as a last resort, allow a synonym
+        if (!validExample) {
+          const validSynExamples = examples.filter(ex => {
+            return synonyms.some(syn => {
+              if (syn.toLowerCase() === word.toLowerCase()) return false;
+              const pattern = new RegExp(`\\b${syn}\\b`, 'i');
+              return pattern.test(ex);
+            });
           });
-          if (foundSyn) {
-            // Blank out the synonym/translation
-            const regex = new RegExp(`\\b${foundSyn}\\b`, 'i');
-            let blanked = ex.replace(regex, '____');
-            validExample = blanked;
-            break;
+          // Track recently used synonym examples
+          const unusedSynExamples = validSynExamples.filter(ex => !this.recentTemplates[recentKey].includes(ex));
+          let chosenSynExample = null;
+          if (unusedSynExamples.length > 0) {
+            chosenSynExample = unusedSynExamples[Math.floor(Math.random() * unusedSynExamples.length)];
+          } else if (validSynExamples.length > 0) {
+            this.recentTemplates[recentKey] = [];
+            chosenSynExample = validSynExamples[Math.floor(Math.random() * validSynExamples.length)];
+          }
+          if (chosenSynExample) {
+            let foundSyn = synonyms.find(syn => {
+              if (syn.toLowerCase() === word.toLowerCase()) return false;
+              const pattern = new RegExp(`\\b${syn}\\b`, 'i');
+              return pattern.test(chosenSynExample);
+            });
+            if (foundSyn) {
+              const regex = new RegExp(`\\b${foundSyn}\\b`, 'i');
+              let blanked = chosenSynExample.replace(regex, '____');
+              validExample = blanked;
+              this.recentTemplates[recentKey].push(chosenSynExample);
+              if (this.recentTemplates[recentKey].length > this.maxRecentTemplates) {
+                this.recentTemplates[recentKey] = this.recentTemplates[recentKey].slice(-this.maxRecentTemplates);
+              }
+            }
           }
         }
       }
@@ -103,8 +152,14 @@ class ExampleSentenceGenerator {
       // Create example from template with appropriate handling
       let example = this.createExampleFromTemplate(template, word, wordCategory);
 
-      // Ensure the word or synonym appears in the template
-      let foundSyn = synonyms.find(syn => fuzzyMatch(example, syn));
+      // Ensure the exact word appears in the template, blank it out; only use synonym if not present
+      let foundSyn = null;
+      const exactPattern = new RegExp(`\\b${word}\\b`, 'i');
+      if (exactPattern.test(example)) {
+        foundSyn = word;
+      } else {
+        foundSyn = synonyms.find(syn => fuzzyMatch(example, syn));
+      }
       if (foundSyn) {
         const regex = new RegExp(`\\b${foundSyn}\\b`, 'i');
         example = example.replace(regex, '____');
@@ -255,7 +310,20 @@ class ExampleSentenceGenerator {
     const complexity = this.weightedRandom(subcats, weights.slice(0, subcats.length));
     
     // Get templates for this category and complexity
-    const templates = categoryTemplates[complexity] || categoryTemplates.basic || [];
+    let templates = categoryTemplates[complexity] || categoryTemplates.basic || [];
+
+    // Filter out inappropriate templates for certain categories
+    if (templateCategory === 'person') {
+      // Exclude templates with verbs like 'buy', 'sell', 'borrow', 'need to buy', etc.
+      const inappropriateVerbs = [
+        'buy', 'sell', 'borrow', 'purchase', 'own', 'get a', 'need a', 'need to buy', 'replace', 'belongs to me', 'can I borrow', 'I need to buy'
+      ];
+      templates = templates.filter(t => !inappropriateVerbs.some(v => t.toLowerCase().includes(v)));
+      // If all templates are filtered out, fall back to unfiltered
+      if (templates.length === 0) {
+        templates = categoryTemplates[complexity] || categoryTemplates.basic || [];
+      }
+    }
     
     // Initialize template history for this word if not exists
     const wordKey = `${word}_${templateCategory}`;

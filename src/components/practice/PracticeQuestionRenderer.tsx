@@ -373,17 +373,17 @@ export default function PracticeQuestionRenderer({
                         </Text>
                     </View>
                     
-                    {/* Move audio button outside of sentenceContainer */}
+                    {/* Audio button if needed */}
                     {currentQuestion.word.example && currentQuestion.word.example.includes('|') && (
                         <TouchableOpacity
                             style={styles.contextAudioButtonBelow}
                             onPress={() => {
-                                const fullSentence = currentQuestion.word.example.split('|')[0];
-                                const sentenceWithWord = currentQuestion.contextSentence?.replace(
-                                    '_____', 
-                                    currentQuestion.correctAnswer
-                                ) || fullSentence;
-                                handlePlayAudio(sentenceWithWord, currentQuestion.word.language);
+                                let fullSentence = currentQuestion.word.example.split('|')[0];
+                                // Replace blank with correct answer for TTS
+                                if (fullSentence.includes('_____') && currentQuestion.correctAnswer) {
+                                    fullSentence = fullSentence.replace(/_____/g, currentQuestion.correctAnswer);
+                                }
+                                handlePlayAudio(fullSentence, currentQuestion.word.language);
                             }}
                         >
                             <Ionicons name="volume-high" size={24} color="#3498db" />
@@ -391,7 +391,29 @@ export default function PracticeQuestionRenderer({
                         </TouchableOpacity>
                     )}
 
-                    {renderMultipleChoiceOptions()}
+                    {/* Use the same optionsContainer style as other question types */}
+                    <View style={styles.optionsContainer}>
+                        {currentQuestion.options?.map((option, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                style={[
+                                    styles.optionButton,
+                                    selectedAnswer === option && styles.selectedOption,
+                                    showAnswer && option === currentQuestion.correctAnswer && styles.correctOption,
+                                    showAnswer && selectedAnswer === option && option !== currentQuestion.correctAnswer && styles.incorrectOption
+                                ]}
+                                onPress={() => onAnswer(option)}
+                                disabled={showAnswer}
+                            >
+                                <Text style={[
+                                    styles.optionText,
+                                    showAnswer && option === currentQuestion.correctAnswer && styles.correctText
+                                ]}>
+                                    {option}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                 </View>
             );
 
@@ -539,20 +561,20 @@ const styles = StyleSheet.create({
         lineHeight: 24,
     },
     hintContainer: {
-        marginBottom: 20,
+        marginBottom: 7,
     },
     hintHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: '#f0f8ff',
-        padding: 12,
+        padding: 8,
         borderRadius: 8,
     },
     hintTitleContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 10,
     },
     hintTitle: {
         fontSize: 14,
@@ -561,9 +583,9 @@ const styles = StyleSheet.create({
     },
     hintContent: {
         backgroundColor: '#f8fbff',
-        padding: 12,
+        padding: 10,
         borderRadius: 8,
-        marginTop: 8,
+        marginTop: -1,
     },
     hintText: {
         fontSize: 14,
@@ -572,13 +594,16 @@ const styles = StyleSheet.create({
         lineHeight: 20,
     },
     optionsContainer: {
-        gap: 8,
+        gap: 4, // reduce gap for more compact look
+        paddingHorizontal: 0, // ensure no extra horizontal padding
+        paddingVertical: 0, // ensure no extra vertical padding
     },
     optionButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 14,
+        paddingVertical: 15, // less vertical padding
+        paddingHorizontal: 15, // less horizontal padding
         borderRadius: 12,
         borderWidth: 2,
         borderColor: '#ecf0f1',
@@ -810,5 +835,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#3498db',
         fontWeight: '500',
+    },
+    contextOptionsContainer: {
+        gap: 8,
+        marginTop: 18,
     },
 });

@@ -520,7 +520,7 @@ export default function PracticeScreen() {
                             <Text style={styles.nextButtonText}>
                                 {session.currentQuestion < session.totalQuestions - 1 ? 'Next Question' : 'Finish'}
                             </Text>
-                            <Ionicons name="arrow-forward" size={20} color="white" />
+                            <Ionicons name="arrow-forward" size={18} color="white" />
                         </TouchableOpacity>
                     </Animated.View>
                 )}
@@ -563,12 +563,13 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     progressContainer: {
-        height: 4,
-        backgroundColor: '#ecf0f1',
+        height: 10,
+        backgroundColor: '#ffffffff',
     },
     progressBar: {
         height: '100%',
         backgroundColor: '#3498db',
+        marginTop: 94, // Adjust to position below header
     },
     questionHeader: {
         flexDirection: 'row',
@@ -596,11 +597,11 @@ const styles = StyleSheet.create({
     nextButton: {
         flexDirection: 'row',
         backgroundColor: '#27ae60',
-        padding: 16,
-        borderRadius: 12,
+        padding: 13,
+        borderRadius: 15,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 20,
+        marginTop: 16,
         gap: 8,
     },
     nextButtonText: {

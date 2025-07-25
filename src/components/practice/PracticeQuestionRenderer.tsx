@@ -188,7 +188,8 @@ export default function PracticeQuestionRenderer({
                     style={[
                         styles.optionButton,
                         selectedAnswer === option && styles.selectedOption,
-                        showAnswer && option === currentQuestion.correctAnswer && styles.correctOption,
+                        showAnswer && option === currentQuestion.correctAnswer && !selectedAnswer?.includes('__SKIPPED__') && styles.correctOption,
+                        showAnswer && option === currentQuestion.correctAnswer && selectedAnswer === '__SKIPPED__' && styles.skippedOption,
                         showAnswer && selectedAnswer === option && option !== currentQuestion.correctAnswer && styles.incorrectOption
                     ]}
                     onPress={() => onAnswer(option)}
@@ -196,7 +197,8 @@ export default function PracticeQuestionRenderer({
                 >
                     <Text style={[
                         styles.optionText,
-                        showAnswer && option === currentQuestion.correctAnswer && styles.correctText
+                        showAnswer && option === currentQuestion.correctAnswer && !selectedAnswer?.includes('__SKIPPED__') && styles.correctText,
+                        showAnswer && option === currentQuestion.correctAnswer && selectedAnswer === '__SKIPPED__' && styles.skippedText
                     ]}>
                         {option}
                     </Text>
@@ -342,7 +344,8 @@ export default function PracticeQuestionRenderer({
                                 style={[
                                     styles.optionButton,
                                     selectedAnswer === option && styles.selectedOption,
-                                    showAnswer && option === currentQuestion.correctAnswer && styles.correctOption,
+                                    showAnswer && option === currentQuestion.correctAnswer && !selectedAnswer?.includes('__SKIPPED__') && styles.correctOption,
+                                    showAnswer && option === currentQuestion.correctAnswer && selectedAnswer === '__SKIPPED__' && styles.skippedOption,
                                     showAnswer && selectedAnswer === option && option !== currentQuestion.correctAnswer && styles.incorrectOption
                                 ]}
                                 onPress={() => onAnswer(option)}
@@ -350,7 +353,8 @@ export default function PracticeQuestionRenderer({
                             >
                                 <Text style={[
                                     styles.optionText,
-                                    showAnswer && option === currentQuestion.correctAnswer && styles.correctText
+                                    showAnswer && option === currentQuestion.correctAnswer && !selectedAnswer?.includes('__SKIPPED__') && styles.correctText,
+                                    showAnswer && option === currentQuestion.correctAnswer && selectedAnswer === '__SKIPPED__' && styles.skippedText
                                 ]}>
                                     {option}
                                 </Text>
@@ -399,7 +403,8 @@ export default function PracticeQuestionRenderer({
                                 style={[
                                     styles.optionButton,
                                     selectedAnswer === option && styles.selectedOption,
-                                    showAnswer && option === currentQuestion.correctAnswer && styles.correctOption,
+                                    showAnswer && option === currentQuestion.correctAnswer && !selectedAnswer?.includes('__SKIPPED__') && styles.correctOption,
+                                    showAnswer && option === currentQuestion.correctAnswer && selectedAnswer === '__SKIPPED__' && styles.skippedOption,
                                     showAnswer && selectedAnswer === option && option !== currentQuestion.correctAnswer && styles.incorrectOption
                                 ]}
                                 onPress={() => onAnswer(option)}
@@ -407,7 +412,8 @@ export default function PracticeQuestionRenderer({
                             >
                                 <Text style={[
                                     styles.optionText,
-                                    showAnswer && option === currentQuestion.correctAnswer && styles.correctText
+                                    showAnswer && option === currentQuestion.correctAnswer && !selectedAnswer?.includes('__SKIPPED__') && styles.correctText,
+                                    showAnswer && option === currentQuestion.correctAnswer && selectedAnswer === '__SKIPPED__' && styles.skippedText
                                 ]}>
                                     {option}
                                 </Text>
@@ -449,7 +455,8 @@ export default function PracticeQuestionRenderer({
                                 style={[
                                     styles.optionButton,
                                     selectedAnswer === option && styles.selectedOption,
-                                    showAnswer && option === currentQuestion.correctAnswer && styles.correctOption,
+                                    showAnswer && option === currentQuestion.correctAnswer && !selectedAnswer?.includes('__SKIPPED__') && styles.correctOption,
+                                    showAnswer && option === currentQuestion.correctAnswer && selectedAnswer === '__SKIPPED__' && styles.skippedOption,
                                     showAnswer && selectedAnswer === option && option !== currentQuestion.correctAnswer && styles.incorrectOption
                                 ]}
                                 onPress={() => onAnswer(option)}
@@ -457,7 +464,8 @@ export default function PracticeQuestionRenderer({
                             >
                                 <Text style={[
                                     styles.optionText,
-                                    showAnswer && option === currentQuestion.correctAnswer && styles.correctText
+                                    showAnswer && option === currentQuestion.correctAnswer && !selectedAnswer?.includes('__SKIPPED__') && styles.correctText,
+                                    showAnswer && option === currentQuestion.correctAnswer && selectedAnswer === '__SKIPPED__' && styles.skippedText
                                 ]}>
                                     {option}
                                 </Text>
@@ -481,7 +489,8 @@ export default function PracticeQuestionRenderer({
                         style={[
                             styles.typingInput,
                             showAnswer && typedAnswer.toLowerCase().trim() === currentQuestion.correctAnswer.toLowerCase().trim() && styles.correctInput,
-                            showAnswer && typedAnswer.toLowerCase().trim() !== currentQuestion.correctAnswer.toLowerCase().trim() && styles.incorrectInput
+                            showAnswer && typedAnswer.toLowerCase().trim() !== currentQuestion.correctAnswer.toLowerCase().trim() && !selectedAnswer?.includes('__SKIPPED__') && styles.incorrectInput,
+                            showAnswer && selectedAnswer?.includes('__SKIPPED__') && styles.skippedInput
                         ]}
                         value={typedAnswer}
                         onChangeText={onTypeAnswer}
@@ -500,10 +509,23 @@ export default function PracticeQuestionRenderer({
                         <Text style={styles.submitButtonText}>Submit</Text>
                     </TouchableOpacity>
 
-                    {showAnswer && typedAnswer.toLowerCase().trim() !== currentQuestion.correctAnswer.toLowerCase().trim() && (
-                        <View style={styles.correctAnswerContainer}>
-                            <Text style={styles.correctAnswerLabel}>Correct answer:</Text>
-                            <Text style={styles.correctAnswerText}>{currentQuestion.correctAnswer}</Text>
+                    {showAnswer && (typedAnswer.toLowerCase().trim() !== currentQuestion.correctAnswer.toLowerCase().trim() || selectedAnswer?.includes('__SKIPPED__')) && (
+                        <View style={[
+                            styles.correctAnswerContainer,
+                            selectedAnswer?.includes('__SKIPPED__') && styles.skippedAnswerContainer
+                        ]}>
+                            <Text style={[
+                                styles.correctAnswerLabel,
+                                selectedAnswer?.includes('__SKIPPED__') && styles.skippedAnswerLabel
+                            ]}>
+                                Correct answer:
+                            </Text>
+                            <Text style={[
+                                styles.correctAnswerText,
+                                selectedAnswer?.includes('__SKIPPED__') && styles.skippedAnswerText
+                            ]}>
+                                {currentQuestion.correctAnswer}
+                            </Text>
                             <TouchableOpacity
                                 onPress={() => {
                                     animateSpeaker();
@@ -515,7 +537,7 @@ export default function PracticeQuestionRenderer({
                                     <Ionicons 
                                         name="volume-medium" 
                                         size={24} 
-                                        color="#3498db" 
+                                        color={selectedAnswer?.includes('__SKIPPED__') ? '#f39c12' : '#3498db'}
                                     />
                                 </Animated.View>
                             </TouchableOpacity>
@@ -839,5 +861,26 @@ const styles = StyleSheet.create({
     contextOptionsContainer: {
         gap: 8,
         marginTop: 18,
+    },
+    skippedOption: {
+        borderColor: '#f39c12',
+        backgroundColor: '#fef5e7',
+    },
+    skippedText: {
+        color: '#f39c12',
+        fontWeight: '600',
+    },
+    skippedInput: {
+        borderColor: '#f39c12',
+        backgroundColor: '#fef5e7',
+    },
+    skippedAnswerContainer: {
+        backgroundColor: '#fef5e7',
+    },
+    skippedAnswerLabel: {
+        color: '#f39c12',
+    },
+    skippedAnswerText: {
+        color: '#f39c12',
     },
 });

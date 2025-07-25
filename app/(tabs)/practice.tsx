@@ -7,7 +7,8 @@ import {
     ScrollView,
     Animated,
     Modal,
-    Dimensions
+    Dimensions,
+    Easing
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -30,6 +31,7 @@ export default function PracticeScreen() {
     const [showAnswer, setShowAnswer] = useState(false);
     const [typedAnswer, setTypedAnswer] = useState('');
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+    const [skipped, setSkipped] = useState(false);
     const [stats, setStats] = useState<PracticeStats | null>(null);
     const [availableLanguages, setAvailableLanguages] = useState<{ code: string; name: string; wordCount: number }[]>([]);
     const [selectedLanguage, setSelectedLanguage] = useState<string>('');
@@ -51,6 +53,26 @@ export default function PracticeScreen() {
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const progressAnim = useRef(new Animated.Value(0)).current;
 
+    // Spinner animation for loading modal
+    const spinnerAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (isProcessingAnswer && currentQuestion && currentQuestion.type === 'recording') {
+            // Start spinning
+            Animated.loop(
+                Animated.timing(spinnerAnim, {
+                    toValue: 1,
+                    duration: 900,
+                    useNativeDriver: true,
+                    easing: Easing.linear,
+                })
+            ).start();
+        } else {
+            spinnerAnim.stopAnimation();
+            spinnerAnim.setValue(0);
+        }
+    }, [isProcessingAnswer, currentQuestion && currentQuestion.type === 'recording']);
+
     const router = useRouter();
 
     useEffect(() => {
@@ -60,6 +82,12 @@ export default function PracticeScreen() {
             RecordingService.cleanup();
         };
     }, []);
+
+    useEffect(() => {
+        if (session) {
+            animateProgress();
+        }
+    }, [showAnswer, session?.currentQuestion]);
 
     const initializeServices = async () => {
         await RecordingService.initialize();
@@ -119,7 +147,9 @@ export default function PracticeScreen() {
                 setTypedAnswer('');
                 setIsProcessingAnswer(false);
                 animateQuestionEntry();
-                animateProgress();
+                
+                // Set initial progress to 1/N
+                progressAnim.setValue(1 / newSession.totalQuestions);
             }
         } catch (error) {
             console.error('Error starting practice:', error);
@@ -149,7 +179,20 @@ export default function PracticeScreen() {
     const animateProgress = () => {
         if (!session) return;
         
-        const progress = (session.currentQuestion + 1) / session.totalQuestions;
+        let progress = 0;
+        
+        // Calculate progress based on current state
+        if (session.currentQuestion === 0 && !showAnswer) {
+            // First question, not answered yet: show 1/N
+            progress = 1 / session.totalQuestions;
+        } else if (showAnswer) {
+            // Question answered, show completed progress including current
+            progress = (session.currentQuestion + 1) / session.totalQuestions;
+        } else {
+            // Mid-quiz, not answered yet: show progress up to current question
+            progress = (session.currentQuestion + 1) / session.totalQuestions;
+        }
+        
         Animated.timing(progressAnim, {
             toValue: progress,
             duration: 300,
@@ -157,7 +200,7 @@ export default function PracticeScreen() {
         }).start();
     };
 
-    const handleAnswer = async (answer: string) => {
+    const handleAnswer = async (answer: string, skip = false) => {
         if (!currentQuestion || showAnswer || isProcessingAnswer) return;
 
         // Handle recording type questions
@@ -183,15 +226,16 @@ export default function PracticeScreen() {
 
         setIsProcessingAnswer(true);
         setSelectedAnswer(answer);
+        setSkipped(skip);
         
         try {
             const isCorrect = await PracticeService.submitAnswer(answer);
             
             // Play haptic feedback with different patterns
-            if (isCorrect) {
+            if (isCorrect && !skip) {
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } else {
-                // Different pattern for wrong answers
+                // Different pattern for wrong answers or skip
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             }
 
@@ -277,6 +321,7 @@ export default function PracticeScreen() {
             setTypedAnswer('');
             setRecordingResult(null);
             setIsRecording(false);
+            setSkipped(false);
             
             // Animate transition
             Animated.sequence([
@@ -511,7 +556,7 @@ export default function PracticeScreen() {
                     )}
                 </Animated.View>
 
-                {showAnswer && (
+                {showAnswer && !skipped && (
                     <Animated.View style={{ opacity: fadeAnim }}>
                         <TouchableOpacity
                             style={styles.nextButton}
@@ -524,7 +569,70 @@ export default function PracticeScreen() {
                         </TouchableOpacity>
                     </Animated.View>
                 )}
+
+                {/* Skip Question Button: only show when not showing answer */}
+                {!showAnswer && (
+                    <TouchableOpacity
+                        style={styles.skipQuestionButton}
+                        onPress={async () => {
+                            if (currentQuestion) {
+                                setSkipped(true);
+                                setSelectedAnswer('__SKIPPED__');
+                                
+                                // For recording questions, skip processing modal
+                                if (currentQuestion.type === 'recording') {
+                                    // Just mark as incorrect and show answer immediately
+                                    await PracticeService.submitAnswer('__SKIPPED__');
+                                    setShowAnswer(true);
+                                    
+                                    // Auto-advance after 0.01 seconds for recording
+                                    setTimeout(() => {
+                                        nextQuestion();
+                                    }, 10);
+                                } else {
+                                    // For other question types, show processing briefly
+                                    setIsProcessingAnswer(true);
+                                    await PracticeService.submitAnswer('__SKIPPED__');
+                                    setShowAnswer(true);
+                                    setIsProcessingAnswer(false);
+                                    
+                                    // Auto-advance after 1 seconds
+                                    setTimeout(() => {
+                                        nextQuestion();
+                                    }, 1000);
+                                }
+                            }
+                        }}
+                    > 
+                        <Text style={styles.skipQuestionButtonText}>Skip Question</Text>
+                        <Ionicons name="arrow-forward" size={18} color="white" />
+                    </TouchableOpacity>
+                )}
             </ScrollView>
+
+            {/* Loading Modal for Answer/Recording Processing */}
+            {(isProcessingAnswer && currentQuestion && currentQuestion.type === 'recording') && (
+                <Modal
+                    visible={true}
+                    transparent
+                    animationType="fade"
+                >
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' }}>
+                        <View style={{ backgroundColor: 'white', padding: 32, borderRadius: 16, alignItems: 'center' }}>
+                            <Animated.View style={{ marginBottom: 16, transform: [{
+                                rotate: spinnerAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: ['0deg', '360deg']
+                                })
+                            }] }}>
+                                <Ionicons name="refresh" size={48} color="#3498db" />
+                            </Animated.View>
+                            <Text style={{ fontSize: 18, color: '#3498db', fontWeight: '600', marginBottom: 4 }}>Processing...</Text>
+                            <Text style={{ fontSize: 14, color: '#7f8c8d', textAlign: 'center' }}>Please wait while we check your pronunciation.</Text>
+                        </View>
+                    </View>
+                </Modal>
+            )}
 
             {renderResults()}
         </View>
@@ -605,6 +713,21 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     nextButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    skipQuestionButton: {
+        flexDirection: 'row',
+        backgroundColor: '#f39c12',
+        padding: 13,
+        borderRadius: 15,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 16,
+        gap: 8,
+    },
+    skipQuestionButtonText: {
         color: 'white',
         fontSize: 16,
         fontWeight: '600',

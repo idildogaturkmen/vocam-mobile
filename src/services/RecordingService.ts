@@ -146,6 +146,15 @@ class RecordingService {
         }
     }
 
+    async checkPermissions(): Promise<boolean> {
+        try {
+            const { status } = await Audio.requestPermissionsAsync();
+            return status === 'granted';
+        } catch (error) {
+            console.error('Permission check error:', error);
+            return false;
+        }
+    }
     async evaluatePronunciation(
         recordingUri: string, 
         expectedText: string, 

@@ -8,7 +8,8 @@ import {
     Animated,
     Modal,
     Dimensions,
-    Easing
+    Easing,
+    Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -57,6 +58,8 @@ export default function PracticeScreen() {
     const spinnerAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
+        let watchdogTimer: any = null;
+        
         if (isProcessingAnswer && currentQuestion && currentQuestion.type === 'recording') {
             // Start spinning
             Animated.loop(
@@ -67,11 +70,31 @@ export default function PracticeScreen() {
                     easing: Easing.linear,
                 })
             ).start();
+            
+            // Set a watchdog timer to prevent infinite processing
+            watchdogTimer = setTimeout(() => {
+                if (isProcessingAnswer) {
+                    console.warn('Processing timeout - auto-skipping question');
+                    setIsProcessingAnswer(false);
+                    handleSkipQuestion();
+                }
+            }, 30000); // 30 second maximum processing time
         } else {
             spinnerAnim.stopAnimation();
             spinnerAnim.setValue(0);
+            
+            // Clear watchdog if processing finished
+            if (watchdogTimer) {
+                clearTimeout(watchdogTimer);
+            }
         }
-    }, [isProcessingAnswer, currentQuestion && currentQuestion.type === 'recording']);
+        
+        return () => {
+            if (watchdogTimer) {
+                clearTimeout(watchdogTimer);
+            }
+        };
+    }, [isProcessingAnswer, currentQuestion?.type]);
 
     const router = useRouter();
 
@@ -79,7 +102,12 @@ export default function PracticeScreen() {
         initializeServices();
         loadInitialData();
         return () => {
+            // Clear any recording timeouts
+            if (recordingTimeoutRef.current) {
+                clearTimeout(recordingTimeoutRef.current);
+            }
             RecordingService.cleanup();
+            SpeechService.stop();
         };
     }, []);
 
@@ -200,22 +228,61 @@ export default function PracticeScreen() {
         }).start();
     };
 
+    const recordingTimeoutRef = useRef<number | null>(null);
+
     const handleAnswer = async (answer: string, skip = false) => {
         if (!currentQuestion || showAnswer || isProcessingAnswer) return;
 
         // Handle recording type questions
         if (answer === 'recording' && currentQuestion.type === 'recording') {
             if (!isRecording) {
-                // Start recording
-                const started = await RecordingService.startRecording();
-                if (started) {
-                    setIsRecording(true);
-                    // Auto-stop after 5 seconds
-                    setTimeout(async () => {
-                        if (isRecording) {
-                            await handleStopRecording();
-                        }
-                    }, 5000);
+                try {
+                    // Check microphone permissions first
+                    const hasPermission = await RecordingService.checkPermissions();
+                    if (!hasPermission) {
+                        Alert.alert(
+                            'Microphone Permission Required',
+                            'Please enable microphone access in your device settings to use voice recording.',
+                            [
+                                { text: 'Skip Question', onPress: () => handleSkipQuestion() },
+                                { text: 'OK', style: 'cancel' }
+                            ]
+                        );
+                        return;
+                    }
+                    
+                    // Start recording with timeout
+                    const started = await Promise.race([
+                        RecordingService.startRecording(),
+                        new Promise<boolean>((resolve) => 
+                            setTimeout(() => resolve(false), 5000) // 5 second timeout to start
+                        )
+                    ]);
+                    
+                    if (started) {
+                        setIsRecording(true);
+                        // Auto-stop after 5 seconds with additional safety timeout
+                        const recordingTimeout = setTimeout(async () => {
+                            if (isRecording) {
+                                await handleStopRecording(true); // Force stop
+                            }
+                        }, 5000);
+                        
+                        // Store timeout reference for cleanup
+                        recordingTimeoutRef.current = recordingTimeout;
+                    } else {
+                        throw new Error('Failed to start recording');
+                    }
+                } catch (error) {
+                    console.error('Recording start error:', error);
+                    Alert.alert(
+                        'Recording Error',
+                        'Unable to start recording. This might be due to device compatibility issues.',
+                        [
+                            { text: 'Skip Question', onPress: () => handleSkipQuestion() },
+                            { text: 'Try Again', onPress: () => {} }
+                        ]
+                    );
                 }
             } else {
                 // Stop recording
@@ -261,36 +328,100 @@ export default function PracticeScreen() {
         }
     };
 
-    const handleStopRecording = async () => {
+    const handleStopRecording = async (forceStop = false) => {
+        // Clear any existing timeout
+        if (recordingTimeoutRef.current) {
+            clearTimeout(recordingTimeoutRef.current);
+            recordingTimeoutRef.current = null;
+        }
+        
         setIsRecording(false);
         setIsProcessingAnswer(true);
         
-        const uri = await RecordingService.stopRecording();
-        if (uri && currentQuestion) {
-            const evaluation = await RecordingService.evaluatePronunciation(
-                uri,
-                currentQuestion.word.translation,
-                currentQuestion.word.language
-            );
+        try {
+            // Stop recording with timeout
+            const uri = await Promise.race([
+                RecordingService.stopRecording(),
+                new Promise<string | null>((resolve) => 
+                    setTimeout(() => resolve(null), 5000) // 5 second timeout
+                )
+            ]);
             
-            setRecordingResult(evaluation);
-            
-            // Submit the answer based on evaluation
-            await PracticeService.submitAnswer(
-                evaluation.isCorrect ? currentQuestion.correctAnswer : 'incorrect'
-            );
-            
-            // Haptic feedback
-            if (evaluation.isCorrect) {
-                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (uri && currentQuestion) {
+                // Evaluate with timeout
+                const evaluation = await Promise.race([
+                    RecordingService.evaluatePronunciation(
+                        uri,
+                        currentQuestion.word.translation,
+                        currentQuestion.word.language
+                    ),
+                    new Promise<any>((resolve) => 
+                        setTimeout(() => resolve({
+                            isCorrect: false,
+                            confidence: 0,
+                            feedback: 'Evaluation timed out. Please try again.'
+                        }), 10000) // 10 second timeout
+                    )
+                ]);
+                
+                setRecordingResult(evaluation);
+                
+                // Submit the answer based on evaluation
+                await PracticeService.submitAnswer(
+                    evaluation.isCorrect ? currentQuestion.correctAnswer : 'incorrect'
+                );
+                
+                // Haptic feedback
+                if (evaluation.isCorrect) {
+                    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } else {
+                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                }
+                
+                setShowAnswer(true);
+                setIsProcessingAnswer(false);
             } else {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                throw new Error(forceStop ? 'Recording stopped due to timeout' : 'Failed to stop recording');
+            }
+        } catch (error) {
+            console.error('Recording stop error:', error);
+            setIsProcessingAnswer(false);
+            
+            if (!forceStop) {
+                Alert.alert(
+                    'Recording Error',
+                    'Unable to process your recording. Would you like to skip this question?',
+                    [
+                        { text: 'Skip Question', onPress: () => handleSkipQuestion() },
+                        { text: 'Try Again', onPress: () => {} }
+                    ]
+                );
+            } else {
+                // Auto-skip on timeout
+                handleSkipQuestion();
+            }
+        }
+    };
+
+    const handleSkipQuestion = () => {
+        if (currentQuestion) {
+            setSkipped(true);
+            setSelectedAnswer('__SKIPPED__');
+            setIsRecording(false);
+            
+            // Clear any recording timeouts
+            if (recordingTimeoutRef.current) {
+                clearTimeout(recordingTimeoutRef.current);
+                recordingTimeoutRef.current = null;
             }
             
+            PracticeService.submitAnswer('__SKIPPED__');
             setShowAnswer(true);
             setIsProcessingAnswer(false);
-        } else {
-            setIsProcessingAnswer(false);
+            
+            setTimeout(() => {
+                nextQuestion();
+            }, 1500);
         }
     };
 
@@ -576,31 +707,26 @@ export default function PracticeScreen() {
                         style={styles.skipQuestionButton}
                         onPress={async () => {
                             if (currentQuestion) {
-                                setSkipped(true);
-                                setSelectedAnswer('__SKIPPED__');
-                                
-                                // For recording questions, skip processing modal
-                                if (currentQuestion.type === 'recording') {
-                                    // Just mark as incorrect and show answer immediately
-                                    await PracticeService.submitAnswer('__SKIPPED__');
-                                    setShowAnswer(true);
-                                    
-                                    // Auto-advance after 0.01 seconds for recording
-                                    setTimeout(() => {
-                                        nextQuestion();
-                                    }, 10);
-                                } else {
-                                    // For other question types, show processing briefly
-                                    setIsProcessingAnswer(true);
-                                    await PracticeService.submitAnswer('__SKIPPED__');
-                                    setShowAnswer(true);
-                                    setIsProcessingAnswer(false);
-                                    
-                                    // Auto-advance after 1 seconds
-                                    setTimeout(() => {
-                                        nextQuestion();
-                                    }, 1000);
-                                }
+                            setSelectedAnswer('__SKIPPED__');
+                            // For recording questions, skip processing modal
+                            if (currentQuestion.type === 'recording') {
+                            // Instantly skip to next question
+                            await PracticeService.submitAnswer('__SKIPPED__');
+                            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                            nextQuestion();
+                            } else {
+                            setSkipped(true);
+                            // For other question types, show processing briefly
+                            setIsProcessingAnswer(true);
+                            await PracticeService.submitAnswer('__SKIPPED__');
+                            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                            setShowAnswer(true);
+                            setIsProcessingAnswer(false);
+                            // Auto-advance after 1 seconds
+                            setTimeout(() => {
+                            nextQuestion();
+                            }, 1000);
+                            }
                             }
                         }}
                     > 

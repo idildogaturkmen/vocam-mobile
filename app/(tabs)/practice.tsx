@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -9,7 +9,8 @@ import {
     Modal,
     Dimensions,
     Easing,
-    Alert
+    Alert,
+    RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -22,6 +23,7 @@ import RecordingService from '../../src/services/RecordingService';
 import AudioManager from '../../src/services/AudioManager';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+const useFocusEffect = require('@react-navigation/native').useFocusEffect;
 
 const { width } = Dimensions.get('window');
 
@@ -56,6 +58,18 @@ export default function PracticeScreen() {
 
     // Spinner animation for loading modal
     const spinnerAnim = useRef(new Animated.Value(0)).current;
+
+    const router = useRouter();
+
+    // Add automatic refresh when tab is focused
+    useFocusEffect(
+        useCallback(() => {
+            if (!session && isAuthenticated) {
+                console.log('Practice tab focused - refreshing vocabulary data');
+                loadInitialData();
+            }
+        }, [session, isAuthenticated])
+    );
 
     useEffect(() => {
         let watchdogTimer: any = null;
@@ -96,8 +110,6 @@ export default function PracticeScreen() {
         };
     }, [isProcessingAnswer, currentQuestion?.type]);
 
-    const router = useRouter();
-
     useEffect(() => {
         initializeServices();
         loadInitialData();
@@ -130,13 +142,18 @@ export default function PracticeScreen() {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 setIsAuthenticated(true);
-                // Load available languages
+                // Load available languages with fresh data
+                console.log('Refreshing vocabulary data...');
                 const languages = await PracticeService.getAvailableLanguages(user.id);
                 setAvailableLanguages(languages);
+                console.log('Updated available languages:', languages);
                 
-                // Select first language by default
+                // Maintain selected language if it still exists, otherwise select first
                 if (languages.length > 0) {
-                    setSelectedLanguage(languages[0].code);
+                    const currentLangExists = languages.find(lang => lang.code === selectedLanguage);
+                    if (!currentLangExists || !selectedLanguage) {
+                        setSelectedLanguage(languages[0].code);
+                    }
                 }
                 
                 // Load user stats
@@ -559,7 +576,6 @@ export default function PracticeScreen() {
 
     // Show login warning if not authenticated
     if (isAuthenticated === false) {
-        // Full white background, top header, and centered card
         return (
             <View style={[styles.container, { backgroundColor: 'white' }]}> 
                 <View style={styles.header}> 
@@ -600,6 +616,15 @@ export default function PracticeScreen() {
                         <Text style={styles.title}>Practice</Text>
                         <Text style={styles.subtitle}>Improve your vocabulary</Text>
                     </View>
+                    <TouchableOpacity
+                        style={styles.refreshButton}
+                        onPress={() => {
+                            console.log('Manual refresh triggered');
+                            loadInitialData();
+                        }}
+                    >
+                        <Ionicons name="refresh" size={24} color="#3498db" />
+                    </TouchableOpacity>
                 </View>
 
                 <PracticeStartScreen
@@ -795,6 +820,11 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#7f8c8d',
         marginTop: 4,
+    },
+    refreshButton: {
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: '#f0f8ff',
     },
     progressContainer: {
         height: 10,

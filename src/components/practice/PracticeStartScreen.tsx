@@ -24,6 +24,7 @@ interface QuizOption {
     subtitle: string;
     color: string;
     reward: string;
+    requiredWords: number;
 }
 
 const quizOptions: QuizOption[] = [
@@ -33,7 +34,8 @@ const quizOptions: QuizOption[] = [
         title: 'Quick Practice',
         subtitle: '2-3 minutes',
         color: '#3498db',
-        reward: '+50 XP'
+        reward: '+50 XP',
+        requiredWords: 4
     },
     {
         questions: 10,
@@ -41,7 +43,8 @@ const quizOptions: QuizOption[] = [
         title: 'Standard Session',
         subtitle: '5-7 minutes',
         color: '#e74c3c',
-        reward: '+120 XP'
+        reward: '+120 XP',
+        requiredWords: 8
     },
     {
         questions: 20,
@@ -49,7 +52,8 @@ const quizOptions: QuizOption[] = [
         title: 'Challenge Mode',
         subtitle: '10-15 minutes',
         color: '#f39c12',
-        reward: '+300 XP'
+        reward: '+300 XP',
+        requiredWords: 16
     }
 ];
 
@@ -129,49 +133,105 @@ export default function PracticeStartScreen({
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Choose Your Challenge</Text>
                     <View style={styles.quizOptionsContainer}>
-                        {quizOptions.map((option) => (
-                            <TouchableOpacity
-                                key={option.questions}
-                                style={[styles.quizOption, { borderColor: option.color }]}
-                                onPress={() => onStartPractice(option.questions)}
-                                activeOpacity={0.8}
-                            >
-                                <View style={styles.quizOptionHeader}>
-                                    <View style={[styles.iconContainer, { backgroundColor: option.color }]}>
-                                        <Ionicons name={option.icon as any} size={24} color="white" />
-                                    </View>
-                                    <View style={styles.rewardBadge}>
-                                        <Text style={styles.rewardText}>{option.reward}</Text>
-                                    </View>
-                                </View>
-                                
-                                <View style={styles.quizOptionContent}>
-                                    <Text style={styles.quizOptionTitle}>{option.title}</Text>
-                                    <Text style={styles.quizOptionSubtitle}>{option.subtitle}</Text>
-                                    
-                                    <View style={styles.questionCountContainer}>
-                                        <Text style={[styles.questionCount, { color: option.color }]}>
-                                            {option.questions}
-                                        </Text>
-                                        <Text style={styles.questionLabel}>questions</Text>
-                                    </View>
-                                </View>
+                        {quizOptions.map((option) => {
+                            const selectedLang = availableLanguages.find(lang => lang.code === selectedLanguage);
+                            const currentWordCount = selectedLang?.wordCount || 0;
+                            const isLocked = currentWordCount < option.requiredWords;
+                            const wordsNeeded = option.requiredWords - currentWordCount;
 
-                                <View style={styles.startButtonContainer}>
-                                    <View style={[styles.startButton, { backgroundColor: option.color }]}>
-                                        <FontAwesome5 name="play" size={14} color="white" />
-                                        <Text style={styles.startButtonText}>Start</Text>
+                            return (
+                                <TouchableOpacity
+                                    key={option.questions}
+                                    style={[
+                                        styles.quizOption, 
+                                        { borderColor: isLocked ? '#bdc3c7' : option.color },
+                                        isLocked && styles.lockedQuizOption
+                                    ]}
+                                    onPress={() => !isLocked && onStartPractice(option.questions)}
+                                    activeOpacity={isLocked ? 1 : 0.8}
+                                    disabled={isLocked}
+                                >
+                                    {/* Blur overlay for locked options */}
+                                    {isLocked && (
+                                        <View style={styles.lockOverlay}>
+                                            <View style={styles.lockIconContainer}>
+                                                <Ionicons name="lock-closed" size={32} color="#7f8c8d" />
+                                            </View>
+                                            <Text style={styles.lockText}>
+                                                Need {wordsNeeded} more word{wordsNeeded !== 1 ? 's' : ''}
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    <View style={[styles.quizOptionHeader, isLocked && styles.blurredContent]}>
+                                        <View style={[
+                                            styles.iconContainer, 
+                                            { backgroundColor: isLocked ? '#bdc3c7' : option.color }
+                                        ]}>
+                                            <Ionicons name={option.icon as any} size={24} color="white" />
+                                        </View>
+                                        <View style={[
+                                            styles.rewardBadge,
+                                            isLocked && styles.lockedRewardBadge
+                                        ]}>
+                                            <Text style={[
+                                                styles.rewardText,
+                                                isLocked && styles.lockedRewardText
+                                            ]}>
+                                                {option.reward}
+                                            </Text>
+                                        </View>
                                     </View>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
+                                    
+                                    <View style={[styles.quizOptionContent, isLocked && styles.blurredContent]}>
+                                        <Text style={[
+                                            styles.quizOptionTitle,
+                                            isLocked && styles.lockedText
+                                        ]}>
+                                            {option.title}
+                                        </Text>
+                                        <Text style={[
+                                            styles.quizOptionSubtitle,
+                                            isLocked && styles.lockedText
+                                        ]}>
+                                            {option.subtitle}
+                                        </Text>
+                                        
+                                        <View style={styles.questionCountContainer}>
+                                            <Text style={[
+                                                styles.questionCount, 
+                                                { color: isLocked ? '#bdc3c7' : option.color }
+                                            ]}>
+                                                {option.questions}
+                                            </Text>
+                                            <Text style={[
+                                                styles.questionLabel,
+                                                isLocked && styles.lockedText
+                                            ]}>
+                                                questions
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={[styles.startButtonContainer, isLocked && styles.blurredContent]}>
+                                        <View style={[
+                                            styles.startButton, 
+                                            { backgroundColor: isLocked ? '#bdc3c7' : option.color }
+                                        ]}>
+                                            <FontAwesome5 name="play" size={14} color="white" />
+                                            <Text style={styles.startButtonText}>Start</Text>
+                                        </View>
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
 
                     {/* Motivational Message */}
                     <View style={styles.motivationCard}>
                         <Ionicons name="bulb" size={24} color="#f39c12" />
                         <Text style={styles.motivationText}>
-                            Complete longer sessions to earn more XP and improve faster!
+                            Complete longer sessions to earn more XP and improve faster! Learn more words to unlock additional challenge modes.
                         </Text>
                     </View>
                 </View>
@@ -282,6 +342,34 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 4,
+        position: 'relative',
+    },
+    lockedQuizOption: {
+        backgroundColor: '#f8f9fa',
+    },
+    lockOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10,
+    },
+    lockIconContainer: {
+        marginBottom: 8,
+    },
+    lockText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#7f8c8d',
+        textAlign: 'center',
+    },
+    blurredContent: {
+        opacity: 0.4,
     },
     quizOptionHeader: {
         flexDirection: 'row',
@@ -302,10 +390,16 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderRadius: 12,
     },
+    lockedRewardBadge: {
+        backgroundColor: '#f5f5f5',
+    },
     rewardText: {
         fontSize: 14,
         fontWeight: '600',
         color: '#3498db',
+    },
+    lockedRewardText: {
+        color: '#bdc3c7',
     },
     quizOptionContent: {
         marginBottom: 16,
@@ -320,6 +414,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#7f8c8d',
         marginBottom: 12,
+    },
+    lockedText: {
+        color: '#bdc3c7',
     },
     questionCountContainer: {
         flexDirection: 'row',

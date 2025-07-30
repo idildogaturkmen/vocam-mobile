@@ -155,6 +155,86 @@ class RecordingService {
             return false;
         }
     }
+
+    async testMicrophone(): Promise<{ success: boolean; message: string; audioLevel?: number }> {
+        try {
+            // First check permissions
+            const hasPermission = await this.checkPermissions();
+            if (!hasPermission) {
+                return {
+                    success: false,
+                    message: 'Microphone permission not granted. Please enable microphone access in your device settings.'
+                };
+            }
+
+            // Initialize if not already done
+            if (!this.permissionResponse) {
+                const initialized = await this.initialize();
+                if (!initialized) {
+                    return {
+                        success: false,
+                        message: 'Failed to initialize audio system. Please check your device settings.'
+                    };
+                }
+            }
+
+            // Try to start a brief recording to test the microphone
+            const recordingStarted = await this.startRecording();
+            if (!recordingStarted) {
+                return {
+                    success: false,
+                    message: 'Failed to start recording. Microphone may be in use by another app.'
+                };
+            }
+
+            // Record for 1 second to test
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Stop the test recording
+            const recordingUri = await this.stopRecording();
+            if (!recordingUri) {
+                return {
+                    success: false,
+                    message: 'Failed to complete test recording.'
+                };
+            }
+
+            // Check if the recording file exists and has content
+            try {
+                const fileInfo = await FileSystem.getInfoAsync(recordingUri);
+                if (!fileInfo.exists || fileInfo.size === 0) {
+                    return {
+                        success: false,
+                        message: 'Microphone test failed - no audio was recorded.'
+                    };
+                }
+
+                // Clean up test recording
+                await FileSystem.deleteAsync(recordingUri, { idempotent: true });
+
+                return {
+                    success: true,
+                    message: `Microphone is working!`,
+                    audioLevel: fileInfo.size
+                };
+            } catch (fileError) {
+                return {
+                    success: false,
+                    message: 'Microphone test completed but could not verify recording quality.'
+                };
+            }
+
+        } catch (error) {
+            console.error('❌ Microphone test failed:', error);
+            // Ensure we're not stuck in recording state
+            this._isRecording = false;
+            return {
+                success: false,
+                message: `Microphone test failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
     async evaluatePronunciation(
         recordingUri: string, 
         expectedText: string, 

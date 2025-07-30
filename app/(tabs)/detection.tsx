@@ -25,7 +25,10 @@ import { getDisplayAndVisionImage } from '../../src/services/ImageUtils';
 import VocabularyService from '../../src/services/VocabularyService';
 import type { SaveWordResult } from '../../src/services/VocabularyService';
 import SessionService from '../../src/services/SessionService';
+import ExampleSentenceGenerator from '@/src/services/example-sentences/ExampleSentenceGenerator';
 
+ ExampleSentenceGenerator.setDebug(true);
+ 
 // Database
 import { supabase } from '../../database/config';
 

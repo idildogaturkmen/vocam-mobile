@@ -65,7 +65,6 @@ export default function PracticeScreen() {
     useFocusEffect(
         useCallback(() => {
             if (!session && isAuthenticated) {
-                console.log('Practice tab focused - refreshing vocabulary data');
                 loadInitialData();
             }
         }, [session, isAuthenticated])
@@ -143,10 +142,8 @@ export default function PracticeScreen() {
             if (user) {
                 setIsAuthenticated(true);
                 // Load available languages with fresh data
-                console.log('Refreshing vocabulary data...');
                 const languages = await PracticeService.getAvailableLanguages(user.id);
                 setAvailableLanguages(languages);
-                console.log('Updated available languages:', languages);
                 
                 // Maintain selected language if it still exists, otherwise select first
                 if (languages.length > 0) {
@@ -619,7 +616,6 @@ export default function PracticeScreen() {
                     <TouchableOpacity
                         style={styles.refreshButton}
                         onPress={() => {
-                            console.log('Manual refresh triggered');
                             loadInitialData();
                         }}
                     >

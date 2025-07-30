@@ -1,7 +1,7 @@
 import { supabase } from '../../database/config';
 import VocabularyService, { SavedWord } from './VocabularyService';
 import SpeechService from './SpeechService';
-import ExampleSentenceGenerator from 'src/services/example-sentences/ExampleSentenceGenerator.js';
+import ExampleSentenceGenerator from './example-sentences/ExampleSentenceGenerator';
 import WordCategorizer from 'src/services/example-sentences/WordCategorizer.js';
 import TranslationService from './TranslationService';
 

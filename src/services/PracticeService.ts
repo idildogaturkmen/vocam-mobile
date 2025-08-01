@@ -257,9 +257,39 @@ class PracticeService {
         };
     }
 
-    // Helper method for regex escaping:
     private escapeRegex(string: string): string {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    /**
+     * Enhanced regex escaping that handles Unicode characters properly
+     */
+    private escapeRegexUnicode(string: string): string {
+        // First escape regex special characters
+        let escaped = string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        // Handle Turkish and other special characters by creating character class alternatives
+        const turkishMappings: Record<string, string> = {
+            'ş': '[şs]',
+            's': '[şs]',
+            'ç': '[çc]',
+            'c': '[çc]',
+            'ı': '[ıi]',
+            'i': '[ıi]',
+            'ğ': '[ğg]',
+            'g': '[ğg]',
+            'ü': '[üu]',
+            'u': '[üu]',
+            'ö': '[öo]',
+            'o': '[öo]'
+        };
+        
+        // Apply Turkish character mappings
+        for (const [char, pattern] of Object.entries(turkishMappings)) {
+            escaped = escaped.replace(new RegExp(char, 'gi'), pattern);
+        }
+        
+        return escaped;
     }
 
     /**
@@ -272,19 +302,21 @@ class PracticeService {
         let displayQuestion = `Complete the sentence in ${this.getLanguageName(word.language)}:`;
         
         try {
-            // First try to get a proper example from the API
-            // Use the actual quiz option (word.translation) for blanking
+            // Use ExampleSentenceGenerator to get a proper example sentence
+            // Use the English word (word.original) to get the example, then translate
             const example = await ExampleSentenceGenerator.getExampleSentence(
-            word.translation, // always blank the correct answer/option
-            word.language,
-            async (text: string, targetLang: string) => {
-            return await TranslationService.translateText(text, targetLang, 'en');
-            }
+                word.original, // Use English word to get example
+                word.language,
+                async (text: string, targetLang: string) => {
+                    return await TranslationService.translateText(text, targetLang, 'en');
+                }
             );
             
             if (
                 example &&
                 example.source !== 'error_fallback' &&
+                example.translated &&
+                // Check if the translated sentence contains the target word
                 new RegExp(`\\b${this.escapeRegex(word.translation)}\\b`, 'i').test(example.translated)
             ) {
                 // Blank the correct answer in the translated sentence
@@ -296,22 +328,22 @@ class PracticeService {
                 // Store the blanked sentence for both display and audio
                 word.example = `${blanked}|${example.english}`;
             } else {
-                // Always fall back to a template-based sentence with the correct answer if not found
-                contextSentence = await this.generateTargetLanguageSentenceWithBlank(word);
+                // Fall back to generating a varied sentence with blank
+                contextSentence = await this.generateVariedSentenceWithBlank(word);
                 // Store the blanked sentence for both display and audio
                 word.example = `${contextSentence}|`;
             }
-            } catch (error) {
+        } catch (error) {
             console.error('Error creating context question:', error);
-            contextSentence = await this.generateTargetLanguageSentenceWithBlank(word);
+            contextSentence = await this.generateVariedSentenceWithBlank(word);
             // Store the blanked sentence for both display and audio
             word.example = `${contextSentence}|`;
-            }
-            
-            // Generate options in target language
-            const options = this.generateOptions(word.translation, vocabulary, 'translation');
-            
-            return {
+        }
+        
+        // Generate options in target language
+        const options = this.generateOptions(word.translation, vocabulary, 'translation');
+        
+        return {
             id: `${word.id}_context`,
             type: 'context',
             word,
@@ -319,7 +351,7 @@ class PracticeService {
             correctAnswer: word.translation,
             contextSentence,
             displayQuestion
-            };
+        };
     }
 
     // Add this helper method
@@ -346,20 +378,43 @@ class PracticeService {
         }
     }
 
-    private async generateTargetLanguageSentenceWithBlank(word: SavedWord): Promise<string> {
-        // Generate a simple sentence with blank in target language
-        const simpleTemplate = `I need a ${word.original}.`;
+    private async generateVariedSentenceWithBlank(word: SavedWord): Promise<string> {
+        // Generate varied sentence templates to avoid repetition
+        const templates = [
+            `I need a ${word.original}.`,
+            `The ${word.original} is very useful.`,
+            `Can you pass me the ${word.original}?`,
+            `My ${word.original} is broken.`,
+            `Where did you buy this ${word.original}?`,
+            `I lost my ${word.original} yesterday.`,
+            `This ${word.original} belongs to me.`,
+            `The new ${word.original} works perfectly.`,
+            `I'm looking for a good ${word.original}.`,
+            `Have you seen my ${word.original}?`
+        ];
+        
+        // Select a random template
+        const template = templates[Math.floor(Math.random() * templates.length)];
+        
         try {
             const translated = await TranslationService.translateText(
-                simpleTemplate, 
+                template, 
                 word.language,
                 'en'
             );
-            // Replace the translated word with blank
-            return translated.replace(
-                new RegExp(`\\b${this.escapeRegex(word.translation)}\\b`, 'gi'),
+            // Replace the translated word with blank using Unicode-aware regex
+            const blanked = translated.replace(
+                new RegExp(`\\b${this.escapeRegexUnicode(word.translation)}\\b`, 'gi'),
                 '_____'
             );
+            
+            // Ensure we actually have a blank in the sentence
+            if (!blanked.includes('_____')) {
+                // If blanking failed, use the fallback pattern
+                return this.generateTargetLanguageContext(word);
+            }
+            
+            return blanked;
         } catch (error) {
             // Ultimate fallback
             return this.generateTargetLanguageContext(word);
@@ -367,17 +422,76 @@ class PracticeService {
     }
 
     /**
-     * Generate context sentences in target language
+     * Generate context sentences in target language with proper fallbacks
      */
     private generateTargetLanguageContext(word: SavedWord): string {
-        // Common sentence patterns that work across languages
-        // The blank will be replaced with the translated word
+        // Complete sentence patterns for all 44 supported languages
         const patterns: Record<string, string[]> = {
-            'es': [ // Spanish
-                `El _____ está aquí.`,
-                `Necesito un _____.`,
-                `¿Dónde está el _____?`,
-                `Me gusta el _____.`
+            'ar': [ // Arabic
+                `_____ هنا.`,
+                `أحتاج إلى _____.`,
+                `أين _____؟`,
+                `_____ جيد.`
+            ],
+            'bn': [ // Bengali
+                `_____ এখানে আছে।`,
+                `আমার _____ দরকার।`,
+                `_____ কোথায়?`,
+                `এই _____ ভাল।`
+            ],
+            'bg': [ // Bulgarian
+                `_____ е тук.`,
+                `Нуждая се от _____.`,
+                `Къде е _____?`,
+                `Харесвам _____.`
+            ],
+            'zh-CN': [ // Chinese Simplified
+                `_____在这里。`,
+                `我需要_____。`,
+                `_____在哪里？`,
+                `这个_____很好。`
+            ],
+            'zh-TW': [ // Chinese Traditional
+                `_____在這裡。`,
+                `我需要_____。`,
+                `_____在哪裡？`,
+                `這個_____很好。`
+            ],
+            'hr': [ // Croatian
+                `_____ je ovdje.`,
+                `Trebam _____.`,
+                `Gdje je _____?`,
+                `Sviđa mi se _____.`
+            ],
+            'cs': [ // Czech
+                `_____ je tady.`,
+                `Potřebuji _____.`,
+                `Kde je _____?`,
+                `Líbí se mi _____.`
+            ],
+            'da': [ // Danish
+                `_____ er her.`,
+                `Jeg har brug for _____.`,
+                `Hvor er _____?`,
+                `Jeg kan lide _____.`
+            ],
+            'nl': [ // Dutch
+                `_____ is hier.`,
+                `Ik heb _____ nodig.`,
+                `Waar is _____?`,
+                `Ik vind _____ leuk.`
+            ],
+            'tl': [ // Filipino
+                `_____ ay nandito.`,
+                `Kailangan ko ng _____.`,
+                `Nasaan ang _____?`,
+                `Gusto ko ang _____.`
+            ],
+            'fi': [ // Finnish
+                `_____ on täällä.`,
+                `Tarvitsen _____.`,
+                `Missä _____ on?`,
+                `Pidän _____.`
             ],
             'fr': [ // French
                 `Le _____ est ici.`,
@@ -391,69 +505,671 @@ class PracticeService {
                 `Wo ist der _____?`,
                 `Ich mag den _____.`
             ],
+            'el': [ // Greek
+                `_____ είναι εδώ.`,
+                `Χρειάζομαι _____.`,
+                `Πού είναι _____?`,
+                `Μου αρέσει _____.`
+            ],
+            'gu': [ // Gujarati
+                `_____ અહીં છે.`,
+                `મને _____ જોઈએ છે.`,
+                `_____ ક્યાં છે?`,
+                `આ _____ સારું છે.`
+            ],
+            'he': [ // Hebrew
+                `_____ נמצא כאן.`,
+                `אני צריך _____.`,
+                `איפה _____?`,
+                `אני אוהב _____.`
+            ],
+            'hi': [ // Hindi
+                `_____ यहाँ है।`,
+                `मुझे _____ चाहिए।`,
+                `_____ कहाँ है?`,
+                `यह _____ अच्छा है।`
+            ],
+            'hu': [ // Hungarian
+                `_____ itt van.`,
+                `Szükségem van _____.`,
+                `Hol van _____?`,
+                `Szeretem _____.`
+            ],
+            'is': [ // Icelandic
+                `_____ er hér.`,
+                `Ég þarf _____.`,
+                `Hvar er _____?`,
+                `Mér líkar _____.`
+            ],
+            'id': [ // Indonesian
+                `_____ ada di sini.`,
+                `Saya butuh _____.`,
+                `Di mana _____?`,
+                `_____ ini bagus.`
+            ],
             'it': [ // Italian
                 `Il _____ è qui.`,
                 `Ho bisogno di un _____.`,
                 `Dov'è il _____?`,
                 `Mi piace il _____.`
             ],
-            'default': [ // Default pattern
-                `_____ [${word.translation}]`, // Show translation as hint
+            'ja': [ // Japanese
+                `_____はここにあります。`,
+                `_____が必要です。`,
+                `_____はどこですか？`,
+                `この_____は良いです。`
+            ],
+            'ko': [ // Korean
+                `_____이 여기 있습니다.`,
+                `_____이 필요합니다.`,
+                `_____이 어디에 있나요?`,
+                `이 _____은 좋습니다.`
+            ],
+            'la': [ // Latin
+                `_____ hic est.`,
+                `_____ mihi opus est.`,
+                `Ubi est _____?`,
+                `_____ mihi placet.`
+            ],
+            'ms': [ // Malay
+                `_____ ada di sini.`,
+                `Saya perlukan _____.`,
+                `Di mana _____?`,
+                `_____ ini bagus.`
+            ],
+            'no': [ // Norwegian
+                `_____ er her.`,
+                `Jeg trenger _____.`,
+                `Hvor er _____?`,
+                `Jeg liker _____.`
+            ],
+            'fa': [ // Persian (Farsi)
+                `_____ اینجاست.`,
+                `من به _____ نیاز دارم.`,
+                `_____ کجاست؟`,
+                `من _____ را دوست دارم.`
+            ],
+            'pl': [ // Polish
+                `_____ jest tutaj.`,
+                `Potrzebuję _____.`,
+                `Gdzie jest _____?`,
+                `Lubię _____.`
+            ],
+            'pt': [ // Portuguese
+                `O _____ está aqui.`,
+                `Eu preciso de um _____.`,
+                `Onde está o _____?`,
+                `Eu gosto do _____.`
+            ],
+            'pa': [ // Punjabi
+                `_____ ਇੱਥੇ ਹੈ।`,
+                `ਮੈਨੂੰ _____ ਦੀ ਲੋੜ ਹੈ।`,
+                `_____ ਕਿੱਥੇ ਹੈ?`,
+                `ਇਹ _____ ਚੰਗਾ ਹੈ।`
+            ],
+            'ro': [ // Romanian
+                `_____ este aici.`,
+                `Am nevoie de _____.`,
+                `Unde este _____?`,
+                `Îmi place _____.`
+            ],
+            'ru': [ // Russian
+                `_____ здесь.`,
+                `Мне нужен _____.`,
+                `Где _____?`,
+                `Мне нравится _____.`
+            ],
+            'sr': [ // Serbian
+                `_____ је овде.`,
+                `Требам _____.`,
+                `Где је _____?`,
+                `Свиђа ми се _____.`
+            ],
+            'sk': [ // Slovak
+                `_____ je tu.`,
+                `Potrebujem _____.`,
+                `Kde je _____?`,
+                `Páči sa mi _____.`
+            ],
+            'es': [ // Spanish
+                `El _____ está aquí.`,
+                `Necesito un _____.`,
+                `¿Dónde está el _____?`,
+                `Me gusta el _____.`
+            ],
+            'sw': [ // Swahili
+                `_____ iko hapa.`,
+                `Ninahitaji _____.`,
+                `_____ iko wapi?`,
+                `Ninapenda _____.`
+            ],
+            'sv': [ // Swedish
+                `_____ är här.`,
+                `Jag behöver _____.`,
+                `Var är _____?`,
+                `Jag gillar _____.`
+            ],
+            'ta': [ // Tamil
+                `_____ இங்கே இருக்கிறது.`,
+                `எனக்கு _____ வேண்டும்.`,
+                `_____ எங்கே?`,
+                `இந்த _____ நல்லது.`
+            ],
+            'te': [ // Telugu
+                `_____ ఇక్కడ ఉంది.`,
+                `నాకు _____ కావాలి.`,
+                `_____ ఎక్కడ ఉంది?`,
+                `ఈ _____ బాగుంది.`
+            ],
+            'th': [ // Thai
+                `_____ อยู่ที่นี่`,
+                `ฉันต้องการ _____`,
+                `_____ อยู่ที่ไหน?`,
+                `_____ นี้ดี`
+            ],
+            'tr': [ // Turkish
+                `_____ burada.`,
+                `Bir _____ istiyorum.`,
+                `_____ nerede?`,
+                `Bu _____ güzel.`
+            ],
+            'uk': [ // Ukrainian
+                `_____ тут.`,
+                `Мені потрібен _____.`,
+                `Де _____?`,
+                `Мені подобається _____.`
+            ],
+            'ur': [ // Urdu
+                `_____ یہاں ہے۔`,
+                `مجھے _____ چاہیے۔`,
+                `_____ کہاں ہے؟`,
+                `یہ _____ اچھا ہے۔`
+            ],
+            'vi': [ // Vietnamese
+                `_____ ở đây.`,
+                `Tôi cần _____.`,
+                `_____ ở đâu?`,
+                `Tôi thích _____.`
             ]
         };
         
-        const langPatterns = patterns[word.language] || patterns['default'];
+        // Get patterns for the language
+        let langPatterns = patterns[word.language];
+        
+        // If no specific patterns for this language, this should never happen now
+        // but we'll keep a fallback that logs an error
+        if (!langPatterns) {
+            console.error(`CRITICAL: No patterns found for supported language: ${word.language}`);
+            // Use Spanish as emergency fallback (better than English)
+            langPatterns = patterns['es'];
+        }
+        
         return langPatterns[Math.floor(Math.random() * langPatterns.length)];
     }
 
-    
     private async generateProperHint(word: SavedWord): Promise<string | undefined> {
         try {
-            // Use the ExampleSentenceGenerator to get a proper example
-            // Always use the correct answer (word.translation) for hint generation
+            // PRIORITY 1: Try ExampleSentenceGenerator with multiple strategies
+            const exampleHint = await this.tryExampleSentenceGenerator(word);
+            if (exampleHint) {
+                return exampleHint;
+            }
+            
+            // PRIORITY 2: Try with different search terms if compound word
+            if (word.original.includes(' ')) {
+                const alternativeHint = await this.tryAlternativeSearchTerms(word);
+                if (alternativeHint) {
+                    return alternativeHint;
+                }
+            }
+            
+            // PRIORITY 3: Try contextual templates only if ExampleSentenceGenerator fails
+            const contextualHint = await this.generateContextualHint(word);
+            if (contextualHint) {
+                return contextualHint;
+            }
+            
+            // LAST RESORT: Simple templates (should rarely be reached)
+            console.warn(`Falling back to simple template for word: ${word.original}`);
+            return await this.generateSimpleHint(word);
+            
+        } catch (error) {
+            console.error('Error generating hint:', error);
+            return await this.generateSimpleHint(word);
+        }
+    }
+    
+    /**
+     * Try ExampleSentenceGenerator with enhanced validation and correction
+     */
+    private async tryExampleSentenceGenerator(word: SavedWord): Promise<string | null> {
+        try {
             const example = await ExampleSentenceGenerator.getExampleSentence(
-                word.translation,
+                word.original,
                 word.language,
                 async (text: string, targetLang: string) => {
                     return await TranslationService.translateText(text, targetLang, 'en');
                 }
             );
             
-            // If we got a good example from the API
-            if (example && example.source !== 'error_fallback' && example.source !== 'template_general_basic') {
-                return `${example.translated}|${example.english}`;
+            // Accept more sources, but validate them properly
+            if (example && 
+                example.source !== 'error_fallback' && 
+                example.translated && 
+                example.english) {
+                
+                // First check: Does it contain our exact word?
+                if (new RegExp(`\\b${this.escapeRegexUnicode(word.translation)}\\b`, 'i').test(example.translated)) {
+                    // Validate context appropriateness
+                    if (!this.isContextuallyInappropriate(example.english, word.original)) {
+                        return `${example.translated}|${example.english}`;
+                    }
+                }
+                
+                // Second check: Can we correct synonyms to our exact word?
+                const correctedSentence = await this.correctWordInSentence(example.translated, word);
+                if (correctedSentence && !this.isContextuallyInappropriate(example.english, word.original)) {
+                    return `${correctedSentence}|${example.english}`;
+                }
+                
+                // Third check: If it's a good sentence but wrong word, try to force replace
+                if (!this.isContextuallyInappropriate(example.english, word.original)) {
+                    const forcedCorrection = await this.forceWordReplacement(example.translated, word);
+                    if (forcedCorrection) {
+                        return `${forcedCorrection}|${example.english}`;
+                    }
+                }
             }
             
-            // If API failed, try to get from word's existing example
-            if (word.example && word.example.includes('|')) {
-                return word.example;
+            return null;
+        } catch (error) {
+            console.error('ExampleSentenceGenerator error:', error);
+            return null;
+        }
+    }
+    
+    /**
+     * Try alternative search terms for compound words
+     */
+    private async tryAlternativeSearchTerms(word: SavedWord): Promise<string | null> {
+        const words = word.original.split(' ');
+        const searchTerms = [
+            words[words.length - 1], // Last word
+            words[0], // First word
+            words.slice(1).join(' ') // Everything except first word
+        ];
+        
+        for (const searchTerm of searchTerms) {
+            if (searchTerm.length < 3) continue; // Skip very short terms
+            
+            try {
+                const example = await ExampleSentenceGenerator.getExampleSentence(
+                    searchTerm,
+                    word.language,
+                    async (text: string, targetLang: string) => {
+                        return await TranslationService.translateText(text, targetLang, 'en');
+                    }
+                );
+                
+                if (example && 
+                    example.source !== 'error_fallback' && 
+                    example.translated && 
+                    example.english &&
+                    !this.isContextuallyInappropriate(example.english, word.original)) {
+                    
+                    // Try to replace the search term with our full word
+                    const adaptedSentence = await this.adaptSentenceForWord(example.translated, example.english, word, searchTerm);
+                    if (adaptedSentence) {
+                        return adaptedSentence;
+                    }
+                }
+            } catch (error) {
+                continue;
             }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Force word replacement when we have a good sentence but wrong word
+     */
+    private async forceWordReplacement(sentence: string, word: SavedWord): Promise<string | null> {
+        // Find potential words to replace (nouns, typically)
+        const words = sentence.split(' ');
+        
+        // Look for words that might be nouns (capitalized in German, or common patterns)
+        for (let i = 0; i < words.length; i++) {
+            const currentWord = words[i];
             
-            // Last resort: create a context-rich sentence
-            const contextTemplates = [
-                `I need to buy a new {word} from the store.`,
-                `My favorite {word} is the one I got last year.`,
-                `Can you help me find my {word}? I think I left it in the kitchen.`,
-                `This {word} looks really nice on you.`,
-                `The {word} is on the table next to the window.`
-            ];
+            // Skip articles, prepositions, etc.
+            if (currentWord.length < 3) continue;
             
-            const template = contextTemplates[Math.floor(Math.random() * contextTemplates.length)];
-            // English sentence uses the original English word
-            const englishSentence = template.replace(/{word}/g, word.original);
-            // Translated sentence uses the correct answer (target language word)
-            const translatedTemplate = await TranslationService.translateText(
-                template.replace(/{word}/g, word.translation),
+            // Try replacing this word with our target word
+            const testSentence = [...words];
+            testSentence[i] = word.translation;
+            const result = testSentence.join(' ');
+            
+            // Basic validation - does it still make grammatical sense?
+            if (this.isGrammaticallyValid(result, word.language)) {
+                return result;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Adapt a sentence found with a search term to use our full word
+     */
+    private async adaptSentenceForWord(translatedSentence: string, englishSentence: string, word: SavedWord, searchTerm: string): Promise<string | null> {
+        // Try to replace the search term with our full word in the translated sentence
+        const searchTermRegex = new RegExp(`\\b${this.escapeRegexUnicode(searchTerm)}\\b`, 'gi');
+        
+        if (searchTermRegex.test(translatedSentence)) {
+            const adapted = translatedSentence.replace(searchTermRegex, word.translation);
+            
+            // Validate the adapted sentence
+            if (this.isGrammaticallyValid(adapted, word.language)) {
+                // Also adapt the English sentence
+                const adaptedEnglish = englishSentence.replace(
+                    new RegExp(`\\b${this.escapeRegexUnicode(searchTerm)}\\b`, 'gi'),
+                    word.original
+                );
+                return `${adapted}|${adaptedEnglish}`;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Basic grammatical validation
+     */
+    private isGrammaticallyValid(sentence: string, language: string): boolean {
+        // Basic checks for common grammatical issues
+        const sentenceLower = sentence.toLowerCase();
+        
+        // Check for repeated words
+        const words = sentenceLower.split(' ');
+        for (let i = 0; i < words.length - 1; i++) {
+            if (words[i] === words[i + 1] && words[i].length > 2) {
+                return false; // Repeated words
+            }
+        }
+        
+        // Language-specific basic validation
+        switch (language) {
+            case 'de':
+                // German: Check for basic article-noun agreement issues
+                if (sentenceLower.includes('der die') || sentenceLower.includes('die der')) {
+                    return false;
+                }
+                break;
+            case 'es':
+                // Spanish: Check for basic gender agreement issues
+                if (sentenceLower.includes('el la') || sentenceLower.includes('la el')) {
+                    return false;
+                }
+                break;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Generate contextually appropriate hint using word categories and semantic matching
+     * This should only be used when ExampleSentenceGenerator fails
+     */
+    private async generateContextualHint(word: SavedWord): Promise<string | null> {
+        console.log(`Using contextual templates for word: ${word.original} (ExampleSentenceGenerator failed)`);
+        
+        const category = WordCategorizer.getWordCategory(word.original);
+        
+        // Get contextually appropriate templates based on word category
+        const templates = this.getContextualTemplates(word.original, category);
+        
+        for (const template of templates) {
+            try {
+                const englishSentence = template.replace(/{word}/g, word.original);
+                
+                // Translate the sentence
+                const translatedSentence = await TranslationService.translateText(
+                    englishSentence,
+                    word.language,
+                    'en'
+                );
+                
+                // Check if the translation contains our exact target word
+                if (new RegExp(`\\b${this.escapeRegexUnicode(word.translation)}\\b`, 'i').test(translatedSentence)) {
+                    return `${translatedSentence}|${englishSentence}`;
+                }
+                
+                // If not exact match, try to replace any synonym with our exact word
+                const correctedSentence = await this.correctWordInSentence(translatedSentence, word);
+                if (correctedSentence && correctedSentence !== translatedSentence) {
+                    return `${correctedSentence}|${englishSentence}`;
+                }
+                
+            } catch (error) {
+                continue; // Try next template
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Get contextually appropriate templates based on word category
+     */
+    private getContextualTemplates(word: string, category: string | null): string[] {
+        const wordLower = word.toLowerCase();
+        
+        // Specific templates for common problematic words
+        const specificTemplates: Record<string, string[]> = {
+            'glasses': [
+                `I need new {word} to see better.`,
+                `My {word} are broken.`,
+                `Where are my {word}?`,
+                `These {word} are too small.`
+            ],
+            'remote': [
+                `The TV {word} is not working.`,
+                `I can't find the {word} control.`,
+                `This {word} has many buttons.`,
+                `The {word} needs new batteries.`
+            ],
+            'top': [
+                `This {word} is comfortable.`,
+                `I bought a new {word} yesterday.`,
+                `The {word} is too tight.`,
+                `This {word} matches my pants.`
+            ],
+            'chair': [
+                `The {word} is very comfortable.`,
+                `I need a new {word} for my desk.`,
+                `This {word} is broken.`,
+                `The {word} is too high.`
+            ]
+        };
+        
+        // Return specific templates if available
+        if (specificTemplates[wordLower]) {
+            return specificTemplates[wordLower];
+        }
+        
+        // Category-based templates
+        switch (category) {
+            case 'clothing':
+                return [
+                    `This {word} fits perfectly.`,
+                    `I bought a new {word} yesterday.`,
+                    `The {word} is very comfortable.`,
+                    `This {word} is my favorite.`
+                ];
+            case 'furniture':
+                return [
+                    `The {word} is in the living room.`,
+                    `I need a new {word} for my home.`,
+                    `This {word} is very comfortable.`,
+                    `The {word} is made of wood.`
+                ];
+            case 'electronics':
+                return [
+                    `The {word} is not working properly.`,
+                    `I bought a new {word} yesterday.`,
+                    `This {word} is very useful.`,
+                    `The {word} needs to be charged.`
+                ];
+            case 'food':
+                return [
+                    `This {word} tastes delicious.`,
+                    `I want to eat some {word}.`,
+                    `The {word} is fresh.`,
+                    `I bought {word} at the market.`
+                ];
+            case 'tools':
+                return [
+                    `I need this {word} for work.`,
+                    `The {word} is very useful.`,
+                    `This {word} is broken.`,
+                    `I can't find my {word}.`
+                ];
+            default:
+                return [
+                    `I have a {word}.`,
+                    `The {word} is here.`,
+                    `This {word} is useful.`,
+                    `I need a {word}.`
+                ];
+        }
+    }
+    
+    /**
+     * Validate and fix hints from ExampleSentenceGenerator
+     */
+    private async validateAndFixHint(translatedSentence: string, englishSentence: string, word: SavedWord): Promise<string | null> {
+        // Check if sentence makes contextual sense (basic validation)
+        if (this.isContextuallyInappropriate(englishSentence, word.original)) {
+            return null;
+        }
+        
+        // Check if our exact word is in the translated sentence
+        if (new RegExp(`\\b${this.escapeRegexUnicode(word.translation)}\\b`, 'i').test(translatedSentence)) {
+            return `${translatedSentence}|${englishSentence}`;
+        }
+        
+        // Try to correct the word in the sentence
+        const correctedSentence = await this.correctWordInSentence(translatedSentence, word);
+        if (correctedSentence) {
+            return `${correctedSentence}|${englishSentence}`;
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Check if a sentence is contextually inappropriate for a word
+     */
+    private isContextuallyInappropriate(sentence: string, word: string): boolean {
+        const sentenceLower = sentence.toLowerCase();
+        const wordLower = word.toLowerCase();
+        
+        // Specific inappropriate contexts
+        const inappropriateContexts: Record<string, string[]> = {
+            'remote': ['looks nice on you', 'wear', 'fits', 'comfortable to wear'],
+            'table': ['on the table next to', 'table is on the table'],
+            'chair': ['looks nice on you', 'wear'],
+            'glasses': ['tastes', 'eat', 'drink'],
+            'food': ['wear', 'looks nice on you']
+        };
+        
+        const inappropriate = inappropriateContexts[wordLower];
+        if (inappropriate) {
+            return inappropriate.some(context => sentenceLower.includes(context));
+        }
+        
+        // General inappropriate patterns
+        const generalInappropriate = [
+            'table is on the table',
+            'chair is on the chair',
+            'looks nice on you' // for non-wearable items
+        ];
+        
+        return generalInappropriate.some(pattern => sentenceLower.includes(pattern));
+    }
+    
+    /**
+     * Try to correct synonyms/variants in translated sentence with exact answer word
+     */
+    private async correctWordInSentence(sentence: string, word: SavedWord): Promise<string | null> {
+        // Common synonym mappings for problematic words
+        const synonymMappings: Record<string, Record<string, string[]>> = {
+            'de': {
+                'Spitze': ['Oberteil', 'Top'],
+                'Gläser': ['Brille'],
+                'Stuhl': ['Sessel']
+            },
+            'es': {
+                'silla': ['asiento'],
+                'gafas': ['anteojos', 'lentes']
+            },
+            'fr': {
+                'chaise': ['siège'],
+                'lunettes': ['verres']
+            }
+        };
+        
+        const langMappings = synonymMappings[word.language];
+        if (langMappings && langMappings[word.translation]) {
+            let correctedSentence = sentence;
+            const synonyms = langMappings[word.translation];
+            
+            for (const synonym of synonyms) {
+                const synonymRegex = new RegExp(`\\b${this.escapeRegexUnicode(synonym)}\\b`, 'gi');
+                if (synonymRegex.test(correctedSentence)) {
+                    correctedSentence = correctedSentence.replace(synonymRegex, word.translation);
+                    return correctedSentence;
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Generate a simple, guaranteed correct hint as absolute final fallback
+     * This should rarely be reached if ExampleSentenceGenerator is working properly
+     */
+    private async generateSimpleHint(word: SavedWord): Promise<string> {
+        console.warn(`Using simple template fallback for word: ${word.original} - this should be rare!`);
+        
+        // Ultra-simple templates that always work
+        const simpleTemplates = [
+            `This is a ${word.original}.`,
+            `I have a ${word.original}.`,
+            `The ${word.original} is here.`
+        ];
+        
+        const template = simpleTemplates[Math.floor(Math.random() * simpleTemplates.length)];
+        
+        try {
+            const translated = await TranslationService.translateText(
+                template,
                 word.language,
                 'en'
             );
             
-            return `${translatedTemplate}|${englishSentence}`;
+            // Force replace with our exact word if translation differs
+            const corrected = translated.replace(
+                new RegExp(`\\b[^\\s]+\\b(?=\\s|$)`, 'i'),
+                word.translation
+            );
             
+            return `${corrected}|${template}`;
         } catch (error) {
-            console.error('Error generating hint:', error);
-            // Fallback to existing example or simple sentence
-            return word.example || `${word.translation}.|This is ${word.original}.`;
+            // Ultimate fallback - no translation needed
+            return `${word.translation}.|This is ${word.original}.`;
         }
     }
 

@@ -44,6 +44,101 @@ interface Detection {
   exampleEnglish?: string;
 }
 
+// Core object categories with their root keywords for fuzzy matching
+const objectCategories: { [key: string]: string[] } = {
+  'table': ['table', 'desk', 'tableware', 'tabletop', 'surface'],
+  'chair': ['chair', 'seat', 'stool', 'bench'],
+  'sofa': ['sofa', 'couch', 'sectional', 'loveseat', 'settee'],
+  'tv': ['tv', 'television', 'monitor', 'display', 'screen'],
+  'phone': ['phone', 'mobile', 'smartphone', 'cell', 'telephone'],
+  'laptop': ['laptop', 'computer', 'notebook', 'macbook', 'pc'],
+  'car': ['car', 'vehicle', 'automobile', 'auto'],
+  'bottle': ['bottle', 'flask', 'container'],
+  'cup': ['cup', 'mug', 'glass', 'tumbler'],
+  'book': ['book', 'notebook', 'textbook', 'novel', 'magazine', 'journal'],
+  'light': ['light', 'lamp', 'fixture', 'lighting', 'illumination'],
+  'bag': ['bag', 'handbag', 'purse', 'backpack', 'tote', 'satchel'],
+  'clock': ['clock', 'watch', 'timepiece', 'timer'],
+  'plant': ['plant', 'flower', 'pot', 'vegetation', 'greenery'],
+  'door': ['door', 'entrance', 'doorway', 'portal'],
+  'window': ['window', 'glass', 'pane'],
+  'bed': ['bed', 'mattress', 'bedding', 'pillow'],
+  'kitchen': ['kitchen', 'stove', 'oven', 'refrigerator', 'fridge', 'sink'],
+  'bathroom': ['bathroom', 'toilet', 'sink', 'shower', 'bath'],
+  'food': ['food', 'meal', 'dish', 'cuisine', 'snack'],
+  'drink': ['drink', 'beverage', 'liquid', 'juice', 'water'],
+  'clothing': ['clothing', 'shirt', 'pants', 'dress', 'jacket', 'apparel'],
+  'tool': ['tool', 'equipment', 'instrument', 'device'],
+  'animal': ['animal', 'pet', 'dog', 'cat', 'bird'],
+  'person': ['person', 'people', 'human', 'man', 'woman', 'child'],
+};
+
+// Helper function to find the best matching category for a label using fuzzy matching
+const getPreferredLabel = (label: string): string => {
+  const lowerLabel = label.toLowerCase().trim();
+  
+  // Direct match - if the label exactly matches a category, use it
+  if (objectCategories[lowerLabel]) {
+    return lowerLabel;
+  }
+  
+  // Find the best matching category based on keyword similarity
+  let bestMatch = label; // Default to original label
+  let bestScore = 0;
+  
+  for (const [category, keywords] of Object.entries(objectCategories)) {
+    for (const keyword of keywords) {
+      let score = 0;
+      
+      // Exact keyword match
+      if (lowerLabel === keyword) {
+        score = 100;
+      }
+      // Label contains keyword
+      else if (lowerLabel.includes(keyword)) {
+        score = 80;
+      }
+      // Keyword contains label (e.g., "table" contains "tab")
+      else if (keyword.includes(lowerLabel) && lowerLabel.length > 2) {
+        score = 60;
+      }
+      // Fuzzy similarity for compound words
+      else if (lowerLabel.includes(keyword.substring(0, Math.min(keyword.length, 4))) || 
+               keyword.includes(lowerLabel.substring(0, Math.min(lowerLabel.length, 4)))) {
+        score = 40;
+      }
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = category;
+      }
+    }
+  }
+  
+  // Only use the matched category if we have a strong enough match
+  return bestScore >= 60 ? bestMatch : label;
+};
+
+// Enhanced deduplication function that handles semantic similarity
+const deduplicateDetections = (detections: Detection[]): Detection[] => {
+  const labelMap = new Map<string, Detection>();
+  
+  detections.forEach(detection => {
+    const preferredLabel = getPreferredLabel(detection.label);
+    const existingDetection = labelMap.get(preferredLabel);
+    
+    if (!existingDetection || detection.confidence > existingDetection.confidence) {
+      // Use the preferred label but keep all other detection properties
+      labelMap.set(preferredLabel, {
+        ...detection,
+        label: preferredLabel
+      });
+    }
+  });
+  
+  return Array.from(labelMap.values());
+};
+
 export default function DetectionScreen() {
   // Camera states
   const [facing, setFacing] = useState<'back' | 'front'>('back');
@@ -205,9 +300,12 @@ export default function DetectionScreen() {
       // Detect objects
       const results = await ObjectDetectionService.detectObjects(imageUri, 0.5);
       if (results && results.length > 0) {
+        // Deduplicate detections - keep only highest confidence for each unique label
+        const deduplicatedResults = deduplicateDetections(results);
+        
         // Translate detected objects
         const translatedResults = await Promise.all(
-          results.slice(0, 10).map(async (detection: Detection) => {
+          deduplicatedResults.slice(0, 10).map(async (detection: Detection) => {
             const translation = await TranslationService.translateText(
               detection.label, 
               targetLanguage
@@ -229,16 +327,17 @@ export default function DetectionScreen() {
         setDetections(translatedResults);
         
         // Auto-select high confidence detections
-        const highConfidenceIndices = new Set(
+        const highConfidenceIndices = new Set<number>(
           translatedResults
-            .map((detection, index) => ({ detection, index }))
-            .filter(({ detection }) => detection.confidence > 0.7)
-            .map(({ index }) => index)
+            .map((detection: Detection, index: number) => ({ detection, index }))
+            .filter(({ detection }: { detection: Detection }) => detection.confidence > 0.7)
+            .map(({ index }: { index: number }) => index)
         );
         setSelectedWords(highConfidenceIndices.size > 0 ? highConfidenceIndices : new Set([0]));
         
       } else {
-        Alert.alert('No Objects Found', 'No objects were detected in this image.');
+        // Set empty detections to trigger the no results UI
+        setDetections([]);
       }
       
     } catch (error) {
@@ -463,6 +562,11 @@ export default function DetectionScreen() {
           onLanguagePress={() => setShowLanguageModal(true)}
           targetLanguage={targetLanguage}
           languageName={getCurrentLanguageName()}
+          onRetakePhoto={() => {
+            setPhoto(null);
+            setDetections([]);
+            setSelectedWords(new Set());
+          }}
         >
           <View style={{ flex: 1 }}>
             {/* Detection Results */}
@@ -515,7 +619,7 @@ export default function DetectionScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-            )}
+          )}
           </View>
         </PhotoResult>
         {/* MODAL */}
@@ -599,6 +703,115 @@ export default function DetectionScreen() {
                   </View>
                 )}
               </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Manual Input Modal */}
+        <Modal
+          visible={showManualInput}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => {
+            setShowManualInput(false);
+            setManualWord('');
+          }}
+        >
+          <Pressable 
+            style={styles.modalOverlay}
+            onPress={() => {
+              setShowManualInput(false);
+              setManualWord('');
+            }}
+          >
+            <Pressable 
+              style={styles.modalContent}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text style={styles.modalTitle}>Add Word Manually</Text>
+              <TextInput
+                style={styles.manualInput}
+                placeholder="Enter a word to translate"
+                value={manualWord}
+                onChangeText={setManualWord}
+                autoFocus
+              />
+              <View style={styles.manualButtons}>
+                <TouchableOpacity 
+                  style={styles.manualCancelButton}
+                  onPress={() => {
+                    setShowManualInput(false);
+                    setManualWord('');
+                  }}
+                >
+                  <Text style={styles.manualCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.manualAddButton}
+                  onPress={async () => {
+                    if (manualWord.trim()) {
+                      try {
+                        // Get current user
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (!user) {
+                          Alert.alert('Error', 'Please log in to save vocabulary');
+                          return;
+                        }
+
+                        // Translate manual word
+                        const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
+                        const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
+                        
+                        // Test pronunciation
+                        await handleSpeech(translation, targetLanguage);
+                        
+                        // Save to vocabulary
+                        const result: SaveWordResult = await VocabularyService.saveWord(
+                          manualWord.trim(),
+                          translation,
+                          example.translated || '',
+                          example.english || '',
+                          targetLanguage,
+                          user.id
+                        );
+                        
+                        setShowManualInput(false);
+                        setManualWord('');
+                        
+                        // Get language name for display
+                        const languageName = getCurrentLanguageName();
+                        
+                        if (result === 'success') {
+                          Alert.alert(
+                            'Word Added!', 
+                            `✅ "${manualWord.trim()}" saved in ${languageName}\nTranslation: "${translation}"`,
+                            [{
+                              text: 'OK',
+                              onPress: async () => {
+                                // Refresh user stats
+                                const stats = await SessionService.getUserStats(user.id);
+                                setUserStats(stats);
+                              }
+                            }]
+                          );
+                        } else if (result === 'exists') {
+                          Alert.alert(
+                            'Already Saved', 
+                            `ℹ️ "${manualWord.trim()}" is already in your ${languageName} vocabulary!`
+                          );
+                        } else {
+                          Alert.alert('Error', 'Failed to save word. Please try again.');
+                        }
+                      } catch (error) {
+                        console.error('Manual word error:', error);
+                        Alert.alert('Error', 'Failed to add word. Please try again.');
+                      }
+                    }
+                  }}
+                >
+                  <Text style={styles.manualAddText}>Add Word</Text>
+                </TouchableOpacity>
+              </View>
             </Pressable>
           </Pressable>
         </Modal>
@@ -994,9 +1207,32 @@ const styles = StyleSheet.create({
     padding: 40,
     alignItems: 'center',
   },
+  noResultsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 10,
+  },
+  noResultsSubtitle: {
+    fontSize: 16,
+    color: '#95a5a6',
+    marginBottom: 20,
+  },
   noResultsText: {
     fontSize: 16,
     color: '#95a5a6',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 25,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   // Manual input styles
   manualInput: {
@@ -1081,5 +1317,23 @@ const styles = StyleSheet.create({
       color: 'white',
       fontSize: 16,
       fontWeight: '600',
+  },
+  tipsContainer: {
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  tipItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ecf0f1',
+  },
+  tipText: {
+    fontSize: 16,
+    color: '#2c3e50',
+    marginLeft: 10,
   },
 });

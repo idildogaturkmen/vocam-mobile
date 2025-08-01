@@ -202,35 +202,33 @@ class RecordingService {
             // Check if the recording file exists and has content
             try {
                 const fileInfo = await FileSystem.getInfoAsync(recordingUri);
-                if (!fileInfo.exists || fileInfo.size === 0) {
+                if (!fileInfo.exists || (fileInfo.size && fileInfo.size < 1000)) {
                     return {
                         success: false,
-                        message: 'Microphone test failed - no audio was recorded.'
+                        message: 'Recording appears to be empty. Please check your microphone settings.'
                     };
                 }
 
-                // Clean up test recording
+                // Clean up the test recording
                 await FileSystem.deleteAsync(recordingUri, { idempotent: true });
 
                 return {
                     success: true,
-                    message: `Microphone is working!`,
-                    audioLevel: fileInfo.size
+                    message: 'Microphone test successful! Your microphone is working properly.',
+                    audioLevel: fileInfo.size ? Math.min(100, Math.max(0, (fileInfo.size / 10000) * 100)) : 50
                 };
             } catch (fileError) {
+                console.error('File check error:', fileError);
                 return {
                     success: false,
-                    message: 'Microphone test completed but could not verify recording quality.'
+                    message: 'Unable to verify recording quality. Please try again.'
                 };
             }
-
         } catch (error) {
-            console.error('❌ Microphone test failed:', error);
-            // Ensure we're not stuck in recording state
-            this._isRecording = false;
+            console.error('Microphone test error:', error);
             return {
                 success: false,
-                message: `Microphone test failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                message: 'Microphone test failed. Please check your device settings and try again.'
             };
         }
     }
@@ -241,12 +239,16 @@ class RecordingService {
         language: string
     ): Promise<RecordingEvaluation> {
         try {
-            // Read the audio file and convert to base64
+            if (!recordingUri) {
+                throw new Error('No recording URI provided');
+            }
+
+            // Read the audio file
             const audioBytes = await FileSystem.readAsStringAsync(recordingUri, {
                 encoding: FileSystem.EncodingType.Base64,
             });
-            
-            // Map language codes to Google Cloud Speech language codes
+
+            // Language mapping for Google Speech API
             const languageMap: Record<string, string> = {
                 'es': 'es-ES',
                 'fr': 'fr-FR',
@@ -360,34 +362,20 @@ class RecordingService {
         console.log('Normalized transcription:', normalizedTranscription);
         console.log('Normalized expected:', normalizedExpected);
         
-        // Check for exact match first
-        if (normalizedTranscription === normalizedExpected) {
-            // Perfect match - vary confidence based on recognition confidence
-            const baseConfidence = 85; // Start at 85% minimum for exact match
-            const variationRange = 15; // Can go up to 100%
-            const finalConfidence = baseConfidence + (recognitionConfidence * variationRange);
-            
-            return {
-                isCorrect: true,
-                confidence: Math.min(100, Math.round(finalConfidence)),
-                feedback: finalConfidence >= 95 ? 'Perfect pronunciation! Native-like accuracy!' : 'Excellent pronunciation! Very clear and accurate.',
-                transcription
-            };
-        }
+        // Advanced pronunciation evaluation with multiple metrics
+        const metrics = this.calculateAdvancedMetrics(
+            normalizedTranscription,
+            normalizedExpected,
+            transcription,
+            expectedText,
+            language,
+            recognitionConfidence
+        );
         
-        // Calculate similarity score
-        const similarity = this.calculateSimilarity(normalizedTranscription, normalizedExpected);
-        const levenshteinScore = this.levenshteinSimilarity(normalizedTranscription, normalizedExpected);
-        const wordMatchScore = this.wordMatchScore(normalizedTranscription, normalizedExpected);
+        console.log('Advanced metrics:', metrics);
         
-        console.log('Similarity scores:', { similarity, levenshteinScore, wordMatchScore });
-        
-        // Combine scores with weights
-        const combinedScore = (
-            similarity * 0.4 + 
-            levenshteinScore * 0.3 + 
-            wordMatchScore * 0.3
-        ) * recognitionConfidence;
+        // Calculate final score using sophisticated weighting
+        const combinedScore = this.calculateWeightedScore(metrics, language);
         
         // Determine if pronunciation is correct based on threshold
         const threshold = this.getThresholdForLanguage(language);
@@ -519,22 +507,351 @@ class RecordingService {
         return matchedWords / Math.max(words1.length, words2.length);
     }
 
+    private calculateAdvancedMetrics(
+        normalizedTranscription: string,
+        normalizedExpected: string,
+        originalTranscription: string,
+        originalExpected: string,
+        language: string,
+        recognitionConfidence: number
+    ) {
+        // Fast exact match check - if perfect, skip complex calculations
+        const exactMatch = normalizedTranscription === normalizedExpected ? 1.0 : 0.0;
+        if (exactMatch === 1.0) {
+            return {
+                exactMatch: 1.0,
+                similarity: 1.0,
+                levenshteinScore: 1.0,
+                wordMatchScore: 1.0,
+                phoneticSimilarity: 1.0,
+                syllableAccuracy: 1.0,
+                lengthSimilarity: 1.0,
+                structuralSimilarity: 1.0,
+                confidenceWeight: this.calculateConfidenceWeight(recognitionConfidence),
+                languageBonus: 0.1, // Perfect match bonus
+                recognitionConfidence
+            };
+        }
+        
+        // Core metrics (fast calculations)
+        const similarity = this.calculateSimilarity(normalizedTranscription, normalizedExpected);
+        const levenshteinScore = this.levenshteinSimilarity(normalizedTranscription, normalizedExpected);
+        const wordMatchScore = this.wordMatchScore(normalizedTranscription, normalizedExpected);
+        
+        // Quick length check
+        const lengthSimilarity = this.calculateLengthSimilarity(normalizedTranscription, normalizedExpected);
+        
+        // Simplified phonetic and syllable analysis for speed
+        const phoneticSimilarity = this.fastPhoneticSimilarity(normalizedTranscription, normalizedExpected);
+        const syllableAccuracy = this.fastSyllableAccuracy(normalizedTranscription, normalizedExpected);
+        const structuralSimilarity = similarity; // Use similarity as proxy for structure
+        
+        // Fast confidence weighting
+        const confidenceWeight = this.calculateConfidenceWeight(recognitionConfidence);
+        
+        // Quick language bonus check
+        const languageBonus = this.fastLanguageBonus(normalizedTranscription, normalizedExpected, language);
+        
+        return {
+            exactMatch,
+            similarity,
+            levenshteinScore,
+            wordMatchScore,
+            phoneticSimilarity,
+            syllableAccuracy,
+            lengthSimilarity,
+            structuralSimilarity,
+            confidenceWeight,
+            languageBonus,
+            recognitionConfidence
+        };
+    }
+
+    private calculateWeightedScore(metrics: any, language: string): number {
+        // Language-specific weight adjustments
+        const weights = this.getLanguageWeights(language);
+        
+        // Calculate base score with sophisticated weighting
+        let baseScore = (
+            metrics.exactMatch * weights.exactMatch +
+            metrics.similarity * weights.similarity +
+            metrics.levenshteinScore * weights.levenshtein +
+            metrics.wordMatchScore * weights.wordMatch +
+            metrics.phoneticSimilarity * weights.phonetic +
+            metrics.syllableAccuracy * weights.syllable +
+            metrics.lengthSimilarity * weights.length +
+            metrics.structuralSimilarity * weights.structural
+        );
+        
+        // Apply confidence weighting
+        baseScore *= metrics.confidenceWeight;
+        
+        // Apply language-specific bonus
+        baseScore += metrics.languageBonus;
+        
+        // Ensure score is between 0 and 1
+        return Math.max(0, Math.min(1, baseScore));
+    }
+
+    private calculatePhoneticSimilarity(text1: string, text2: string, language: string): number {
+        // Simplified phonetic analysis - compare sound patterns
+        const phonetic1 = this.getPhoneticRepresentation(text1, language);
+        const phonetic2 = this.getPhoneticRepresentation(text2, language);
+        return this.levenshteinSimilarity(phonetic1, phonetic2);
+    }
+
+    private calculateSyllableAccuracy(text1: string, text2: string, language: string): number {
+        const syllables1 = this.countSyllables(text1, language);
+        const syllables2 = this.countSyllables(text2, language);
+        
+        if (syllables1 === 0 && syllables2 === 0) return 1.0;
+        if (syllables1 === 0 || syllables2 === 0) return 0.0;
+        
+        const difference = Math.abs(syllables1 - syllables2);
+        const maxSyllables = Math.max(syllables1, syllables2);
+        return 1 - (difference / maxSyllables);
+    }
+
+    private calculateLengthSimilarity(text1: string, text2: string): number {
+        const len1 = text1.length;
+        const len2 = text2.length;
+        
+        if (len1 === 0 && len2 === 0) return 1.0;
+        if (len1 === 0 || len2 === 0) return 0.0;
+        
+        const difference = Math.abs(len1 - len2);
+        const maxLength = Math.max(len1, len2);
+        return 1 - (difference / maxLength);
+    }
+
+    private calculateStructuralSimilarity(text1: string, text2: string): number {
+        // Analyze word structure patterns
+        const structure1 = this.getWordStructure(text1);
+        const structure2 = this.getWordStructure(text2);
+        return this.levenshteinSimilarity(structure1, structure2);
+    }
+
+    private calculateConfidenceWeight(recognitionConfidence: number): number {
+        // Non-linear confidence weighting - higher confidence gets exponential boost
+        if (recognitionConfidence >= 0.9) return 1.0;
+        if (recognitionConfidence >= 0.7) return 0.95;
+        if (recognitionConfidence >= 0.5) return 0.85;
+        if (recognitionConfidence >= 0.3) return 0.7;
+        return 0.5; // Very low confidence
+    }
+
+    private calculateLanguageSpecificBonus(text1: string, text2: string, language: string): number {
+        // Language-specific pronunciation bonuses
+        let bonus = 0;
+        
+        // Exact match bonus
+        if (text1 === text2) bonus += 0.1;
+        
+        // Language-specific patterns
+        switch (language) {
+            case 'en':
+                // English: bonus for common contractions and variations
+                if (this.hasCommonEnglishVariations(text1, text2)) bonus += 0.05;
+                break;
+            case 'es':
+                // Spanish: bonus for accent variations
+                if (this.hasSpanishAccentVariations(text1, text2)) bonus += 0.05;
+                break;
+            case 'fr':
+                // French: bonus for liaison and accent variations
+                if (this.hasFrenchLiaisonVariations(text1, text2)) bonus += 0.05;
+                break;
+        }
+        
+        return bonus;
+    }
+
+    private getLanguageWeights(language: string) {
+        // Language-specific weight configurations for different metrics
+        const defaultWeights = {
+            exactMatch: 0.25,
+            similarity: 0.20,
+            levenshtein: 0.15,
+            wordMatch: 0.15,
+            phonetic: 0.10,
+            syllable: 0.08,
+            length: 0.04,
+            structural: 0.03
+        };
+
+        // Language-specific adjustments
+        switch (language) {
+            case 'en':
+                return {
+                    ...defaultWeights,
+                    phonetic: 0.12, // English benefits from phonetic analysis
+                    wordMatch: 0.18
+                };
+            case 'zh-CN':
+            case 'ja':
+                return {
+                    ...defaultWeights,
+                    syllable: 0.15, // Tonal languages benefit from syllable accuracy
+                    phonetic: 0.15
+                };
+            case 'fr':
+            case 'es':
+                return {
+                    ...defaultWeights,
+                    phonetic: 0.14, // Romance languages benefit from phonetic analysis
+                    structural: 0.05
+                };
+            default:
+                return defaultWeights;
+        }
+    }
+
+    private getPhoneticRepresentation(text: string, language: string): string {
+        // Simplified phonetic mapping - in a real implementation, you'd use IPA or Soundex
+        let phonetic = text.toLowerCase();
+        
+        // Basic phonetic transformations
+        phonetic = phonetic
+            .replace(/ph/g, 'f')
+            .replace(/th/g, 't')
+            .replace(/ch/g, 'k')
+            .replace(/sh/g, 's')
+            .replace(/ck/g, 'k')
+            .replace(/[aeiou]+/g, 'V') // Vowels to V
+            .replace(/[bcdfghjklmnpqrstvwxyz]+/g, 'C'); // Consonants to C
+        
+        return phonetic;
+    }
+
+    private countSyllables(text: string, language: string): number {
+        if (!text) return 0;
+        
+        // Basic syllable counting - count vowel groups
+        const vowelGroups = text.toLowerCase().match(/[aeiouáéíóúàèìòùâêîôûäëïöü]+/g);
+        return vowelGroups ? vowelGroups.length : 1;
+    }
+
+    private getWordStructure(text: string): string {
+        // Convert to pattern: C=consonant, V=vowel, S=space
+        return text.toLowerCase()
+            .replace(/[aeiouáéíóúàèìòùâêîôûäëïöü]/g, 'V')
+            .replace(/[bcdfghjklmnpqrstvwxyzñç]/g, 'C')
+            .replace(/\s+/g, 'S');
+    }
+
+    private hasCommonEnglishVariations(text1: string, text2: string): boolean {
+        // Check for common English pronunciation variations
+        const variations = [
+            ['color', 'colour'],
+            ['center', 'centre'],
+            ['ize', 'ise'],
+            ['or', 'our']
+        ];
+        
+        for (const [var1, var2] of variations) {
+            if ((text1.includes(var1) && text2.includes(var2)) ||
+                (text1.includes(var2) && text2.includes(var1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private hasSpanishAccentVariations(text1: string, text2: string): boolean {
+        // Remove accents and compare
+        const removeAccents = (str: string) => str
+            .replace(/[áàâä]/g, 'a')
+            .replace(/[éèêë]/g, 'e')
+            .replace(/[íìîï]/g, 'i')
+            .replace(/[óòôö]/g, 'o')
+            .replace(/[úùûü]/g, 'u');
+        
+        return removeAccents(text1) === removeAccents(text2);
+    }
+
+    private hasFrenchLiaisonVariations(text1: string, text2: string): boolean {
+        // Check for French liaison patterns (simplified)
+        const liaisons = [
+            ['les enfants', 'les zenfants'],
+            ['un ami', 'un nami'],
+            ['ils ont', 'ils zont']
+        ];
+        
+        for (const [standard, liaison] of liaisons) {
+            if ((text1.includes(standard) && text2.includes(liaison)) ||
+                (text1.includes(liaison) && text2.includes(standard))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Fast/optimized versions of pronunciation analysis methods
+    private fastPhoneticSimilarity(text1: string, text2: string): number {
+        // Quick phonetic comparison - just check first/last sounds and length
+        if (text1.length === 0 || text2.length === 0) return 0;
+        
+        const firstMatch = text1[0] === text2[0] ? 0.3 : 0;
+        const lastMatch = text1[text1.length - 1] === text2[text2.length - 1] ? 0.3 : 0;
+        const lengthSimilarity = 1 - Math.abs(text1.length - text2.length) / Math.max(text1.length, text2.length);
+        
+        return (firstMatch + lastMatch + lengthSimilarity * 0.4);
+    }
+
+    private fastSyllableAccuracy(text1: string, text2: string): number {
+        // Quick syllable estimation - count vowel clusters
+        const countVowelClusters = (text: string) => {
+            const matches = text.match(/[aeiouáéíóúàèìòùâêîôûäëïöü]+/gi);
+            return matches ? matches.length : 1;
+        };
+        
+        const syllables1 = countVowelClusters(text1);
+        const syllables2 = countVowelClusters(text2);
+        
+        if (syllables1 === syllables2) return 1.0;
+        const diff = Math.abs(syllables1 - syllables2);
+        const max = Math.max(syllables1, syllables2);
+        return Math.max(0, 1 - (diff / max));
+    }
+
+    private fastLanguageBonus(text1: string, text2: string, language: string): number {
+        // Quick language bonus - just check exact match and basic patterns
+        if (text1 === text2) return 0.1;
+        
+        // Quick accent-insensitive check for romance languages
+        if (['es', 'fr', 'it', 'pt'].includes(language)) {
+            const normalize = (str: string) => str
+                .replace(/[áàâäã]/g, 'a')
+                .replace(/[éèêë]/g, 'e')
+                .replace(/[íìîï]/g, 'i')
+                .replace(/[óòôöõ]/g, 'o')
+                .replace(/[úùûü]/g, 'u')
+                .replace(/[ç]/g, 'c')
+                .replace(/[ñ]/g, 'n');
+            
+            if (normalize(text1) === normalize(text2)) return 0.05;
+        }
+        
+        return 0;
+    }
+
     private getThresholdForLanguage(language: string): number {
         // Different languages have different difficulty levels
+        // Balanced thresholds for good user experience while maintaining quality
         const thresholds: Record<string, number> = {
-            'en': 0.85,
-            'es': 0.80,
-            'fr': 0.75,
-            'de': 0.75,
-            'it': 0.80,
-            'pt': 0.80,
-            'ru': 0.70,
-            'ja': 0.65,
-            'zh-CN': 0.65,
-            'ko': 0.65,
-            'ar': 0.70,
-            'hi': 0.70,
-            'default': 0.75
+            'en': 0.65,
+            'es': 0.60,
+            'fr': 0.55,
+            'de': 0.55,
+            'it': 0.60,
+            'pt': 0.60,
+            'ru': 0.50,
+            'ja': 0.45,
+            'zh-CN': 0.45,
+            'ko': 0.45,
+            'ar': 0.50,
+            'hi': 0.50,
+            'default': 0.55
         };
         
         return thresholds[language] || thresholds.default;
@@ -575,6 +892,55 @@ class RecordingService {
         }
         
         return apiKey;
+    }
+
+    /**
+     * Play back a recorded audio file
+     * @param recordingUri - URI of the recording to play
+     * @returns Promise<{ sound: Audio.Sound | null; success: boolean }> - sound object and success status
+     */
+    async playRecording(recordingUri: string): Promise<{ sound: Audio.Sound | null; success: boolean }> {
+        try {
+            if (!recordingUri) {
+                console.error('❌ No recording URI provided');
+                return { sound: null, success: false };
+            }
+
+            // Configure audio for playback
+            await AudioManager.configureForPlayback();
+            
+            // Set audio mode for playback
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: true,
+                staysActiveInBackground: false,
+                shouldDuckAndroid: false,
+                playThroughEarpieceAndroid: false,
+            });
+
+            // Create and load the sound
+            const { sound } = await Audio.Sound.createAsync(
+                { uri: recordingUri },
+                { shouldPlay: true, volume: 1.0 }
+            );
+            return { sound, success: true };
+        } catch (error) {
+            console.error('❌ Failed to play recording:', error);
+            return { sound: null, success: false };
+        }
+    }
+
+    /**
+     * Stop playback of a sound
+     * @param sound - The sound object to stop
+     */
+    async stopPlayback(sound: Audio.Sound): Promise<void> {
+        try {
+            await sound.stopAsync();
+            await sound.unloadAsync();
+        } catch (error) {
+            console.error('❌ Failed to stop recording playback:', error);
+        }
     }
 
     async cleanup() {

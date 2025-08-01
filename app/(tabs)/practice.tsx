@@ -21,7 +21,7 @@ import PracticeQuestionRenderer from '../../src/components/practice/PracticeQues
 import PracticeStartScreen from '../../src/components/practice/PracticeStartScreen';
 import RecordingService from '../../src/services/RecordingService';
 import AudioManager from '../../src/services/AudioManager';
-import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 const useFocusEffect = require('@react-navigation/native').useFocusEffect;
 
@@ -49,6 +49,9 @@ export default function PracticeScreen() {
         confidence: number;
         feedback: string;
     } | null>(null);
+    const [userRecordingUri, setUserRecordingUri] = useState<string | null>(null);
+    const [isPlayingUserRecording, setIsPlayingUserRecording] = useState(false);
+    const [currentPlaybackSound, setCurrentPlaybackSound] = useState<Audio.Sound | null>(null);
     
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -312,13 +315,7 @@ export default function PracticeScreen() {
         try {
             const isCorrect = await PracticeService.submitAnswer(answer);
             
-            // Play haptic feedback with different patterns
-            if (isCorrect && !skip) {
-                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } else {
-                // Different pattern for wrong answers or skip
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            }
+            // Visual feedback animation
 
             // Animate feedback
             Animated.sequence([
@@ -380,19 +377,16 @@ export default function PracticeScreen() {
                 
                 setRecordingResult(evaluation);
                 
+                // Store the recording URI for replay functionality
+                setUserRecordingUri(uri);
+                
                 // Submit the answer based on evaluation
                 await PracticeService.submitAnswer(
                     evaluation.isCorrect ? currentQuestion.correctAnswer : 'incorrect'
                 );
                 
-                // Haptic feedback
-                if (evaluation.isCorrect) {
-                    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                } else {
-                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                }
-                
                 setShowAnswer(true);
+                setSkipped(false); // Ensure Next Question button shows
                 setIsProcessingAnswer(false);
             } else {
                 throw new Error(forceStop ? 'Recording stopped due to timeout' : 'Failed to stop recording');
@@ -450,6 +444,44 @@ export default function PracticeScreen() {
         }
     };
 
+    const handlePlayUserRecording = async () => {
+        if (!userRecordingUri) return;
+
+        try {
+            // Stop any current playback
+            if (currentPlaybackSound) {
+                await RecordingService.stopPlayback(currentPlaybackSound);
+                setCurrentPlaybackSound(null);
+                setIsPlayingUserRecording(false);
+                return;
+            }
+
+            // Start playback
+            setIsPlayingUserRecording(true);
+            const { sound, success } = await RecordingService.playRecording(userRecordingUri);
+            
+            if (success && sound) {
+                setCurrentPlaybackSound(sound);
+                
+                // Set up playback completion listener
+                sound.setOnPlaybackStatusUpdate((status) => {
+                    if (status.isLoaded && status.didJustFinish) {
+                        setIsPlayingUserRecording(false);
+                        setCurrentPlaybackSound(null);
+                        RecordingService.stopPlayback(sound);
+                    }
+                });
+            } else {
+                setIsPlayingUserRecording(false);
+                console.error('Failed to play user recording');
+            }
+        } catch (error) {
+            console.error('Error playing user recording:', error);
+            setIsPlayingUserRecording(false);
+            setCurrentPlaybackSound(null);
+        }
+    };
+
     const nextQuestion = async () => {
         if (!session) return;
 
@@ -467,6 +499,14 @@ export default function PracticeScreen() {
             setRecordingResult(null);
             setIsRecording(false);
             setSkipped(false);
+            
+            // Reset recording replay states
+            setUserRecordingUri(null);
+            setIsPlayingUserRecording(false);
+            if (currentPlaybackSound) {
+                await RecordingService.stopPlayback(currentPlaybackSound);
+                setCurrentPlaybackSound(null);
+            }
             
             // Animate transition
             Animated.sequence([
@@ -691,9 +731,12 @@ export default function PracticeScreen() {
                             audioPlaying={audioPlaying}
                             isRecording={isRecording}
                             recordingResult={recordingResult}
+                            userRecordingUri={userRecordingUri}
+                            isPlayingUserRecording={isPlayingUserRecording}
                             onAnswer={handleAnswer}
                             onTypeAnswer={setTypedAnswer}
                             onPlayAudio={handleSpeech}
+                            onPlayUserRecording={handlePlayUserRecording}
                         />
                     ) : (
                         <View style={styles.errorContainer}>
@@ -733,14 +776,12 @@ export default function PracticeScreen() {
                             if (currentQuestion.type === 'recording') {
                             // Instantly skip to next question
                             await PracticeService.submitAnswer('__SKIPPED__');
-                            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                             nextQuestion();
                             } else {
                             setSkipped(true);
                             // For other question types, show processing briefly
                             setIsProcessingAnswer(true);
                             await PracticeService.submitAnswer('__SKIPPED__');
-                            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                             setShowAnswer(true);
                             setIsProcessingAnswer(false);
                             // Auto-advance after 1 seconds
@@ -823,13 +864,18 @@ const styles = StyleSheet.create({
         backgroundColor: '#f0f8ff',
     },
     progressContainer: {
+        position: 'absolute',
+        top: 87, // Position below the header
+        left: 0,
+        right: 0,
         height: 10,
         backgroundColor: '#ffffffff',
+        zIndex: 1000, // High z-index to stay on top
+        elevation: 10, // For Android shadow/elevation
     },
     progressBar: {
         height: '100%',
         backgroundColor: '#3498db',
-        marginTop: 94, // Adjust to position below header
     },
     questionHeader: {
         flexDirection: 'row',

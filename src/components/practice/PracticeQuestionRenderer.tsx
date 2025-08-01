@@ -22,9 +22,12 @@ interface PracticeQuestionRendererProps {
     audioPlaying: boolean;
     isRecording?: boolean;
     recordingResult?: { isCorrect: boolean; confidence: number; feedback: string } | null;
+    userRecordingUri?: string | null;
+    isPlayingUserRecording?: boolean;
     onAnswer: (answer: string) => void;
     onTypeAnswer: (text: string) => void;
     onPlayAudio: (text: string, language: string) => void;
+    onPlayUserRecording?: () => void;
 }
 
 export default function PracticeQuestionRenderer({
@@ -35,9 +38,12 @@ export default function PracticeQuestionRenderer({
     audioPlaying,
     isRecording,
     recordingResult,
+    userRecordingUri,
+    isPlayingUserRecording,
     onAnswer,
     onTypeAnswer,
     onPlayAudio,
+    onPlayUserRecording,
 }: PracticeQuestionRendererProps) {
     
     const [hintExpanded, setHintExpanded] = useState(false);
@@ -271,20 +277,47 @@ export default function PracticeQuestionRenderer({
                         </Text>
                     </View>
 
-                    <TouchableOpacity
-                        style={styles.playButton}
-                        onPress={() => {
-                            animateSpeaker();
-                            handlePlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
-                        }}
-                        activeOpacity={0.7}
-                        disabled={audioLoading}
-                    >
-                        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                            <Ionicons name="volume-high" size={25} color="#3498db" />
-                        </Animated.View>
-                        <Text style={styles.playText}>Listen to correct pronunciation</Text>
-                    </TouchableOpacity>
+                    <View style={styles.audioButtonsContainer}>
+                        <TouchableOpacity
+                            style={styles.playButton}
+                            onPress={() => {
+                                animateSpeaker();
+                                handlePlayAudio(currentQuestion.word.translation, currentQuestion.word.language);
+                            }}
+                            activeOpacity={0.7}
+                            disabled={audioLoading}
+                        >
+                            <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                                <Ionicons name="volume-high" size={25} color="#3498db" />
+                            </Animated.View>
+                            <Text style={styles.playText}>Listen to correct pronunciation</Text>
+                        </TouchableOpacity>
+
+                        {userRecordingUri && showAnswer && (
+                            <TouchableOpacity
+                                style={[
+                                    styles.playButton,
+                                    styles.replayButton,
+                                    isPlayingUserRecording && styles.playingButton
+                                ]}
+                                onPress={onPlayUserRecording}
+                                activeOpacity={0.7}
+                                disabled={!onPlayUserRecording}
+                            >
+                                <Ionicons 
+                                    name={isPlayingUserRecording ? "pause" : "play"} 
+                                    size={25} 
+                                    color={isPlayingUserRecording ? "#27ae60" : "#27ae60"} 
+                                />
+                                <Text style={[
+                                    styles.playText,
+                                    styles.replayText
+                                ]}>
+                                    {isPlayingUserRecording ? "Playing your recording..." : "Replay your recording"}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
                     {showAnswer && recordingResult && (
                         <View style={[
@@ -882,5 +915,22 @@ const styles = StyleSheet.create({
     },
     skippedAnswerText: {
         color: '#f39c12',
+    },
+    audioButtonsContainer: {
+        gap: 12,
+        marginVertical: 8,
+    },
+    replayButton: {
+        backgroundColor: '#f8f9fa',
+        borderWidth: 1,
+        borderColor: '#27ae60',
+    },
+    playingButton: {
+        backgroundColor: '#f8f9fa',
+        borderColor: '#27ae60',
+    },
+    replayText: {
+        color: '#27ae60',
+        fontWeight: '500',
     },
 });

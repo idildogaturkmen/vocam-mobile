@@ -57,7 +57,8 @@ export default {
       },
       googleVisionApiKey: process.env.GOOGLE_CLOUD_VISION_API_KEY || "",
       googleCloudApiKey: process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_CLOUD_VISION_API_KEY || "",
-      wordsApiKey: process.env.EXPO_PUBLIC_WORDS_API_KEY || ""
+      wordsApiKey: process.env.EXPO_PUBLIC_WORDS_API_KEY || "",
+      wordnikApiKey: process.env.WORDNIK_API_KEY || ""
     }
   }
 };

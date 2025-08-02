@@ -147,7 +147,7 @@ class ExampleSentenceGenerator {
       // Check rate limiting
       const now = Date.now();
       const isRateLimited = this.rateLimitResetTime > now;
-      
+
       // Run API calls in parallel - PRIORITIZE PAID APIs
       const apiPromises: Promise<ExampleResult[]>[] = [];
       
@@ -162,41 +162,64 @@ class ExampleSentenceGenerator {
             this.getWordsApiExamples(searchTerm)
               .then(results => {
                 return results.map(text => ({
-                  text: this.cleanSentence(text),
+                  text: this.robustCleanSentence(text),
                   source: 'WordsAPI',
                   searchTerm
                 }));
               })
               .catch(error => {
+                console.log(`  ❌ WordsAPI failed for "${searchTerm}":`, error.message);
                 return [];
               })
           );
         }
         
-        // 2. Tatoeba - High quality community sentences
+        // 2. Wordnik - High quality dictionary examples
+        if (this.wordnikApiKey && this.wordnikApiKey !== 'your-wordnik-api-key') {
+          apiPromises.push(
+            this.getWordnikExamples(searchTerm)
+              .then(results => {
+                return results.map(text => ({
+                  text: this.robustCleanSentence(text),
+                  source: 'Wordnik',
+                  searchTerm
+                }));
+              })
+              .catch(error => {
+                console.log(`  ❌ Wordnik failed for "${searchTerm}":`, error.message);
+                return [];
+              })
+          );
+        }
+        
+        // 3. Tatoeba - High quality community sentences
         apiPromises.push(
           this.getTatoebaExamples(searchTerm)
             .then(results => {
               return results.map(text => ({
-                text: this.cleanSentence(text),
+                text: this.robustCleanSentence(text),
                 source: 'Tatoeba',
                 searchTerm
               }));
             })
-            .catch(() => [])
+            .catch(() => {
+              return [];
+            })
         );
         
-        // 3. Free Dictionary
+        // 4. Free Dictionary
         apiPromises.push(
           this.getFreeDictionaryExamples(searchTerm)
             .then(results => {
               return results.map(text => ({
-                text: this.cleanSentence(text),
+                text: this.robustCleanSentence(text),
                 source: 'FreeDictionary',
                 searchTerm
               }));
             })
-            .catch(() => [])
+            .catch(() => {
+              return [];
+            })
         );
       }
       
@@ -259,6 +282,50 @@ class ExampleSentenceGenerator {
     
     const lowerText = text.toLowerCase();
     if (lowerText.includes("example of") || lowerText.includes("examples of")) return false;
+    
+    // Reject meta-commentary, references, and non-natural sentences
+    const metaPatterns = [
+      /^note:/i,
+      /^\(psst:/i,
+      /^psst:/i,
+      /^fyi:/i,
+      /^hint:/i,
+      /^tip:/i,
+      /^remember:/i,
+      /^important:/i,
+      /^warning:/i,
+      /^notice:/i,
+      /keywords?\s*"/i,  // "Google can't reach keywords"
+      /from the cache/i,   // Technical references
+      /\.com\b/i,         // Website references
+      /^\([^)]*\)\.?$/i,  // Sentences that are just parenthetical comments
+      /^\([^)]*-/i,       // References starting with (Name - 
+      /^\([^)]*\s+[A-Z][a-z]+/i, // References starting with (Name
+      /- an eye for/i,    // Specific pattern for "- an eye for"
+      /view it »/i,       // "View It »" pattern
+      /forbes\.?\s*com/i, // Forbes references
+      /boost your business/i, // Contest references
+    ];
+    
+    if (metaPatterns.some(pattern => pattern.test(text))) {
+      return false;
+    }
+    
+    // Reject sentences that start with parentheses (likely references/citations)
+    if (text.trim().startsWith('(')) {
+      return false;
+    }
+    
+    // Reject sentences that look like references or citations
+    const referencePatterns = [
+      /^[A-Z][a-z]+\s+[A-Z][a-z]+\s*-/i, // "John Smith - something"
+      /^[A-Z][a-z]+\s*-/i,               // "Name - something"
+      /\([A-Z][a-z]+\s+[A-Z][a-z]+/i,   // "(John Smith" pattern
+    ];
+    
+    if (referencePatterns.some(pattern => pattern.test(text))) {
+      return false;
+    }
     
     const trimmedText = text.trim();
     if (!trimmedText.endsWith('.') && !trimmedText.endsWith('!') && !trimmedText.endsWith('?')) return false;
@@ -427,11 +494,11 @@ class ExampleSentenceGenerator {
           } else {
             this.rateLimitResetTime = Date.now() + (60 * 60 * 1000);
           }
-          console.warn(`WordsAPI rate limited until ${new Date(this.rateLimitResetTime)}`);
+          console.warn(`  ⏱️ WordsAPI rate limited until ${new Date(this.rateLimitResetTime)}`);
         } else if (response.status === 403) {
-          console.error('WordsAPI authentication failed. Check your RapidAPI subscription and key.');
+          console.error('  ❌ WordsAPI authentication failed. Check your RapidAPI subscription and key.');
         } else if (response.status === 402) {
-          console.error('WordsAPI quota exceeded. Upgrade your RapidAPI plan.');
+          console.error('  💳 WordsAPI quota exceeded. Upgrade your RapidAPI plan.');
         }
         return [];
       }
@@ -445,6 +512,58 @@ class ExampleSentenceGenerator {
       
       return examples;
     } catch (error) {
+      
+      return [];
+    }
+  }
+
+  private async getWordnikExamples(word: string): Promise<string[]> {
+    try {
+      if (!this.wordnikApiKey || this.wordnikApiKey === 'your-wordnik-api-key') {
+        return [];
+      }
+      
+      const cacheKey = `wordnik_${word}`;
+      const cached = await this.getCached<string[]>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+      
+      const url = `https://api.wordnik.com/v4/word.json/${encodeURIComponent(word)}/examples?includeDuplicates=false&useCanonical=false&skip=0&limit=10&api_key=${this.wordnikApiKey}`;
+      
+      const response = await this.fetchWithTimeout(url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      }, 8000);
+      
+      if (!response.ok) {
+        if (response.status === 403) {
+          console.error('  ❌ Wordnik API authentication failed. Check your API key.');
+        } else if (response.status === 429) {
+          console.warn('  ⏱️ Wordnik API rate limited. Please wait before making more requests.');
+        }
+        return [];
+      }
+      
+      const data = await response.json();
+      const examples: string[] = [];
+      
+      if (data.examples && Array.isArray(data.examples)) {
+        for (const example of data.examples) {
+          if (example.text) {
+            examples.push(example.text);
+          }
+        }
+      }
+      
+      if (examples.length > 0) {
+        await this.setCached(cacheKey, examples.slice(0, 10));
+      }
+      
+      return examples;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.log(`  ❌ Wordnik API error:`, errorMessage);
       return [];
     }
   }
@@ -453,7 +572,9 @@ class ExampleSentenceGenerator {
     try {
       const cacheKey = `tatoeba_${word}`;
       const cached = await this.getCached<string[]>(cacheKey);
-      if (cached) return cached;
+      if (cached) {
+        return cached;
+      }
       
       const url = `https://tatoeba.org/en/api_v0/search?from=eng&query=${encodeURIComponent(word)}&limit=20`;
       
@@ -462,7 +583,9 @@ class ExampleSentenceGenerator {
         headers: { 'Accept': 'application/json' }
       });
       
-      if (!response.ok) return [];
+      if (!response.ok) {
+        return [];
+      }
       
       const data = await response.json();
       const examples: string[] = [];
@@ -481,6 +604,8 @@ class ExampleSentenceGenerator {
       
       return examples;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.log(`  ❌ Tatoeba API error:`, errorMessage);
       return [];
     }
   }
@@ -489,13 +614,17 @@ class ExampleSentenceGenerator {
     try {
       const cacheKey = `freedict_${word}`;
       const cached = await this.getCached<string[]>(cacheKey);
-      if (cached) return cached;
+      if (cached) {
+        return cached;
+      }
       
       const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
       
       const response = await this.fetchWithTimeout(url);
       
-      if (!response.ok) return [];
+      if (!response.ok) {
+        return [];
+      }
       
       const data = await response.json();
       const examples: string[] = [];
@@ -518,6 +647,8 @@ class ExampleSentenceGenerator {
       
       return examples;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.log(`  ❌ FreeDictionary API error:`, errorMessage);
       return [];
     }
   }
@@ -533,12 +664,12 @@ class ExampleSentenceGenerator {
           score += 100;
         }
         
-        // Source quality scoring - PRIORITIZE WordsAPI over others
+        // Source quality scoring - PRIORITIZE WordsAPI, then Wordnik
         const sourceScores: Record<string, number> = {
           'WordsAPI': 20,
+          'Wordnik': 18,
           'Tatoeba': 15,
           'FreeDictionary': 12,
-          'Wordnik': 8,
         };
         score += sourceScores[ex.source] || 0;
         
@@ -615,21 +746,185 @@ class ExampleSentenceGenerator {
     return fallbackTemplates[Math.floor(Math.random() * fallbackTemplates.length)];
   }
 
+  /**
+   * Comprehensive sentence cleaning algorithm that handles problematic formatting
+   * from various APIs, especially Wordnik's ellipses and dot patterns
+   */
+  private robustCleanSentence(sentence: string): string {
+    if (!sentence || typeof sentence !== 'string') {
+      return '';
+    }
+
+    let cleaned = sentence.trim();
+    
+    // Step 1: Handle problematic ellipses and dot patterns
+    cleaned = this.cleanEllipsesAndDots(cleaned);
+    
+    // Step 2: Remove unwanted formatting and metadata
+    cleaned = this.removeUnwantedFormatting(cleaned);
+    
+    // Step 3: Fix spacing and punctuation
+    cleaned = this.fixSpacingAndPunctuation(cleaned);
+    
+    // Step 4: Handle capitalization
+    cleaned = this.fixCapitalization(cleaned);
+    
+    // Step 5: Ensure proper sentence ending
+    cleaned = this.ensureProperEnding(cleaned);
+    
+    // Step 6: Final validation and quality check
+    if (!this.isValidCleanedSentence(cleaned)) {
+      return ''; // Return empty string for invalid sentences
+    }
+    
+    return cleaned;
+  }
+
+  /**
+   * Handles the problematic ellipses and dot patterns from Wordnik
+   */
+  private cleanEllipsesAndDots(text: string): string {
+    // Remove excessive dots and ellipses patterns like "… … … …."
+    text = text.replace(/[…\.]{4,}/g, ''); // Remove 4+ consecutive dots/ellipses
+    text = text.replace(/\s*[…\.]+\s*[…\.]+\s*[…\.]+/g, ''); // Remove spaced ellipses patterns
+    text = text.replace(/\s*…\s*…\s*/g, ''); // Remove double ellipses with spaces
+    text = text.replace(/\.{3,}/g, '...'); // Normalize multiple dots to proper ellipsis
+    text = text.replace(/…+/g, '...'); // Convert Unicode ellipses to ASCII
+    
+    // Clean up trailing ellipses at the end of sentences
+    text = text.replace(/\.{3,}\s*$/, '.'); // Replace trailing ellipses with period
+    text = text.replace(/…\s*$/, '.'); // Replace trailing Unicode ellipsis with period
+    
+    return text.trim();
+  }
+
+  /**
+   * Removes unwanted formatting, brackets, and metadata
+   */
+  private removeUnwantedFormatting(text: string): string {
+    // Remove numbered list prefixes
+    text = text.replace(/^\d+[\.\)\-]\s*/g, '');
+    
+    // Remove various bracket types and their contents
+    text = text.replace(/\[.*?\]/g, ''); // Square brackets
+    text = text.replace(/\{.*?\}/g, ''); // Curly brackets
+    text = text.replace(/\<.*?\>/g, ''); // Angle brackets
+    
+    // Remove citation patterns
+    text = text.replace(/\([A-Z][a-z]+\s+[A-Z][a-z]+.*?\)/g, ''); // (Author Name ...)
+    text = text.replace(/\([A-Z][a-z]+\s*-.*?\)/g, ''); // (Name - ...)
+    text = text.replace(/\(\d{4}\)/g, ''); // (Year)
+    text = text.replace(/\(p\.?\s*\d+\)/g, ''); // (p. 123)
+    
+    // Remove quotation marks that wrap entire sentences
+    if (text.startsWith('"') && text.endsWith('"')) {
+      text = text.slice(1, -1);
+    }
+    if (text.startsWith("'") && text.endsWith("'")) {
+      text = text.slice(1, -1);
+    }
+    
+    // Remove asterisks and other formatting markers
+    text = text.replace(/\*+/g, '');
+    text = text.replace(/_+/g, '');
+    text = text.replace(/#+/g, '');
+    
+    return text.trim();
+  }
+
+  /**
+   * Fixes spacing issues and punctuation problems
+   */
+  private fixSpacingAndPunctuation(text: string): string {
+    // Normalize whitespace
+    text = text.replace(/\s+/g, ' ');
+    
+    // Fix spacing around punctuation
+    text = text.replace(/\s+([,.!?;:])/g, '$1'); // Remove space before punctuation
+    text = text.replace(/([.!?])([A-Z])/g, '$1 $2'); // Add space after sentence-ending punctuation
+    text = text.replace(/,([A-Za-z])/g, ', $1'); // Add space after commas
+    text = text.replace(/;([A-Za-z])/g, '; $1'); // Add space after semicolons
+    text = text.replace(/:([A-Za-z])/g, ': $1'); // Add space after colons
+    
+    // Fix double punctuation
+    text = text.replace(/\.{2}/g, '.'); // Double periods to single
+    text = text.replace(/!{2,}/g, '!'); // Multiple exclamations to single
+    text = text.replace(/\?{2,}/g, '?'); // Multiple questions to single
+    text = text.replace(/,{2,}/g, ','); // Multiple commas to single
+    
+    // Remove punctuation at the beginning
+    text = text.replace(/^[,.;:!?]+\s*/, '');
+    
+    return text.trim();
+  }
+
+  /**
+   * Fixes capitalization issues
+   */
+  private fixCapitalization(text: string): string {
+    if (!text) return text;
+    
+    // Capitalize first letter
+    if (/^[a-z]/.test(text)) {
+      text = text[0].toUpperCase() + text.slice(1);
+    }
+    
+    // Fix capitalization after sentence-ending punctuation
+    text = text.replace(/([.!?])\s+([a-z])/g, (match, punct, letter) => {
+      return punct + ' ' + letter.toUpperCase();
+    });
+    
+    return text;
+  }
+
+  /**
+   * Ensures the sentence has proper ending punctuation
+   */
+  private ensureProperEnding(text: string): string {
+    if (!text) return text;
+    
+    // If sentence doesn't end with punctuation, add a period
+    if (!/[.!?]$/.test(text)) {
+      text += '.';
+    }
+    
+    return text;
+  }
+
+  /**
+   * Validates that the cleaned sentence meets quality standards
+   */
+  private isValidCleanedSentence(text: string): boolean {
+    if (!text || text.length < 3) return false;
+    
+    // Check for minimum word count
+    const words = text.split(/\s+/).filter(word => word.length > 0);
+    if (words.length < 2) return false;
+    
+    // Check for excessive punctuation (might indicate cleaning failure)
+    const punctuationCount = (text.match(/[.!?;:,]/g) || []).length;
+    const wordCount = words.length;
+    if (punctuationCount > wordCount * 0.5) return false; // Too much punctuation
+    
+    // Check for remaining problematic patterns
+    const problematicPatterns = [
+      /[…\.]{3,}/, // Still has excessive dots
+      /\s{3,}/, // Excessive whitespace
+      /^[^A-Z]/, // Doesn't start with capital
+      /[\[\]\{\}\<\>]/, // Still has brackets
+      /^[.!?;:,]/, // Starts with punctuation
+    ];
+    
+    if (problematicPatterns.some(pattern => pattern.test(text))) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  // Keep the old method for backward compatibility if needed elsewhere
   private cleanSentence(sentence: string): string {
-    sentence = sentence.trim().replace(/\s+/g, ' ');
-    sentence = sentence.replace(/^\d+[\.\)]\s*/g, '');
-    sentence = sentence.replace(/\[.*?\]/g, '');
-    sentence = sentence.replace(/\s+([,.!?;:])/g, '$1');
-    
-    if (sentence && /^[a-z]/.test(sentence)) {
-      sentence = sentence[0].toUpperCase() + sentence.slice(1);
-    }
-    
-    if (sentence && !/[.!?]$/.test(sentence)) {
-      sentence += '.';
-    }
-    
-    return sentence;
+    return this.robustCleanSentence(sentence);
   }
 
   private async getCached<T>(key: string): Promise<T | null> {

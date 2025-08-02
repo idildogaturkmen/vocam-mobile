@@ -1,6 +1,7 @@
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import AudioManager from './AudioManager';
 
 interface RecordingEvaluation {
@@ -31,14 +32,22 @@ class RecordingService {
                 return false;
             }
 
-            // Configure audio mode for recording - NO interruption modes
-            await Audio.setAudioModeAsync({
+            // Configure audio mode for recording with platform-specific settings
+            const audioModeConfig = {
                 allowsRecordingIOS: true,
                 playsInSilentModeIOS: true,
                 staysActiveInBackground: false,
-                shouldDuckAndroid: true,
+                // Android-specific optimizations
+                shouldDuckAndroid: Platform.OS === 'android' ? false : true, // Prevent audio conflicts on Android
                 playThroughEarpieceAndroid: false,
+            };
+            
+            console.log('🎵 Configuring audio mode for recording:', {
+                platform: Platform.OS,
+                config: audioModeConfig
             });
+            
+            await Audio.setAudioModeAsync(audioModeConfig);
             return true;
         } catch (error) {
             console.error('❌ Recording Service initialization failed:', error);
@@ -63,13 +72,48 @@ class RecordingService {
                 await this.stopRecording();
             }
 
-            // Use AudioManager to configure for recording
+            // Use AudioManager to configure for recording with platform-specific handling
             await AudioManager.configureForRecording();
+            
+            // Additional Android-specific delay to ensure microphone is ready
+            if (Platform.OS === 'android') {
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
 
-            // Create and start recording
-            const { recording } = await Audio.Recording.createAsync(
-                Audio.RecordingOptionsPresets.HIGH_QUALITY
-            );
+            // Create and start recording with platform-optimized settings
+            const recordingOptions = Platform.OS === 'android' ? {
+                // Android-optimized settings
+                android: {
+                    extension: '.m4a',
+                    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+                    audioEncoder: Audio.AndroidAudioEncoder.AAC,
+                    sampleRate: 44100,
+                    numberOfChannels: 1,
+                    bitRate: 128000,
+                },
+                ios: {
+                    extension: '.m4a',
+                    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+                    audioQuality: Audio.IOSAudioQuality.HIGH,
+                    sampleRate: 44100,
+                    numberOfChannels: 1,
+                    bitRate: 128000,
+                    linearPCMBitDepth: 16,
+                    linearPCMIsBigEndian: false,
+                    linearPCMIsFloat: false,
+                },
+                web: {
+                    mimeType: 'audio/webm;codecs=opus',
+                    bitsPerSecond: 128000,
+                },
+            } : Audio.RecordingOptionsPresets.HIGH_QUALITY;
+            
+            console.log('🎤 Creating recording with options:', {
+                platform: Platform.OS,
+                options: recordingOptions
+            });
+            
+            const { recording } = await Audio.Recording.createAsync(recordingOptions);
 
             this.recording = recording;
             this._isRecording = true;
@@ -269,11 +313,14 @@ class RecordingService {
             
             const speechLanguage = languageMap[language] || language;
             
-            // Prepare the request for Google Cloud Speech-to-Text
+            // Get recording info for proper format configuration
+            const recordingInfo = await this.getRecordingInfo(recordingUri);
+            
+            // Prepare the request for Google Cloud Speech-to-Text with dynamic configuration
             const request = {
                 config: {
-                    encoding: 'WEBM_OPUS',
-                    sampleRateHertz: 48000,
+                    encoding: recordingInfo.encoding,
+                    sampleRateHertz: recordingInfo.sampleRate,
                     languageCode: speechLanguage,
                     model: 'default',
                     useEnhanced: false,
@@ -289,9 +336,22 @@ class RecordingService {
                 }
             };
             
+            console.log('🎤 Speech API Request Config:', {
+                encoding: recordingInfo.encoding,
+                sampleRate: recordingInfo.sampleRate,
+                language: speechLanguage,
+                platform: Platform.OS
+            });
+            
+            // Get API key and validate
+            const apiKey = this.getGoogleCloudApiKey();
+            if (!apiKey) {
+                throw new Error('Google Cloud API key not configured. Please check your environment variables.');
+            }
+            
             // Make the API call to Google Cloud Speech-to-Text
             const response = await fetch(
-                `https://speech.googleapis.com/v1/speech:recognize?key=${this.getGoogleCloudApiKey()}`,
+                `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
                 {
                     method: 'POST',
                     headers: {
@@ -302,9 +362,31 @@ class RecordingService {
             );
             
             if (!response.ok) {
-                const error = await response.text();
-                console.error('Speech API error:', error);
-                throw new Error(`Speech API error: ${response.status}`);
+                const errorText = await response.text();
+                let errorDetails;
+                try {
+                    errorDetails = JSON.parse(errorText);
+                } catch {
+                    errorDetails = { message: errorText };
+                }
+                
+                console.error('🚨 Speech API Error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    error: errorDetails,
+                    platform: Platform.OS,
+                    encoding: recordingInfo.encoding,
+                    sampleRate: recordingInfo.sampleRate
+                });
+                
+                // Provide user-friendly error messages
+                if (response.status === 401) {
+                    throw new Error('Authentication failed. Please check your Google Cloud API key configuration.');
+                } else if (response.status === 400) {
+                    throw new Error('Invalid audio format or configuration. This may be a device compatibility issue.');
+                } else {
+                    throw new Error(`Speech recognition service error (${response.status}). Please try again.`);
+                }
             }
             
             const data = await response.json();        
@@ -881,18 +963,7 @@ class RecordingService {
         }
     }
 
-    private getGoogleCloudApiKey(): string {
-        // Get API key from your configuration
-        // This should match how you handle it in TranslationService
-        const apiKey = process.env.GOOGLE_CLOUD_API_KEY || 
-                      Constants.expoConfig?.extra?.googleCloudApiKey;
-        
-        if (!apiKey) {
-            throw new Error('Google Cloud API key not configured');
-        }
-        
-        return apiKey;
-    }
+
 
     /**
      * Play back a recorded audio file
@@ -943,17 +1014,68 @@ class RecordingService {
         }
     }
 
-    async cleanup() {
-        if (this.recording) {
-            try {
-                await this.recording.stopAndUnloadAsync();
-            } catch (error) {
-                console.error('Error cleaning up recording:', error);
-            }
-            this.recording = null;
+    /**
+     * Get Google Cloud API key from app configuration
+     */
+    private getGoogleCloudApiKey(): string {
+        const apiKey = Constants.expoConfig?.extra?.googleCloudApiKey;
+        if (!apiKey) {
+            console.error('❌ Google Cloud API key not found in app configuration');
+            return '';
         }
-        // Ensure we're back in playback mode after cleanup
-        await AudioManager.configureForPlayback();
+        return apiKey;
+    }
+
+    /**
+     * Get recording format information for cross-platform compatibility
+     */
+    private async getRecordingInfo(recordingUri: string): Promise<{
+        encoding: string;
+        sampleRate: number;
+    }> {
+        try {
+            // Get file info to determine format
+            const fileInfo = await FileSystem.getInfoAsync(recordingUri);
+            
+            // Platform-specific format detection
+            if (Platform.OS === 'android') {
+                // Android typically uses AAC or AMR format
+                // Check file extension or use default Android format
+                if (recordingUri.includes('.aac') || recordingUri.includes('.m4a')) {
+                    return {
+                        encoding: 'MP4', // Google Speech API format for AAC
+                        sampleRate: 44100 // Common Android sample rate
+                    };
+                } else {
+                    // Default Android format
+                    return {
+                        encoding: 'WEBM_OPUS', // Fallback, but may need adjustment
+                        sampleRate: 48000
+                    };
+                }
+            } else {
+                // iOS typically uses CAF or M4A format
+                return {
+                    encoding: 'MP4', // Works for iOS M4A/AAC format
+                    sampleRate: 44100 // Common iOS sample rate
+                };
+            }
+        } catch (error) {
+            console.warn('⚠️ Could not determine recording format, using defaults:', error);
+            
+            // Safe defaults based on platform
+            if (Platform.OS === 'android') {
+                return {
+                    encoding: 'WEBM_OPUS',
+                    sampleRate: 48000
+                };
+            } else {
+                return {
+                    encoding: 'MP4',
+                    sampleRate: 44100
+                };
+            }
+        }
     }
 }
 

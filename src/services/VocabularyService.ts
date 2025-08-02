@@ -474,79 +474,93 @@ class VocabularyService {
      */
     async getUserVocabulary(userId: string, languageFilter?: string): Promise<SavedWord[]> {
         try {
-            // Build the query properly
-            let query = supabase
+            // First, get all user words
+            const { data: userWordsData, error: userWordsError } = await supabase
                 .from('user_words')
                 .select(`
                     id,
                     proficiency,
                     learned_at,
+                    word_id
+                `)
+                .eq('user_id', userId)
+                .order('learned_at', { ascending: false });
+
+            if (userWordsError) {
+                console.error('Error fetching user words:', userWordsError);
+                return [];
+            }
+
+            if (!userWordsData || userWordsData.length === 0) {
+                return [];
+            }
+
+            // Get word IDs
+            const wordIds = userWordsData.map(uw => uw.word_id);
+
+            // Get words with their translations
+            let translationsQuery = supabase
+                .from('translations')
+                .select(`
+                    word_id,
+                    language_code,
+                    translated_text,
+                    example,
                     words!inner (
                         word_id,
-                        original,
-                        translations!inner (
-                            language_code,
-                            translated_text,
-                            example
-                        )
+                        original
                     )
                 `)
-                .eq('user_id', userId);
+                .in('word_id', wordIds);
 
-            // Add language filter if specified
+            // Apply language filter if specified
             if (languageFilter) {
-                query = query.eq('words.translations.language_code', languageFilter);
+                translationsQuery = translationsQuery.eq('language_code', languageFilter);
             }
 
-            const { data, error } = await query.order('learned_at', { ascending: false });
+            const { data: translationsData, error: translationsError } = await translationsQuery;
 
-            if (error) {
-                console.error('Error fetching vocabulary:', error);
+            if (translationsError) {
+                console.error('Error fetching translations:', translationsError);
                 return [];
             }
 
-            if (!data || data.length === 0) {
+            if (!translationsData || translationsData.length === 0) {
                 return [];
             }
+
+            // Create a map of user words for quick lookup
+            const userWordsMap = new Map(
+                userWordsData.map(uw => [uw.word_id, uw])
+            );
 
             // Transform the data into our SavedWord format
             const vocabulary: SavedWord[] = [];
 
-            for (const item of data) {
-                const userWord = item as any;
-                const words = userWord.words;
-                
-                if (!words || !words.translations) {
-                    continue;
-                }
+            for (const translation of translationsData) {
+                const userWord = userWordsMap.get(translation.word_id);
+                if (!userWord) continue;
 
-                const translations = Array.isArray(words.translations) 
-                    ? words.translations 
-                    : [words.translations];
+                const word = Array.isArray(translation.words) ? translation.words[0] : translation.words;
+                if (!word) continue;
 
-                for (const translation of translations) {
-                    if (!translation || !translation.language_code || !translation.translated_text) {
-                        continue;
-                    }
+                // Parse example (format: "translated|english")
+                const [example = '', exampleEnglish = ''] = translation.example?.split('|') || [];
 
-                    // Parse example (format: "translated|english")
-                    const [example = '', exampleEnglish = ''] = translation.example?.split('|') || [];
+                // Create unique ID by combining user_word id and language code
+                const uniqueId = `${userWord.id}_${translation.language_code}`;
 
-                    // Create unique ID by combining user_word id and language code
-                    const uniqueId = `${userWord.id}_${translation.language_code}`;
-
-                    vocabulary.push({
-                        id: uniqueId, // Make ID unique for each translation
-                        original: words.original || '',
-                        translation: translation.translated_text || '',
-                        example: example,
-                        exampleEnglish: exampleEnglish,
-                        language: translation.language_code || '',
-                        proficiency: userWord.proficiency || 0,
-                        learnedAt: userWord.learned_at || '',
-                        category: this.categorizeWord(words.original || '')
-                    });
-                }
+                vocabulary.push({
+                    id: uniqueId, // Make ID unique for each translation
+                    original: word.original || '',
+                    translation: translation.translated_text || '',
+                    example: example,
+                    exampleEnglish: exampleEnglish,
+                    language: translation.language_code || '',
+                    proficiency: userWord.proficiency || 0,
+                    learnedAt: userWord.learned_at || '',
+                    category: this.categorizeWord(word.original || '')
+                });
             }
 
             return vocabulary;

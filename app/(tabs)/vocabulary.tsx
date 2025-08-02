@@ -594,14 +594,16 @@ export default function VocabularyScreen() {
     // Show empty state for non-authenticated users
     if (isAuthenticated === false) {
         return (
-            <View style={styles.container}>
+            <View style={[styles.container, { backgroundColor: 'white' }]}> 
                 <View style={styles.header}>
-                    <Text style={styles.title}>My Vocabulary</Text>
+                    <View>
+                        <Text style={styles.title}>My Vocabulary</Text>
+                    </View>
                 </View>
                 
                 <View style={styles.authRequiredContainer}>
                     <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
-                    <Text style={styles.authRequiredTitle}>Login Recommended</Text>
+                    <Text style={styles.authRequiredTitle}>Login Required</Text>
                     <Text style={styles.authRequiredText}>
                         You're browsing without logging in. Your vocabulary won't be saved.
                     </Text>

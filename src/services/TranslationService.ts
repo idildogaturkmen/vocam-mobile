@@ -58,8 +58,7 @@ class TranslationService {
         console.log('Available constants:', Constants.expoConfig?.extra);
         throw new Error('Google Cloud API key not found. Please check your configuration.');
       }
-      
-      console.log('✅ Translation Service initialized with API key');
+
       this.isInitialized = true;
       return true;
     } catch (error) {
@@ -86,7 +85,6 @@ class TranslationService {
 
     for (const key of sources) {
       if (key && key !== '') {
-        console.log('🔑 Found API key from configuration');
         return key;
       }
     }
@@ -126,8 +124,6 @@ class TranslationService {
       await new Promise(resolve => setTimeout(resolve, this.rateLimit - timeSinceLastRequest));
     }
 
-    console.log(`🌐 Google Translating "${text}" from ${sourceLanguage} to ${targetLanguage}`);
-
     const response = await fetch(`${this.baseUrl}?key=${this.apiKey}`, {
       method: 'POST',
       headers: {
@@ -155,15 +151,11 @@ class TranslationService {
     // Cache the result
     this.translationCache.set(cacheKey, decodedTranslation);
     this.lastRequestTime = Date.now();
-    
-    console.log(`✅ Translated: "${text}" → "${decodedTranslation}"`);
     return decodedTranslation;
   }
 
   private async fallbackTranslation(text: string, targetLanguage: string, sourceLanguage: string = 'en'): Promise<string> {
     try {
-      console.log('📱 Using fallback translation (MyMemory API)');
-      
       // Properly encode the text
       const encodedText = encodeURIComponent(text);
       const url = `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=${sourceLanguage}|${targetLanguage}`;
@@ -180,8 +172,6 @@ class TranslationService {
           .replace(/&quot;/g, '"')
           .replace(/&#39;/g, "'")
           .replace(/&amp;/g, '&');
-          
-        console.log(`✅ Fallback translation: "${text}" → "${cleanTranslation}"`);
         return cleanTranslation;
       }
     } catch (error) {
@@ -204,8 +194,6 @@ class TranslationService {
 
   async getExampleSentence(word: string, targetLanguage: string): Promise<ExampleSentence> {
     try {
-      console.log(`📝 Getting example sentence for "${word}" in ${targetLanguage}`);
-      
       // Use the enhanced sentence generator
       const example = await ExampleSentenceGenerator.getExampleSentence(
         word, 
@@ -224,59 +212,6 @@ class TranslationService {
         source: 'error_fallback'
       };
     }
-  }
-
-  private async getTatoebaExample(word: string, targetLanguage: string): Promise<ExampleSentence | null> {
-    try {
-      const response = await fetch(
-        `https://tatoeba.org/en/api_v0/search?from=eng&to=${this.getTatoebaLangCode(targetLanguage)}&query=${encodeURIComponent(word)}&limit=10`
-      );
-      
-      if (response.ok) {
-        const data: TatoebaResponse = await response.json();
-        if (data.results && data.results.length > 0) {
-          const sentence = data.results[Math.floor(Math.random() * Math.min(5, data.results.length))];
-          
-          if (sentence.translations && sentence.translations.length > 0) {
-            return {
-              english: sentence.text,
-              translated: sentence.translations[0].text,
-              source: 'tatoeba'
-            };
-          }
-        }
-      }
-    } catch (error) {
-      console.log('Tatoeba API failed, using fallback');
-    }
-    return null;
-  }
-
-  private getTatoebaLangCode(langCode: string): string {
-    const mapping: Record<string, string> = {
-      'es': 'spa',
-      'fr': 'fra',
-      'de': 'deu',
-      'it': 'ita',
-      'pt': 'por',
-      'ru': 'rus',
-      'ja': 'jpn',
-      'zh-CN': 'cmn'
-    };
-    return mapping[langCode] || 'eng';
-  }
-
-  getSupportedLanguages(): Record<string, string> {
-    return {
-      'Spanish': 'es',
-      'French': 'fr',
-      'German': 'de',
-      'Italian': 'it',
-      'Portuguese': 'pt',
-      'Russian': 'ru',
-      'Japanese': 'ja',
-      'Chinese (Simplified)': 'zh-CN'
-    };
   }
 }
 

@@ -1,4 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
@@ -21,10 +22,12 @@ import { useRouter } from 'expo-router';
 import ObjectDetectionService from '../../src/services/ObjectDetectionService';
 import TranslationService from '../../src/services/TranslationService';
 import SpeechService from '../../src/services/SpeechService';
-import { getDisplayAndVisionImage } from '../../src/services/ImageUtils';
 import VocabularyService from '../../src/services/VocabularyService';
 import type { SaveWordResult } from '../../src/services/VocabularyService';
 import SessionService from '../../src/services/SessionService';
+
+// Import ImageManipulator directly to fix import issue
+import * as ImageManipulator from 'expo-image-manipulator';
 
 // Database
 import { supabase } from '../../database/config';
@@ -44,99 +47,35 @@ interface Detection {
   exampleEnglish?: string;
 }
 
-// Core object categories with their root keywords for fuzzy matching
-const objectCategories: { [key: string]: string[] } = {
-  'table': ['table', 'desk', 'tableware', 'tabletop', 'surface'],
-  'chair': ['chair', 'seat', 'stool', 'bench'],
-  'sofa': ['sofa', 'couch', 'sectional', 'loveseat', 'settee'],
-  'tv': ['tv', 'television', 'monitor', 'display', 'screen'],
-  'phone': ['phone', 'mobile', 'smartphone', 'cell', 'telephone'],
-  'laptop': ['laptop', 'computer', 'notebook', 'macbook', 'pc'],
-  'car': ['car', 'vehicle', 'automobile', 'auto'],
-  'bottle': ['bottle', 'flask', 'container'],
-  'cup': ['cup', 'mug', 'glass', 'tumbler'],
-  'book': ['book', 'notebook', 'textbook', 'novel', 'magazine', 'journal'],
-  'light': ['light', 'lamp', 'fixture', 'lighting', 'illumination'],
-  'bag': ['bag', 'handbag', 'purse', 'backpack', 'tote', 'satchel'],
-  'clock': ['clock', 'watch', 'timepiece', 'timer'],
-  'plant': ['plant', 'flower', 'pot', 'vegetation', 'greenery'],
-  'door': ['door', 'entrance', 'doorway', 'portal'],
-  'window': ['window', 'glass', 'pane'],
-  'bed': ['bed', 'mattress', 'bedding', 'pillow'],
-  'kitchen': ['kitchen', 'stove', 'oven', 'refrigerator', 'fridge', 'sink'],
-  'bathroom': ['bathroom', 'toilet', 'sink', 'shower', 'bath'],
-  'food': ['food', 'meal', 'dish', 'cuisine', 'snack'],
-  'drink': ['drink', 'beverage', 'liquid', 'juice', 'water'],
-  'clothing': ['clothing', 'shirt', 'pants', 'dress', 'jacket', 'apparel'],
-  'tool': ['tool', 'equipment', 'instrument', 'device'],
-  'animal': ['animal', 'pet', 'dog', 'cat', 'bird'],
-  'person': ['person', 'people', 'human', 'man', 'woman', 'child'],
-};
-
-// Helper function to find the best matching category for a label using fuzzy matching
-const getPreferredLabel = (label: string): string => {
-  const lowerLabel = label.toLowerCase().trim();
-  
-  // Direct match - if the label exactly matches a category, use it
-  if (objectCategories[lowerLabel]) {
-    return lowerLabel;
-  }
-  
-  // Find the best matching category based on keyword similarity
-  let bestMatch = label; // Default to original label
-  let bestScore = 0;
-  
-  for (const [category, keywords] of Object.entries(objectCategories)) {
-    for (const keyword of keywords) {
-      let score = 0;
-      
-      // Exact keyword match
-      if (lowerLabel === keyword) {
-        score = 100;
-      }
-      // Label contains keyword
-      else if (lowerLabel.includes(keyword)) {
-        score = 80;
-      }
-      // Keyword contains label (e.g., "table" contains "tab")
-      else if (keyword.includes(lowerLabel) && lowerLabel.length > 2) {
-        score = 60;
-      }
-      // Fuzzy similarity for compound words
-      else if (lowerLabel.includes(keyword.substring(0, Math.min(keyword.length, 4))) || 
-               keyword.includes(lowerLabel.substring(0, Math.min(lowerLabel.length, 4)))) {
-        score = 40;
-      }
-      
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = category;
-      }
+// Fix for ImageUtils import issue - inline the function
+const getDisplayAndVisionImage = async (uri: string) => {
+  const result = await ImageManipulator.manipulateAsync(
+    uri,
+    [], // no resize/crop, just auto-rotate and strip EXIF
+    { 
+      compress: 0.8,
+      format: ImageManipulator.SaveFormat.JPEG, 
+      base64: false 
     }
-  }
-  
-  // Only use the matched category if we have a strong enough match
-  return bestScore >= 60 ? bestMatch : label;
+  );
+  return result.uri;
 };
 
-// Enhanced deduplication function that handles semantic similarity
+// Simple deduplication that only removes exact duplicates
 const deduplicateDetections = (detections: Detection[]): Detection[] => {
-  const labelMap = new Map<string, Detection>();
+  const seen = new Map<string, Detection>();
   
   detections.forEach(detection => {
-    const preferredLabel = getPreferredLabel(detection.label);
-    const existingDetection = labelMap.get(preferredLabel);
+    const key = detection.label.toLowerCase();
+    const existing = seen.get(key);
     
-    if (!existingDetection || detection.confidence > existingDetection.confidence) {
-      // Use the preferred label but keep all other detection properties
-      labelMap.set(preferredLabel, {
-        ...detection,
-        label: preferredLabel
-      });
+    // Only keep the highest confidence detection for exact same labels
+    if (!existing || detection.confidence > existing.confidence) {
+      seen.set(key, detection);
     }
   });
   
-  return Array.from(labelMap.values());
+  return Array.from(seen.values()).sort((a, b) => b.confidence - a.confidence);
 };
 
 export default function DetectionScreen() {
@@ -149,7 +88,7 @@ export default function DetectionScreen() {
 
   // Detection states
   const [photo, setPhoto] = useState<string | null>(null);
-  const [rotatedPhoto, setRotatedPhoto] = useState<string | null>(null); //for normalized image
+  const [rotatedPhoto, setRotatedPhoto] = useState<string | null>(null);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedWords, setSelectedWords] = useState(new Set<number>());
@@ -240,7 +179,7 @@ export default function DetectionScreen() {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) {
               setIsAuthenticated(false);
-              return; // Don't initialize services if not authenticated
+              return;
           }
           
           setIsAuthenticated(true);
@@ -255,13 +194,11 @@ export default function DetectionScreen() {
     try {
       setModelStatus('loading');
       
-      // Initialize all services
       await ObjectDetectionService.initialize();
       await TranslationService.initialize();
       await SpeechService.initialize();
       
       setModelStatus('ready');
-      console.log('🎉 All services ready!');
       
     } catch (error) {
       setModelStatus('error');
@@ -275,19 +212,48 @@ export default function DetectionScreen() {
       try {
         const photoResult = await cameraRef.current.takePictureAsync({ 
           skipProcessing: false,
-          quality: 0.9,
+          quality: 0.8,
           exif: false,
         });
         
-        // Auto-rotate and strip EXIF before using
         const rotatedUri = await getDisplayAndVisionImage(photoResult.uri);
-        setPhoto(rotatedUri); // Use rotated image for display
-        setRotatedPhoto(rotatedUri); // Use for detection
-        await detectObjectsWithAI(rotatedUri); // Use rotated image for detection
+        setPhoto(rotatedUri);
+        setRotatedPhoto(rotatedUri);
+        await detectObjectsWithAI(rotatedUri);
       } catch (error) {
         console.error('Picture error:', error);
         Alert.alert('Error', 'Could not take picture. Please try again.');
       }
+    }
+  };
+
+  const uploadImage = async () => {
+    if (modelStatus !== 'ready') return;
+    
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Permission Required', 'Permission to access camera roll is required!');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const selectedImage = result.assets[0];
+        const processedUri = await getDisplayAndVisionImage(selectedImage.uri);
+        setPhoto(processedUri);
+        setRotatedPhoto(processedUri);
+        await detectObjectsWithAI(processedUri);
+      }
+    } catch (error) {
+      console.error('Image upload error:', error);
+      Alert.alert('Error', 'Could not upload image. Please try again.');
     }
   };
 
@@ -297,10 +263,11 @@ export default function DetectionScreen() {
     try {
       setIsProcessing(true);
       
-      // Detect objects
-      const results = await ObjectDetectionService.detectObjects(imageUri, 0.5);
+      // Higher confidence threshold for better accuracy  
+      const results = await ObjectDetectionService.detectObjects(imageUri, 0.7);
+      
       if (results && results.length > 0) {
-        // Deduplicate detections - keep only highest confidence for each unique label
+        // Simple deduplication - only removes exact duplicates
         const deduplicatedResults = deduplicateDetections(results);
         
         // Translate detected objects
@@ -330,13 +297,12 @@ export default function DetectionScreen() {
         const highConfidenceIndices = new Set<number>(
           translatedResults
             .map((detection: Detection, index: number) => ({ detection, index }))
-            .filter(({ detection }: { detection: Detection }) => detection.confidence > 0.7)
+            .filter(({ detection }: { detection: Detection }) => detection.confidence > 0.8)
             .map(({ index }: { index: number }) => index)
         );
         setSelectedWords(highConfidenceIndices.size > 0 ? highConfidenceIndices : new Set([0]));
         
       } else {
-        // Set empty detections to trigger the no results UI
         setDetections([]);
       }
       
@@ -354,7 +320,6 @@ export default function DetectionScreen() {
     try {
       setIsProcessing(true);
       
-      // Re-translate all current detections with the new language
       const retranslatedResults = await Promise.all(
         detections.map(async (detection) => {
           const translation = await TranslationService.translateText(
@@ -376,7 +341,6 @@ export default function DetectionScreen() {
       );
       
       setDetections(retranslatedResults);
-      console.log(`✅ Re-translated ${retranslatedResults.length} detections to ${newLanguage}`);
       
     } catch (error) {
       console.error('❌ Re-translation error:', error);
@@ -386,17 +350,14 @@ export default function DetectionScreen() {
     }
   };
 
-  // Enhanced speech function that ensures text is valid
   const handleSpeech = async (text: string, language: string) => {
     try {
-      // Validate text before speaking (Fix for TypeScript error)
       if (!text || typeof text !== 'string' || text.trim() === '') {
         console.warn('⚠️ Invalid text for speech:', text);
         Alert.alert('Speech Error', 'No text available to pronounce.');
         return;
       }
 
-      console.log(`🔊 Playing pronunciation: "${text}" in ${language}`);
       await SpeechService.speak(text, language);
       
     } catch (error) {
@@ -414,14 +375,12 @@ export default function DetectionScreen() {
     try {
       const selectedDetections = Array.from(selectedWords).map(index => detections[index]);
       
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         Alert.alert('Error', 'Please log in to save vocabulary');
         return;
       }
 
-      // Prepare words for batch save
       const wordsToSave = selectedDetections.map(detection => ({
         original: detection.label,
         translation: detection.translation || '',
@@ -429,17 +388,14 @@ export default function DetectionScreen() {
         exampleEnglish: detection.exampleEnglish || ''
       }));
 
-      // Use batch save for better performance
       const result = await VocabularyService.saveMultipleWords(
         wordsToSave,
         targetLanguage,
         user.id
       );
 
-      // Get language name for display
       const languageName = getCurrentLanguageName();
 
-      // Show consolidated message
       if (result.savedWords.length > 0 || result.existingWords.length > 0) {
         let message = '';
         
@@ -466,7 +422,6 @@ export default function DetectionScreen() {
             text: 'Continue Learning', 
             onPress: async () => {
               setPhoto(null);
-              // Refresh user stats after saving
               const { data: { user } } = await supabase.auth.getUser();
               if (user) {
                 const stats = await SessionService.getUserStats(user.id);
@@ -515,7 +470,7 @@ export default function DetectionScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.permissionCard}>
-          <Text style={styles.permissionTitle}>📸 Camera Permission Required</Text>
+          <Text style={styles.permissionTitle}><Ionicons name="camera-outline" size={64} color="#074173" /> Camera Permission Required</Text>
           <Text style={styles.permissionText}>
             VocAm needs camera access to detect objects and help you learn languages.
           </Text>
@@ -556,7 +511,7 @@ export default function DetectionScreen() {
     return (
       <View style={styles.container}>
         <PhotoResult
-          photoUri={photo} // Use rotated image for display
+          photoUri={photo}
           detections={detections}
           isProcessing={isProcessing}
           onLanguagePress={() => setShowLanguageModal(true)}
@@ -569,8 +524,7 @@ export default function DetectionScreen() {
           }}
         >
           <View style={{ flex: 1 }}>
-            {/* Detection Results */}
-          {detections.length > 0 && (
+            {detections.length > 0 && (
             <View style={styles.resultsContainer}>
               <View style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
@@ -622,7 +576,8 @@ export default function DetectionScreen() {
           )}
           </View>
         </PhotoResult>
-        {/* MODAL */}
+
+        {/* Language Selection Modal */}
         <Modal
           visible={showLanguageModal}
           transparent={true}
@@ -645,7 +600,6 @@ export default function DetectionScreen() {
             >
               <Text style={styles.modalTitle}>Select Language</Text>
               
-              {/* Language Search Bar */}
               <View style={styles.modalSearchContainer}>
                 <Ionicons name="search" size={20} color="#7f8c8d" />
                 <TextInput
@@ -678,7 +632,6 @@ export default function DetectionScreen() {
                         setShowLanguageModal(false);
                         setLanguageSearchQuery('');
                         
-                        // If we have detections (photo was taken), re-translate them
                         if (photo && detections.length > 0 && code !== previousLanguage) {
                           await retranslateDetections(code);
                         }
@@ -751,21 +704,17 @@ export default function DetectionScreen() {
                   onPress={async () => {
                     if (manualWord.trim()) {
                       try {
-                        // Get current user
                         const { data: { user } } = await supabase.auth.getUser();
                         if (!user) {
                           Alert.alert('Error', 'Please log in to save vocabulary');
                           return;
                         }
 
-                        // Translate manual word
                         const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
                         const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
                         
-                        // Test pronunciation
                         await handleSpeech(translation, targetLanguage);
                         
-                        // Save to vocabulary
                         const result: SaveWordResult = await VocabularyService.saveWord(
                           manualWord.trim(),
                           translation,
@@ -778,7 +727,6 @@ export default function DetectionScreen() {
                         setShowManualInput(false);
                         setManualWord('');
                         
-                        // Get language name for display
                         const languageName = getCurrentLanguageName();
                         
                         if (result === 'success') {
@@ -788,7 +736,6 @@ export default function DetectionScreen() {
                             [{
                               text: 'OK',
                               onPress: async () => {
-                                // Refresh user stats
                                 const stats = await SessionService.getUserStats(user.id);
                                 setUserStats(stats);
                               }
@@ -820,7 +767,7 @@ export default function DetectionScreen() {
   }
 
   
-  // Camera View with improved settings to prevent zoom
+  // Camera View
   return (
     <View style={styles.container}>
       <CameraView 
@@ -829,16 +776,15 @@ export default function DetectionScreen() {
         ref={cameraRef}
         zoom={0}
       />
-      {/* Controls are outside CameraView to avoid warning */}
       <CameraControls
         facing={facing}
         onFlipCamera={() => setFacing(facing === 'back' ? 'front' : 'back')}
         onTakePicture={takePicture}
+        onUploadImage={uploadImage}
         onManualInput={() => setShowManualInput(true)}
         onLanguagePress={() => setShowLanguageModal(true)}
         modelStatus={modelStatus}
         languageName={getCurrentLanguageName()}
-        // userStats={userStats || undefined}
       />
 
       {/* Language Selection Modal */}
@@ -864,7 +810,6 @@ export default function DetectionScreen() {
           >
             <Text style={styles.modalTitle}>Select Language</Text>
             
-            {/* Language Search Bar */}
             <View style={styles.modalSearchContainer}>
               <Ionicons name="search" size={20} color="#7f8c8d" />
               <TextInput
@@ -897,7 +842,6 @@ export default function DetectionScreen() {
                       setShowLanguageModal(false);
                       setLanguageSearchQuery('');
                       
-                      // If we have detections (photo was taken), re-translate them
                       if (photo && detections.length > 0 && code !== previousLanguage) {
                         await retranslateDetections(code);
                       }
@@ -970,21 +914,17 @@ export default function DetectionScreen() {
                 onPress={async () => {
                   if (manualWord.trim()) {
                     try {
-                      // Get current user
                       const { data: { user } } = await supabase.auth.getUser();
                       if (!user) {
                         Alert.alert('Error', 'Please log in to save vocabulary');
                         return;
                       }
 
-                      // Translate manual word
                       const translation = await TranslationService.translateText(manualWord.trim(), targetLanguage);
                       const example = await TranslationService.getExampleSentence(manualWord.trim(), targetLanguage);
                       
-                      // Test pronunciation
                       await handleSpeech(translation, targetLanguage);
                       
-                      // Save to vocabulary
                       const result: SaveWordResult = await VocabularyService.saveWord(
                         manualWord.trim(),
                         translation,
@@ -997,7 +937,6 @@ export default function DetectionScreen() {
                       setShowManualInput(false);
                       setManualWord('');
                       
-                      // Get language name for display
                       const languageName = getCurrentLanguageName();
                       
                       if (result === 'success') {
@@ -1007,7 +946,6 @@ export default function DetectionScreen() {
                           [{
                             text: 'OK',
                             onPress: async () => {
-                              // Refresh user stats
                               const stats = await SessionService.getUserStats(user.id);
                               setUserStats(stats);
                             }
@@ -1234,7 +1172,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  // Manual input styles
   manualInput: {
     borderWidth: 1,
     borderColor: '#ddd',

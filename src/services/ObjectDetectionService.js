@@ -87,8 +87,6 @@ class ObjectDetectionService {
         newWidth = Math.floor((width / height) * maxDimension);
       }
 
-      console.log(`📐 Resizing image from ${width}x${height} to ${newWidth}x${newHeight}`);
-
       // For Expo, we need to use ImageManipulator
       // First, import it at the top of the file
       const { manipulateAsync } = require('expo-image-manipulator');
@@ -114,21 +112,14 @@ class ObjectDetectionService {
     if (this.isInitialized) return true;
     
     try {
-      console.log('🚀 Initializing Google Vision Object Detection...');
-      
       // Load API key from multiple sources
       this.apiKey = await this.getSecureApiKey();
-      
-      console.log('🔐 API Key loaded:', this.apiKey ? 'Yes (hidden)' : 'No');
       
       if (!this.apiKey) {
         console.error('❌ Google Vision API key not found!');
         throw new Error('Google Vision API key is required. Please set GOOGLE_CLOUD_VISION_API_KEY in your environment.');
       }
-      
-      console.log('✅ Google Vision API key loaded successfully');
       this.isInitialized = true;
-      console.log('✅ Google Vision Object Detection Service ready');
       return true;
       
     } catch (error) {
@@ -166,16 +157,12 @@ class ObjectDetectionService {
       if (!this.apiKey) {
         throw new Error('Google Vision API key not configured. Detection cannot proceed.');
       }
-      
-      console.log('🔍 Starting Google Vision object detection...');
       const startTime = Date.now();
       
       // Resize image before converting to base64
-      console.log('🖼️ Resizing and converting image to base64...');
       const base64Image = await this.resizeImage(imageUri, 800); // Reduced from 1024
       
       // Rest of the method remains the same...
-      console.log('⚡ Calling Google Vision API...');
       const inferenceStart = Date.now();
       const visionResponse = await this.callGoogleVisionAPI(base64Image);
       const inferenceTime = Date.now() - inferenceStart;
@@ -354,7 +341,6 @@ class ObjectDetectionService {
 
   dispose() {
     this.isInitialized = false;
-    console.log('🧹 Google Vision Object Detection Service disposed');
   }
 }
 

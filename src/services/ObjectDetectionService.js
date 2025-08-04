@@ -117,7 +117,8 @@ class ObjectDetectionService {
     };
   }
 
-  async resizeImage(imageUri, maxDimension = 1024) {
+  // OPTIMIZED: Enhanced image resizing with better compression
+  async resizeImage(imageUri, maxDimension = 800) { // Reduced from 1024 for faster processing
     try {
       const imageInfo = await new Promise((resolve, reject) => {
         Image.getSize(imageUri, (width, height) => {
@@ -127,10 +128,15 @@ class ObjectDetectionService {
 
       const { width, height } = imageInfo;
       
+      // OPTIMIZATION: More aggressive size limits for faster processing
       if (width <= maxDimension && height <= maxDimension) {
-        return await FileSystem.readAsStringAsync(imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
+        // Still compress even if no resize needed
+        const resizedImage = await manipulateAsync(
+          imageUri,
+          [], // No resize, just compress
+          { compress: 0.6, format: 'jpeg', base64: true } // Better compression
+        );
+        return resizedImage.base64;
       }
 
       let newWidth, newHeight;
@@ -147,15 +153,30 @@ class ObjectDetectionService {
       const resizedImage = await manipulateAsync(
         imageUri,
         [{ resize: { width: newWidth, height: newHeight } }],
-        { compress: 0.8, format: 'jpeg', base64: true }
+        { 
+          compress: 0.6,  // OPTIMIZED: Better compression (was 0.8)
+          format: 'jpeg', 
+          base64: true 
+        }
       );
 
       return resizedImage.base64;
     } catch (error) {
       console.error('Image resize error:', error);
-      return await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      // Fallback with basic compression
+      try {
+        const fallbackImage = await manipulateAsync(
+          imageUri,
+          [],
+          { compress: 0.5, format: 'jpeg', base64: true }
+        );
+        return fallbackImage.base64;
+      } catch (fallbackError) {
+        // Final fallback to original base64
+        return await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
     }
   }
 
@@ -164,7 +185,6 @@ class ObjectDetectionService {
     
     try {
       this.apiKey = await this.getSecureApiKey();
-
       if (!this.apiKey) {
         console.error('❌ Google Vision API key not found!');
         throw new Error('Google Vision API key is required. Please set GOOGLE_CLOUD_VISION_API_KEY in your environment.');
@@ -204,8 +224,14 @@ class ObjectDetectionService {
         throw new Error('Google Vision API key not configured. Detection cannot proceed.');
       }
       
-      const resizedUri = await this.resizeImage(imageUri);
+      console.log('🔍 Starting object detection for:', imageUri);
+      const startTime = Date.now();
+      
+      // OPTIMIZED: Smaller image size for faster processing
+      const resizedUri = await this.resizeImage(imageUri, 800); // Reduced from 1024
       const visionResponse = await this.callGoogleVisionAPI(resizedUri);
+      
+      const processingTime = Date.now() - startTime;
       
       if (!visionResponse || !visionResponse.responses || !visionResponse.responses[0]) {
         console.log('❌ No valid response from Google Vision API');
@@ -215,7 +241,7 @@ class ObjectDetectionService {
       const rawAnnotations = visionResponse.responses[0].localizedObjectAnnotations || [];
       
       const results = this.processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri);
-      
+
       return results;
       
     } catch (error) {
@@ -236,7 +262,7 @@ class ObjectDetectionService {
           features: [
             {
               type: 'OBJECT_LOCALIZATION',
-              maxResults: 20
+              maxResults: 15  // OPTIMIZED: Reduced from 20 for faster response
             }
           ]
         }
@@ -244,7 +270,7 @@ class ObjectDetectionService {
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // Reduced timeout
 
     try {
       const response = await fetch(apiUrl, {
@@ -273,7 +299,7 @@ class ObjectDetectionService {
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        throw new Error('Google Vision API request timed out after 30 seconds');
+        throw new Error('Google Vision API request timed out after 25 seconds');
       }
       throw error;
     }
@@ -281,7 +307,6 @@ class ObjectDetectionService {
 
   processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri) {
     const annotations = visionResponse.responses[0].localizedObjectAnnotations || [];
-    
     return annotations
       .filter(annotation => {
         // STRICTER confidence filtering for commonly confused items
@@ -311,6 +336,7 @@ class ObjectDetectionService {
             
             // ENHANCED glasses detection: small, wide, upper-middle of image
             if (area < 0.15 && aspectRatio > 1.2 && centerY < 0.65) {
+              console.log(`🔄 GLASSES DETECTED: Converting ${rawLabel} to glasses - area: ${(area * 100).toFixed(1)}%, ratio: ${aspectRatio.toFixed(2)}, centerY: ${centerY.toFixed(2)}`);
               rawLabel = 'glasses';
             }
           }
@@ -336,7 +362,7 @@ class ObjectDetectionService {
         // MINIMAL label normalization - preserve most original labels
         const label = this.normalizeGoogleVisionLabel(rawLabel);
         const category = this.getObjectCategory(label);
-        
+
         const vertices = annotation.boundingPoly.normalizedVertices;
         const processedVertices = [];
         for (let i = 0; i < vertices.length; i++) {
@@ -408,6 +434,8 @@ class ObjectDetectionService {
         '✅ Works in Expo managed workflow',
         '✅ No large model downloads',
         '✅ Preserves detailed labels',
+        '🚀 Optimized image compression',
+        '⚡ Faster processing with smaller images',
         '💰 Pay-per-use pricing after free tier',
         this.apiKey ? '✅ API key configured' : '❌ API key missing'
       ]

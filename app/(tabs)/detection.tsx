@@ -26,8 +26,8 @@ import VocabularyService from '../../src/services/VocabularyService';
 import type { SaveWordResult } from '../../src/services/VocabularyService';
 import SessionService from '../../src/services/SessionService';
 
-// Import ImageManipulator directly to fix import issue
-import * as ImageManipulator from 'expo-image-manipulator';
+// 🚀 OPTIMIZED: Import the new optimized image functions
+import { getDisplayAndVisionImage, getOptimalImage } from '../../src/services/ImageUtils';
 
 // Database
 import { supabase } from '../../database/config';
@@ -46,20 +46,6 @@ interface Detection {
   example?: string;
   exampleEnglish?: string;
 }
-
-// Fix for ImageUtils import issue - inline the function
-const getDisplayAndVisionImage = async (uri: string) => {
-  const result = await ImageManipulator.manipulateAsync(
-    uri,
-    [], // no resize/crop, just auto-rotate and strip EXIF
-    { 
-      compress: 0.8,
-      format: ImageManipulator.SaveFormat.JPEG, 
-      base64: false 
-    }
-  );
-  return result.uri;
-};
 
 // Simple deduplication that only removes exact duplicates
 const deduplicateDetections = (detections: Detection[]): Detection[] => {
@@ -216,6 +202,7 @@ export default function DetectionScreen() {
           exif: false,
         });
         
+        // OPTIMIZED: Use optimized image processing
         const rotatedUri = await getDisplayAndVisionImage(photoResult.uri);
         setPhoto(rotatedUri);
         setRotatedPhoto(rotatedUri);
@@ -246,7 +233,10 @@ export default function DetectionScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const selectedImage = result.assets[0];
-        const processedUri = await getDisplayAndVisionImage(selectedImage.uri);
+        
+        //  OPTIMIZED: Use optimal image processing for uploads
+        const processedUri = await getOptimalImage(selectedImage.uri, 'display');
+
         setPhoto(processedUri);
         setRotatedPhoto(processedUri);
         await detectObjectsWithAI(processedUri);
@@ -269,10 +259,10 @@ export default function DetectionScreen() {
       if (results && results.length > 0) {
         // Simple deduplication - only removes exact duplicates
         const deduplicatedResults = deduplicateDetections(results);
-        
+
         // Translate detected objects
         const translatedResults = await Promise.all(
-          deduplicatedResults.slice(0, 10).map(async (detection: Detection) => {
+          deduplicatedResults.slice(0, 10).map(async (detection: Detection, index) => {
             const translation = await TranslationService.translateText(
               detection.label, 
               targetLanguage
@@ -300,6 +290,8 @@ export default function DetectionScreen() {
             .filter(({ detection }: { detection: Detection }) => detection.confidence > 0.8)
             .map(({ index }: { index: number }) => index)
         );
+        
+        const selectedCount = highConfidenceIndices.size > 0 ? highConfidenceIndices.size : 1;
         setSelectedWords(highConfidenceIndices.size > 0 ? highConfidenceIndices : new Set([0]));
         
       } else {
@@ -308,7 +300,7 @@ export default function DetectionScreen() {
       
     } catch (error) {
       console.error('❌ Detection error:', error);
-      Alert.alert('Detection Failed', 'Unable to analyze the image.');
+      Alert.alert('Detection Failed', 'Unable to analyze the image. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -321,7 +313,8 @@ export default function DetectionScreen() {
       setIsProcessing(true);
       
       const retranslatedResults = await Promise.all(
-        detections.map(async (detection) => {
+        detections.map(async (detection, index) => {
+          
           const translation = await TranslationService.translateText(
             detection.label, 
             newLanguage
@@ -472,7 +465,7 @@ export default function DetectionScreen() {
         <View style={styles.permissionCard}>
           <Text style={styles.permissionTitle}><Ionicons name="camera-outline" size={64} color="#074173" /> Camera Permission Required</Text>
           <Text style={styles.permissionText}>
-            VocAm needs camera access to detect objects and help you learn languages.
+            Vocam needs camera access to detect objects and help you learn languages.
           </Text>
           <TouchableOpacity style={styles.grantButton} onPress={requestPermission}>
             <Text style={styles.grantButtonText}>Grant Permission</Text>
@@ -1030,6 +1023,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'black',
     textAlign: 'center',
+  },
+  resultsSubtitle: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    textAlign: 'center',
+    marginTop: -5,
   },
   actionButtons: {
     flexDirection: 'row',

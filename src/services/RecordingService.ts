@@ -42,11 +42,6 @@ class RecordingService {
                 playThroughEarpieceAndroid: false,
             };
             
-            console.log('🎵 Configuring audio mode for recording:', {
-                platform: Platform.OS,
-                config: audioModeConfig
-            });
-            
             await Audio.setAudioModeAsync(audioModeConfig);
             return true;
         } catch (error) {
@@ -82,14 +77,14 @@ class RecordingService {
 
             // Create and start recording with platform-optimized settings
             const recordingOptions = Platform.OS === 'android' ? {
-                // Android-optimized settings
+                // Android-optimized settings - using AMR format for Google Speech API
                 android: {
-                    extension: '.m4a',
-                    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-                    audioEncoder: Audio.AndroidAudioEncoder.AAC,
-                    sampleRate: 44100,
+                    extension: '.amr',
+                    outputFormat: Audio.AndroidOutputFormat.AMR_NB,
+                    audioEncoder: Audio.AndroidAudioEncoder.AMR_NB,
+                    sampleRate: 8000,
                     numberOfChannels: 1,
-                    bitRate: 128000,
+                    bitRate: 12200,
                 },
                 ios: {
                     extension: '.m4a',
@@ -107,11 +102,6 @@ class RecordingService {
                     bitsPerSecond: 128000,
                 },
             } : Audio.RecordingOptionsPresets.HIGH_QUALITY;
-            
-            console.log('🎤 Creating recording with options:', {
-                platform: Platform.OS,
-                options: recordingOptions
-            });
             
             const { recording } = await Audio.Recording.createAsync(recordingOptions);
 
@@ -317,31 +307,28 @@ class RecordingService {
             const recordingInfo = await this.getRecordingInfo(recordingUri);
             
             // Prepare the request for Google Cloud Speech-to-Text with dynamic configuration
+            const config: any = {
+                sampleRateHertz: recordingInfo.sampleRate,
+                languageCode: speechLanguage,
+                model: 'default',
+                useEnhanced: false,
+                enableWordTimeOffsets: false,
+                enableAutomaticPunctuation: false,
+                speechContexts: [{
+                    phrases: [expectedText],
+                    boost: 20
+                }]
+            };
+            
+            // Always include encoding for consistent API requests
+            config.encoding = recordingInfo.encoding;
+            
             const request = {
-                config: {
-                    encoding: recordingInfo.encoding,
-                    sampleRateHertz: recordingInfo.sampleRate,
-                    languageCode: speechLanguage,
-                    model: 'default',
-                    useEnhanced: false,
-                    enableWordTimeOffsets: false,
-                    enableAutomaticPunctuation: false,
-                    speechContexts: [{
-                        phrases: [expectedText],
-                        boost: 20
-                    }]
-                },
+                config,
                 audio: {
                     content: audioBytes
                 }
             };
-            
-            console.log('🎤 Speech API Request Config:', {
-                encoding: recordingInfo.encoding,
-                sampleRate: recordingInfo.sampleRate,
-                language: speechLanguage,
-                platform: Platform.OS
-            });
             
             // Get API key and validate
             const apiKey = this.getGoogleCloudApiKey();
@@ -389,9 +376,11 @@ class RecordingService {
                 }
             }
             
-            const data = await response.json();        
+            const data = await response.json();
+            
             // Process the transcription results
             if (!data.results || data.results.length === 0) {
+                console.warn('⚠️ Google Speech API returned no results. This usually indicates audio format issues.');
                 return {
                     isCorrect: false,
                     confidence: 0,
@@ -405,9 +394,6 @@ class RecordingService {
             const alternative = result.alternatives[0];
             const transcription = alternative.transcript || '';
             const recognitionConfidence = alternative.confidence || 0;
-            
-            console.log('Transcription:', transcription);
-            console.log('Recognition confidence:', recognitionConfidence);
             
             // Evaluate the pronunciation
             const evaluation = this.evaluateTranscription(
@@ -441,9 +427,6 @@ class RecordingService {
         const normalizedTranscription = this.normalizeText(transcription, language);
         const normalizedExpected = this.normalizeText(expectedText, language);
         
-        console.log('Normalized transcription:', normalizedTranscription);
-        console.log('Normalized expected:', normalizedExpected);
-        
         // Advanced pronunciation evaluation with multiple metrics
         const metrics = this.calculateAdvancedMetrics(
             normalizedTranscription,
@@ -453,8 +436,6 @@ class RecordingService {
             language,
             recognitionConfidence
         );
-        
-        console.log('Advanced metrics:', metrics);
         
         // Calculate final score using sophisticated weighting
         const combinedScore = this.calculateWeightedScore(metrics, language);
@@ -1039,24 +1020,23 @@ class RecordingService {
             
             // Platform-specific format detection
             if (Platform.OS === 'android') {
-                // Android typically uses AAC or AMR format
-                // Check file extension or use default Android format
-                if (recordingUri.includes('.aac') || recordingUri.includes('.m4a')) {
+                // Android records in AMR format - natively supported by Google Speech API
+                if (recordingUri.includes('.amr')) {
                     return {
-                        encoding: 'MP4', // Google Speech API format for AAC
-                        sampleRate: 44100 // Common Android sample rate
+                        encoding: 'AMR', // Google Speech API native support for AMR
+                        sampleRate: 8000 // AMR standard sample rate
                     };
                 } else {
-                    // Default Android format
+                    // Fallback for other formats
                     return {
-                        encoding: 'WEBM_OPUS', // Fallback, but may need adjustment
-                        sampleRate: 48000
+                        encoding: 'AMR', // Reliable fallback
+                        sampleRate: 8000
                     };
                 }
             } else {
-                // iOS typically uses CAF or M4A format
+                // iOS records in M4A/AAC format - use FLAC for compatibility
                 return {
-                    encoding: 'MP4', // Works for iOS M4A/AAC format
+                    encoding: 'FLAC', // Google Speech API compatible format
                     sampleRate: 44100 // Common iOS sample rate
                 };
             }
@@ -1066,12 +1046,12 @@ class RecordingService {
             // Safe defaults based on platform
             if (Platform.OS === 'android') {
                 return {
-                    encoding: 'WEBM_OPUS',
-                    sampleRate: 48000
+                    encoding: 'AMR', // Reliable encoding for Android
+                    sampleRate: 8000
                 };
             } else {
                 return {
-                    encoding: 'MP4',
+                    encoding: 'FLAC',
                     sampleRate: 44100
                 };
             }

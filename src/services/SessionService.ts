@@ -1,4 +1,3 @@
-// src/services/SessionService.ts
 import { supabase } from '../../database/config';
 
 interface SessionData {

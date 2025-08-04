@@ -223,8 +223,7 @@ class ObjectDetectionService {
       if (!this.apiKey) {
         throw new Error('Google Vision API key not configured. Detection cannot proceed.');
       }
-      
-      console.log('🔍 Starting object detection for:', imageUri);
+
       const startTime = Date.now();
       
       // OPTIMIZED: Smaller image size for faster processing
@@ -323,41 +322,6 @@ class ObjectDetectionService {
       })
       .map((annotation, idx) => {
         let rawLabel = annotation.name.toLowerCase();
-        
-        // ENHANCED GLASSES DETECTION - CRITICAL FIX
-        if (rawLabel === 'cup' || rawLabel === 'drinking glass' || rawLabel === 'glass') {
-          const bbox = annotation.boundingPoly?.normalizedVertices;
-          if (bbox && bbox.length >= 4) {
-            const width = Math.abs(bbox[1].x - bbox[0].x);
-            const height = Math.abs(bbox[2].y - bbox[0].y);
-            const aspectRatio = width / height;
-            const area = width * height;
-            const centerY = (Math.min(...bbox.map(v => v.y || 0)) + Math.max(...bbox.map(v => v.y || 0))) / 2;
-            
-            // ENHANCED glasses detection: small, wide, upper-middle of image
-            if (area < 0.15 && aspectRatio > 1.2 && centerY < 0.65) {
-              console.log(`🔄 GLASSES DETECTED: Converting ${rawLabel} to glasses - area: ${(area * 100).toFixed(1)}%, ratio: ${aspectRatio.toFixed(2)}, centerY: ${centerY.toFixed(2)}`);
-              rawLabel = 'glasses';
-            }
-          }
-        }
-        
-        // ENHANCED TOP/TABLE DETECTION
-        if (rawLabel.includes('table') || rawLabel.includes('desk')) {
-          const bbox = annotation.boundingPoly?.normalizedVertices;
-          if (bbox && bbox.length >= 4) {
-            const width = Math.abs(bbox[1].x - bbox[0].x);
-            const height = Math.abs(bbox[2].y - bbox[0].y);
-            const aspectRatio = width / height;
-            const area = width * height;
-            const centerY = (Math.min(...bbox.map(v => v.y || 0)) + Math.max(...bbox.map(v => v.y || 0))) / 2;
-            
-            // If it's small, tall, and in body area, might be clothing
-            if (area < 0.25 && aspectRatio < 1.2 && centerY < 0.8 && centerY > 0.15) {
-              rawLabel = 'shirt';
-            }
-          }
-        }
         
         // MINIMAL label normalization - preserve most original labels
         const label = this.normalizeGoogleVisionLabel(rawLabel);

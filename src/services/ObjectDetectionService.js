@@ -6,61 +6,120 @@ import { manipulateAsync } from 'expo-image-manipulator';
 class ObjectDetectionService {
   constructor() {
     this.isInitialized = false;
-        this.apiKey = null;
+    this.apiKey = null;
     
+    // EXPANDED categories to include detailed Google Vision labels
     this.OBJECT_CATEGORIES = {
-            "food": ["apple", "banana", "orange", "pizza", "burger", "cake", "coffee", "wine", "cup", "bowl", "bottle", "sandwich", "bread"],
-      "electronics": ["laptop", "cell phone", "tv", "keyboard", "mouse", "tablet", "camera", "headphones", "speaker"],
-      "furniture": ["chair", "couch", "table", "bed", "desk", "bookshelf"],
-      "clothing": ["shirt", "pants", "shoes", "hat", "jacket", "dress", "tie"],
-      "transportation": ["car", "bus", "bicycle", "motorcycle", "train", "airplane", "boat"],
-      "animals": ["dog", "cat", "bird", "horse", "cow", "sheep", "elephant", "lion"],
-      "household": ["book", "pen", "scissors", "clock", "lamp", "mirror", "vase", "remote"],
-      "sports": ["ball", "tennis racket", "bicycle", "skateboard", "football", "basketball", "baseball"]
+      "food": ["apple", "banana", "orange", "pizza", "burger", "cake", "coffee", "wine", "cup", "bowl", "bottle", "sandwich", "bread", "fruit", "vegetable", "food"],
+      "electronics": ["laptop", "cell phone", "tv", "keyboard", "mouse", "tablet", "camera", "headphones", "speaker", "mobile phone", "smartphone", "telephone", "computer", "laptop computer", "television", "television set", "computer monitor", "computer mouse", "computer keyboard", "remote control"],
+      "furniture": ["chair", "couch", "table", "bed", "desk", "bookshelf", "armchair", "office chair", "dining chair", "sofa", "kitchen table", "dining table", "coffee table", "office desk", "writing desk", "kitchen & dining room table"],
+      "clothing": ["shirt", "pants", "shoes", "hat", "jacket", "dress", "tie", "top", "t-shirt", "polo shirt", "dress shirt", "blouse", "jeans", "trousers"],
+      "transportation": ["car", "bus", "bicycle", "motorcycle", "train", "airplane", "boat", "automobile", "vehicle", "motor vehicle"],
+      "animals": ["dog", "cat", "bird", "horse", "cow", "sheep", "elephant", "lion", "domestic cat", "house cat", "domestic dog"],
+      "household": ["book", "pen", "scissors", "clock", "lamp", "mirror", "vase", "remote", "glasses", "eyeglasses", "sunglasses", "spectacles", "reading glasses", "safety glasses"],
+      "drinkware": ["cup", "mug", "glass", "wine glass", "drinking glass", "water glass", "coffee cup", "tea cup", "coffee mug", "tea mug"],
+      "kitchen": ["plate", "dish", "bowl", "knife", "fork", "spoon"],
+      "plants": ["plant", "houseplant", "potted plant", "flowering plant", "tree"],
+      "bedding": ["pillow", "throw pillow", "bed pillow", "cushion", "mattress"],
+      "bottles": ["bottle", "water bottle", "plastic bottle", "glass bottle", "beer bottle"],
+      "sports": ["ball", "tennis racket", "bicycle", "skateboard", "football", "basketball", "baseball", "sports ball", "tennis ball", "soccer ball"]
     };
 
-        this.GOOGLE_VISION_LABEL_MAPPING = {
-      'mobile phone': 'cell phone',
-      'smartphone': 'cell phone', 
-      'telephone': 'cell phone',
-      'computer': 'laptop',
-      'laptop computer': 'laptop',
-      'television': 'tv',
-      'television set': 'tv',
-      'computer monitor': 'tv',
-      'computer mouse': 'mouse',
-      'computer keyboard': 'keyboard',
-      'remote control': 'remote',
-      'drinking glass': 'cup',
-      'coffee cup': 'cup',
-      'tea cup': 'cup',
-      'wine glass': 'wine glass',
-      'water bottle': 'bottle',
-      'plastic bottle': 'bottle',
-      'glass bottle': 'bottle',
-      'armchair': 'chair',
-      'office chair': 'chair',
-      'sofa': 'couch',
-      'table': 'dining table',
-      'desk': 'dining table',
-      'automobile': 'car',
-      'vehicle': 'car',
-      'ball': 'sports ball',
-      'football': 'sports ball',
-      'basketball': 'sports ball',
-      'tennis ball': 'sports ball',
-      'baseball': 'sports ball',
-      'soccer ball': 'sports ball',
-      'plate': 'bowl',
-      'plant': 'potted plant',
-      'houseplant': 'potted plant'
+    // MINIMAL mapping - only fix critical misidentifications, preserve detailed labels
+    this.GOOGLE_VISION_LABEL_MAPPING = {
+      // Only map the most problematic cases
+      
+      // Phone consolidation - keep it simple
+      'mobile phone': 'mobile phone', // Keep detailed
+      'smartphone': 'smartphone', // Keep detailed  
+      'telephone': 'telephone', // Keep detailed
+      'cell phone': 'cell phone', // Keep detailed
+      
+      // Computer/TV - keep detailed but consistent
+      'computer': 'computer', // Keep detailed
+      'laptop computer': 'laptop computer', // Keep detailed
+      'television': 'television', // Keep detailed
+      'television set': 'television set', // Keep detailed
+      'computer monitor': 'computer monitor', // Keep detailed
+      
+      // Furniture - KEEP DETAILED LABELS!
+      'kitchen & dining room table': 'kitchen & dining room table', // Keep Google's detailed label!
+      'dining table': 'dining table', // Keep detailed
+      'coffee table': 'coffee table', // Keep detailed
+      'office desk': 'office desk', // Keep detailed
+      'writing desk': 'writing desk', // Keep detailed
+      'armchair': 'armchair', // Keep detailed
+      'office chair': 'office chair', // Keep detailed
+      'dining chair': 'dining chair', // Keep detailed
+      
+      // Drinkware - be specific to prevent glasses confusion
+      'drinking glass': 'drinking glass', // Keep detailed
+      'water glass': 'water glass', // Keep detailed
+      'wine glass': 'wine glass', // Keep detailed
+      'coffee cup': 'coffee cup', // Keep detailed
+      'tea cup': 'tea cup', // Keep detailed
+      'coffee mug': 'coffee mug', // Keep detailed
+      'tea mug': 'tea mug', // Keep detailed
+      
+      // Glasses - CRITICAL for preventing cup confusion
+      'glasses': 'glasses',
+      'eyeglasses': 'eyeglasses',
+      'sunglasses': 'sunglasses',
+      'spectacles': 'spectacles',
+      'reading glasses': 'reading glasses',
+      'safety glasses': 'safety glasses',
+      
+      // Clothing - prevent table confusion
+      'shirt': 'shirt',
+      't-shirt': 't-shirt',
+      'polo shirt': 'polo shirt',
+      'dress shirt': 'dress shirt',
+      'blouse': 'blouse',
+      'top': 'top', // Keep as clothing top
+      
+      // Bottles - keep detailed
+      'water bottle': 'water bottle',
+      'plastic bottle': 'plastic bottle',
+      'glass bottle': 'glass bottle',
+      'beer bottle': 'beer bottle',
+      
+      // Bedding - prevent confusion
+      'pillow': 'pillow',
+      'throw pillow': 'throw pillow',
+      'bed pillow': 'bed pillow',
+      'cushion': 'cushion',
+      'mattress': 'mattress',
+      
+      // Plants - keep detailed
+      'plant': 'plant',
+      'houseplant': 'houseplant',
+      'potted plant': 'potted plant',
+      'flowering plant': 'flowering plant',
+      
+      // Animals - keep detailed when possible
+      'domestic cat': 'domestic cat',
+      'house cat': 'house cat',
+      'domestic dog': 'domestic dog',
+      
+      // Sports - keep some detail
+      'tennis ball': 'tennis ball',
+      'basketball': 'basketball', 
+      'football': 'football',
+      'baseball': 'baseball',
+      'soccer ball': 'soccer ball',
+      
+      // People
+      'person': 'person',
+      'human': 'person',
+      'man': 'person',
+      'woman': 'person',
+      'child': 'person'
     };
   }
 
-  // Add this method after the constructor
-  async resizeImage(imageUri, maxDimension = 1024) {
+  // OPTIMIZED: Enhanced image resizing with better compression
+  async resizeImage(imageUri, maxDimension = 800) { // Reduced from 1024 for faster processing
     try {
-      // Get image dimensions
       const imageInfo = await new Promise((resolve, reject) => {
         Image.getSize(imageUri, (width, height) => {
           resolve({ width, height });
@@ -69,15 +128,17 @@ class ObjectDetectionService {
 
       const { width, height } = imageInfo;
       
-      // Check if resize is needed
+      // OPTIMIZATION: More aggressive size limits for faster processing
       if (width <= maxDimension && height <= maxDimension) {
-        // No resize needed, return original base64
-        return await FileSystem.readAsStringAsync(imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
+        // Still compress even if no resize needed
+        const resizedImage = await manipulateAsync(
+          imageUri,
+          [], // No resize, just compress
+          { compress: 0.6, format: 'jpeg', base64: true } // Better compression
+        );
+        return resizedImage.base64;
       }
 
-      // Calculate new dimensions
       let newWidth, newHeight;
       if (width > height) {
         newWidth = maxDimension;
@@ -87,38 +148,48 @@ class ObjectDetectionService {
         newWidth = Math.floor((width / height) * maxDimension);
       }
 
-      // For Expo, we need to use ImageManipulator
-      // First, import it at the top of the file
       const { manipulateAsync } = require('expo-image-manipulator');
       
       const resizedImage = await manipulateAsync(
         imageUri,
         [{ resize: { width: newWidth, height: newHeight } }],
-        { compress: 0.8, format: 'jpeg', base64: true }
+        { 
+          compress: 0.6,  // OPTIMIZED: Better compression (was 0.8)
+          format: 'jpeg', 
+          base64: true 
+        }
       );
 
       return resizedImage.base64;
     } catch (error) {
       console.error('Image resize error:', error);
-      // Fallback to original
-      return await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      // Fallback with basic compression
+      try {
+        const fallbackImage = await manipulateAsync(
+          imageUri,
+          [],
+          { compress: 0.5, format: 'jpeg', base64: true }
+        );
+        return fallbackImage.base64;
+      } catch (fallbackError) {
+        // Final fallback to original base64
+        return await FileSystem.readAsStringAsync(imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
     }
   }
 
-  GOOGLE_VISION_API_URL = 'https://vision.googleapis.com/v1/images:annotate';
   async initialize() {
     if (this.isInitialized) return true;
     
     try {
-      // Load API key from multiple sources
       this.apiKey = await this.getSecureApiKey();
-      
       if (!this.apiKey) {
         console.error('❌ Google Vision API key not found!');
         throw new Error('Google Vision API key is required. Please set GOOGLE_CLOUD_VISION_API_KEY in your environment.');
       }
+      
       this.isInitialized = true;
       return true;
       
@@ -129,22 +200,17 @@ class ObjectDetectionService {
   }
 
   async getSecureApiKey() {
-    // Method 1: Try Expo Constants extra field
     if (Constants.expoConfig?.extra?.googleVisionApiKey) {
       return Constants.expoConfig.extra.googleVisionApiKey;
     }
 
-    // Method 2: Try manifest extra field (older Expo versions)
     if (Constants.manifest?.extra?.googleVisionApiKey) {
       return Constants.manifest.extra.googleVisionApiKey;
     }
 
-    // Method 3: Try environment variables (works in development)
     if (process.env.GOOGLE_CLOUD_VISION_API_KEY) {
       return process.env.GOOGLE_CLOUD_VISION_API_KEY;
     }
-
-    console.log('🔍 No API key found in any source');
     return null;
   }
 
@@ -157,33 +223,25 @@ class ObjectDetectionService {
       if (!this.apiKey) {
         throw new Error('Google Vision API key not configured. Detection cannot proceed.');
       }
+
       const startTime = Date.now();
       
-      // Resize image before converting to base64
-      const base64Image = await this.resizeImage(imageUri, 800); // Reduced from 1024
+      // OPTIMIZED: Smaller image size for faster processing
+      const resizedUri = await this.resizeImage(imageUri, 800); // Reduced from 1024
+      const visionResponse = await this.callGoogleVisionAPI(resizedUri);
       
-      // Rest of the method remains the same...
-      const inferenceStart = Date.now();
-      const visionResponse = await this.callGoogleVisionAPI(base64Image);
-      const inferenceTime = Date.now() - inferenceStart;
+      const processingTime = Date.now() - startTime;
       
-      console.log(`🎯 Google Vision API completed in ${inferenceTime}ms`);
+      if (!visionResponse || !visionResponse.responses || !visionResponse.responses[0]) {
+        console.log('❌ No valid response from Google Vision API');
+        return [];
+      }
       
-      // Process results with bounding boxes
-      const detections = this.processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri);
+      const rawAnnotations = visionResponse.responses[0].localizedObjectAnnotations || [];
       
-      const totalTime = Date.now() - startTime;
-      console.log(`✅ Detection complete! Found ${detections.length} objects in ${totalTime}ms`);
-      
-      return detections.map((detection, index) => ({
-        ...detection,
-        id: `det_${Date.now()}_${index}`,
-        timestamp: new Date().toISOString(),
-        processing_time_ms: totalTime,
-        inference_time_ms: inferenceTime,
-        rank: index + 1,
-        source: 'google_vision_api'
-      }));
+      const results = this.processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri);
+
+      return results;
       
     } catch (error) {
       console.error('❌ Google Vision detection failed:', error);
@@ -203,16 +261,15 @@ class ObjectDetectionService {
           features: [
             {
               type: 'OBJECT_LOCALIZATION',
-              maxResults: 20  // Reduced from 50
+              maxResults: 15  // OPTIMIZED: Reduced from 20 for faster response
             }
           ]
         }
       ]
     };
 
-    // Add timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // Reduced timeout
 
     try {
       const response = await fetch(apiUrl, {
@@ -241,7 +298,7 @@ class ObjectDetectionService {
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        throw new Error('Google Vision API request timed out after 30 seconds');
+        throw new Error('Google Vision API request timed out after 25 seconds');
       }
       throw error;
     }
@@ -249,19 +306,28 @@ class ObjectDetectionService {
 
   processGoogleVisionResults(visionResponse, confidenceThreshold, imageUri) {
     const annotations = visionResponse.responses[0].localizedObjectAnnotations || [];
-    
-    console.log(`🔍 Processing ${annotations.length} detections from Google Vision`);
-    
     return annotations
-      .filter(annotation => annotation.score >= confidenceThreshold)
+      .filter(annotation => {
+        // STRICTER confidence filtering for commonly confused items
+        const confusableItems = ['cup', 'glass', 'mug', 'table', 'desk', 'chair', 'bed', 'pillow', 'top'];
+        const lowerName = annotation.name.toLowerCase();
+        
+        // Higher threshold for confusable items
+        if (confusableItems.some(item => lowerName.includes(item))) {
+          return annotation.score >= Math.max(confidenceThreshold, 0.75); // Even higher: 75%
+        }
+        
+        // Normal threshold for other items
+        return annotation.score >= confidenceThreshold;
+      })
       .map((annotation, idx) => {
-        const label = this.normalizeGoogleVisionLabel(annotation.name);
+        let rawLabel = annotation.name.toLowerCase();
+        
+        // MINIMAL label normalization - preserve most original labels
+        const label = this.normalizeGoogleVisionLabel(rawLabel);
         const category = this.getObjectCategory(label);
-        
-        // Get vertices and handle undefined values
+
         const vertices = annotation.boundingPoly.normalizedVertices;
-        
-        // Process each vertex, replacing undefined with appropriate defaults
         const processedVertices = [];
         for (let i = 0; i < vertices.length; i++) {
           const vertex = vertices[i];
@@ -270,21 +336,18 @@ class ObjectDetectionService {
           processedVertices.push({ x, y });
         }
        
-        // Calculate bounding box from processed vertices
         const xValues = processedVertices.map(v => v.x);
         const yValues = processedVertices.map(v => v.y);
         
         const bbox = [
-          Math.min(...xValues),  // left
-          Math.min(...yValues),  // top
-          Math.max(...xValues),  // right
-          Math.max(...yValues)   // bottom
+          Math.min(...xValues),
+          Math.min(...yValues),
+          Math.max(...xValues),
+          Math.max(...yValues)
         ];
         
-        // Validate bbox
         if (bbox[2] <= bbox[0] || bbox[3] <= bbox[1]) {
           console.warn(`Invalid bbox for ${label}: [${bbox.join(', ')}]`);
-          // Try to fix it
           bbox[2] = Math.max(bbox[2], bbox[0] + 0.1);
           bbox[3] = Math.max(bbox[3], bbox[1] + 0.1);
         }
@@ -304,13 +367,14 @@ class ObjectDetectionService {
 
   normalizeGoogleVisionLabel(googleLabel) {
     const lowerLabel = googleLabel.toLowerCase();
+    // MINIMAL mapping - mostly just return the original label
     return this.GOOGLE_VISION_LABEL_MAPPING[lowerLabel] || lowerLabel;
   }
 
   getObjectCategory(label) {
     const lowerLabel = label.toLowerCase();
     for (const [category, items] of Object.entries(this.OBJECT_CATEGORIES)) {
-      if (items.includes(lowerLabel)) {
+      if (items.some(item => lowerLabel.includes(item) || item.includes(lowerLabel))) {
         return category;
       }
     }
@@ -322,7 +386,7 @@ class ObjectDetectionService {
       type: 'Google Cloud Vision API',
       accuracy: 'High (Google\'s trained models)',
       cost: '$1.50 per 1000 requests (first 1000/month free)',
-            source: this.apiKey ? 'Google Cloud Vision API' : 'API Key Missing',
+      source: this.apiKey ? 'Google Cloud Vision API' : 'API Key Missing',
       isLoaded: this.isInitialized,
       platform: Platform.OS,
       status: this.isInitialized ? 'Ready' : 'Initializing...',
@@ -333,6 +397,9 @@ class ObjectDetectionService {
         '✅ Supports 1000+ object types',
         '✅ Works in Expo managed workflow',
         '✅ No large model downloads',
+        '✅ Preserves detailed labels',
+        '🚀 Optimized image compression',
+        '⚡ Faster processing with smaller images',
         '💰 Pay-per-use pricing after free tier',
         this.apiKey ? '✅ API key configured' : '❌ API key missing'
       ]

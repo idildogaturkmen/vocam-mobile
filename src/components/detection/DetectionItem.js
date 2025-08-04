@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function DetectionItem({
   detection,
@@ -37,7 +38,7 @@ export default function DetectionItem({
             style={styles.audioButton}
             onPress={() => onSpeakWord(detection.translation || detection.label, targetLanguage)}
           >
-            <Text style={styles.audioIcon}><AntDesign name="sound" size={24} color="black" /></Text>
+            <Ionicons name="volume-high" size={24} color="#3498db" />
           </TouchableOpacity>
         </View>
         
@@ -66,7 +67,7 @@ export default function DetectionItem({
             style={styles.exampleAudioButton}
             onPress={() => onSpeakExample(detection.example || '', targetLanguage)}
           >
-            <Text style={styles.audioIconSmall}><AntDesign name="playcircleo" size={20} color="#3498db" /></Text>
+            <Ionicons name="play-circle" size={20} color="#27ae60" />
             <Text style={styles.exampleAudioText}>Play Example</Text>
           </TouchableOpacity>
         </View>
@@ -137,9 +138,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#ecf0f1',
   },
-  audioIcon: {
-    fontSize: 20,
-  },
   selectButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -197,10 +195,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 5,
-  },
-  audioIconSmall: {
-    fontSize: 16,
-    color: '#3498db',
   },
   exampleAudioText: {
     color: '#3498db',

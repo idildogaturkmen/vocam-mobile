@@ -15,6 +15,7 @@ export default function CameraControls({
   facing,
   onFlipCamera,
   onTakePicture,
+  onUploadImage,
   onManualInput,
   onLanguagePress,
   modelStatus,
@@ -88,6 +89,20 @@ export default function CameraControls({
             )}
           </TouchableOpacity>
           
+          <TouchableOpacity 
+            style={[
+              styles.button,
+              modelStatus !== 'ready' && styles.buttonDisabled
+            ]} 
+            onPress={onUploadImage}
+            disabled={modelStatus !== 'ready'}
+          >
+            <Ionicons name="image-outline" size={28} color="white" />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Secondary Controls Row */}
+        <View style={styles.secondaryButtonContainer}>
           <TouchableOpacity style={styles.button} onPress={onManualInput}>
             <EvilIcons name="pencil" size={36} color="white" />
           </TouchableOpacity>
@@ -207,6 +222,15 @@ const styles = StyleSheet.create({
   },
   captureButtonDisabled: {
     backgroundColor: '#7f8c8d',
+  },
+  buttonDisabled: {
+    backgroundColor: 'rgba(127, 140, 141, 0.7)',
+  },
+  secondaryButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
   },
   statusContainer: {
     backgroundColor: 'rgba(0,0,0,0.7)',

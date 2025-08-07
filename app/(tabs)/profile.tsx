@@ -26,6 +26,9 @@ import HumanAvatar, {
     HAIR_COLORS,
     CLOTHING_COLORS
 } from '../../src/components/Avatar';
+import FireStreak from '../../components/Progress/FireStreak';
+import { getProfile } from '../../utils/progress/getProfile';
+import { MAX_PROF } from '../../constants/constants';
 
 const { width } = Dimensions.get('window');
 
@@ -267,9 +270,7 @@ function ProfileScreen() {
                         </View>
                         
                         <View style={styles.streakDisplay}>
-                            <Ionicons name="flame" size={18} color="#e74c3c" />
-                            <Text style={styles.streakNumber}>{stats?.currentStreak || 0}</Text>
-                            <Text style={styles.streakText}>day streak</Text>
+                            <FireStreak streak={stats?.currentStreak || 0} />
                         </View>
                     </View>
                 </View>

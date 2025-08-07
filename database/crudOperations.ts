@@ -67,3 +67,8 @@ export const deleteUserData = async ({ TableName, Filters }: ReadInputCommandTyp
         throw error;
     }
 };
+
+export const getBucketFileUrl = (bucket: string, path: string) => {
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    return data.publicUrl;
+};

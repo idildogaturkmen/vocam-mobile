@@ -46,7 +46,18 @@ export default function TabLayout() {
         }}
       />
       
-      {/* 3. Progress Tab */}
+      {/* 3. Practice Tab */}
+      <Tabs.Screen
+        name="practice"
+        options={{
+          title: 'Practice',
+          tabBarIcon: ({ color }: { color: string }) => (
+            <FontAwesome6 name="brain" size={24} color={color} />
+          ),
+        }}
+      />
+
+      {/* 4. Progress Tab */}
       <Tabs.Screen
         name="progress"
         options={{
@@ -57,24 +68,15 @@ export default function TabLayout() {
         }}
       />
       
-      {/* 4. Quiz Tab */}
-      <Tabs.Screen
-        name="practice"
-        options={{
-          title: 'Practice',
-          tabBarIcon: ({ color }: { color: string }) => (
-            <FontAwesome6 name="brain" size={24} color={color} />
-          ),
-        }}
-      />
       
-      {/* 5. Settings Tab */}
+      
+      {/* 5. Profile Tab (formerly Settings) */}
       <Tabs.Screen
-        name="settings"
+        name="profile"
         options={{
-          title: 'Settings',
+          title: 'Profile',
           tabBarIcon: ({ color }: { color: string }) => (
-            <Ionicons name="settings" size={24} color={color} />
+            <Ionicons name="person-circle" size={24} color={color} />
           ),
         }}
       />

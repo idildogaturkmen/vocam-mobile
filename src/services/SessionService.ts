@@ -1,4 +1,7 @@
 import { supabase } from '../../database/config';
+import { StreakService } from './StreakService';
+import { LevelingService } from './LevelingService';
+import { AchievementService } from './AchievementService';
 
 interface SessionData {
     id: string;
@@ -7,13 +10,14 @@ interface SessionData {
     ended_at?: string;
     words_studied: number;
     words_learned: number;
+    total_questions: number;
 }
 
 class SessionService {
     private currentSession: SessionData | null = null;
 
     /**
-     * Start a new learning session
+     * Start a new learning session with streak and achievement tracking
      */
     async startSession(userId: string): Promise<string | null> {
         try {
@@ -37,8 +41,12 @@ class SessionService {
                 user_id: userId,
                 started_at: data.started_at,
                 words_studied: 0,
-                words_learned: 0
+                words_learned: 0,
+                total_questions: 10 // Default quiz length
             };
+
+            // Update streak on session start
+            await this.updateUserProgressOnLogin(userId);
 
             return data.id;
         } catch (error) {
@@ -48,7 +56,7 @@ class SessionService {
     }
 
     /**
-     * End the current session
+     * End the current session and award XP
      */
     async endSession(): Promise<boolean> {
         if (!this.currentSession) {
@@ -60,7 +68,10 @@ class SessionService {
             const { error } = await supabase
                 .from('quiz_sessions')
                 .update({
-                    score: this.currentSession.words_learned // Using score field for words learned
+                    score: this.currentSession.words_learned, // Using score field for words learned
+                    percentage_score: this.currentSession.total_questions > 0 
+                        ? (this.currentSession.words_learned / this.currentSession.total_questions) * 100 
+                        : 0
                 })
                 .eq('id', this.currentSession.id);
 
@@ -68,6 +79,12 @@ class SessionService {
                 console.error('Error ending session:', error);
                 return false;
             }
+
+            // Award XP for session completion
+            await this.awardSessionXP();
+
+            // Check for new achievements
+            await AchievementService.checkAndAwardAchievements(this.currentSession.user_id);
 
             this.currentSession = null;
             return true;
@@ -78,12 +95,23 @@ class SessionService {
     }
 
     /**
-     * Increment words studied/learned in current session
+     * Increment words studied/learned in current session and award XP
      */
-    incrementSessionStats(studied: number = 0, learned: number = 0) {
+    async incrementSessionStats(studied: number = 0, learned: number = 0): Promise<void> {
         if (this.currentSession) {
             this.currentSession.words_studied += studied;
             this.currentSession.words_learned += learned;
+
+            // Award XP for each word learned
+            if (learned > 0) {
+                for (let i = 0; i < learned; i++) {
+                    await LevelingService.awardXP(
+                        this.currentSession.user_id, 
+                        'WORD_LEARNED', 
+                        this.currentSession.id
+                    );
+                }
+            }
         }
     }
 
@@ -116,7 +144,8 @@ class SessionService {
                 user_id: session.user_id,
                 started_at: session.started_at,
                 words_studied: 0, // Not tracked in current schema
-                words_learned: session.score || 0
+                words_learned: session.score || 0,
+                total_questions: session.total_questions || 10
             }));
         } catch (error) {
             console.error('Error fetching session history:', error);
@@ -125,61 +154,11 @@ class SessionService {
     }
 
     /**
-     * Update user's streak
+     * Update user's streak (deprecated - use StreakService instead)
      */
     async updateStreak(userId: string): Promise<boolean> {
-        try {
-            // Get user's last login
-            const { data: profile, error: fetchError } = await supabase
-                .from('profiles')
-                .select('last_login, streak')
-                .eq('user_id', userId)
-                .single();
-
-            if (fetchError) {
-                console.error('Error fetching profile:', fetchError);
-                return false;
-            }
-
-            const now = new Date();
-            const lastLogin = profile?.last_login ? new Date(profile.last_login) : null;
-            let newStreak = profile?.streak || 0;
-
-            if (lastLogin) {
-                const daysDiff = Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));
-                
-                if (daysDiff === 1) {
-                    // Consecutive day - increment streak
-                    newStreak += 1;
-                } else if (daysDiff > 1) {
-                    // Missed days - reset streak
-                    newStreak = 1;
-                }
-                // If daysDiff === 0, same day - keep current streak
-            } else {
-                // First login
-                newStreak = 1;
-            }
-
-            // Update profile
-            const { error: updateError } = await supabase
-                .from('profiles')
-                .update({
-                    last_login: now.toISOString(),
-                    streak: newStreak
-                })
-                .eq('user_id', userId);
-
-            if (updateError) {
-                console.error('Error updating streak:', updateError);
-                return false;
-            }
-
-            return true;
-        } catch (error) {
-            console.error('Error updating streak:', error);
-            return false;
-        }
+        const result = await StreakService.updateStreak(userId);
+        return result.newStreak > 0;
     }
 
     /**
@@ -187,10 +166,10 @@ class SessionService {
      */
     async getUserStats(userId: string) {
         try {
-            // Get total words learned
+            // Get total unique words learned (user_words entries)
             const { data: userWords, error: wordsError } = await supabase
                 .from('user_words')
-                .select('proficiency')
+                .select('word_id, proficiency')
                 .eq('user_id', userId);
 
             if (wordsError) {
@@ -198,13 +177,32 @@ class SessionService {
                 return null;
             }
 
-            const totalWords = userWords?.length || 0;
+            // Get total translations by counting user's words and their available languages
+            // First get all word_ids for this user (filter out any undefined values)
+            const userWordIds = userWords?.map(uw => uw.word_id).filter(id => id != null) || [];
+            
+            let totalTranslations = 0;
+            if (userWordIds.length > 0) {
+                // Count translations for user's words (avoiding relationship query)
+                const { data: translationsData, error: translationsError } = await supabase
+                    .from('translations')
+                    .select('id')
+                    .in('word_id', userWordIds);
+
+                if (translationsError) {
+                    console.error('Error fetching translations count:', translationsError);
+                } else {
+                    totalTranslations = translationsData?.length || 0;
+                }
+            }
+
+            const uniqueWords = userWords?.length || 0;
             const masteredWords = userWords?.filter(w => w.proficiency >= 80).length || 0;
-            const averageProficiency = totalWords > 0 
-                ? userWords.reduce((sum, w) => sum + (w.proficiency || 0), 0) / totalWords 
+            const averageProficiency = uniqueWords > 0 
+                ? userWords.reduce((sum, w) => sum + (w.proficiency || 0), 0) / uniqueWords 
                 : 0;
 
-            // Get user profile
+            // Get user profile with correct table name
             const { data: profile, error: profileError } = await supabase
                 .from('profiles')
                 .select('streak')
@@ -216,13 +214,108 @@ class SessionService {
             }
 
             return {
-                totalWords,
+                uniqueWords,           // Count of unique words (32)
+                totalTranslations,     // Count of word-language pairs (116)
+                totalWords: uniqueWords, // For backwards compatibility
                 masteredWords,
                 averageProficiency: Math.round(averageProficiency),
                 currentStreak: profile?.streak || 0
             };
         } catch (error) {
             console.error('Error getting user stats:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Update user progress on login (streak, achievements, XP)
+     */
+    private async updateUserProgressOnLogin(userId: string): Promise<void> {
+        try {
+            // Update streak and check if it increased
+            const { newStreak, streakIncreased } = await StreakService.updateStreak(userId);
+            
+            // Award streak XP if streak increased
+            if (streakIncreased) {
+                await LevelingService.awardXP(userId, 'DAILY_STREAK');
+                
+                // Award first login bonus if this is their first login
+                if (newStreak === 1) {
+                    await LevelingService.awardXP(userId, 'FIRST_LOGIN');
+                }
+            }
+
+            // Check for new achievements
+            await AchievementService.checkAndAwardAchievements(userId);
+        } catch (error) {
+            console.error('Error updating user progress on login:', error);
+        }
+    }
+
+    /**
+     * Award XP for completing a session
+     */
+    private async awardSessionXP(): Promise<void> {
+        if (!this.currentSession) return;
+
+        try {
+            // Award quiz completion XP
+            await LevelingService.awardXP(
+                this.currentSession.user_id, 
+                'QUIZ_COMPLETED', 
+                this.currentSession.id
+            );
+
+            // Award perfect quiz bonus if applicable
+            const totalQuestions = 10; // Default quiz length
+            if (this.currentSession.words_learned === totalQuestions) {
+                await LevelingService.awardXP(
+                    this.currentSession.user_id, 
+                    'PERFECT_QUIZ', 
+                    this.currentSession.id
+                );
+            }
+        } catch (error) {
+            console.error('Error awarding session XP:', error);
+        }
+    }
+
+    /**
+     * Award XP for word proficiency milestones
+     */
+    async awardProficiencyXP(userId: string, proficiency: number): Promise<void> {
+        try {
+            // Award XP for reaching certain proficiency levels
+            if (proficiency >= 100) {
+                await LevelingService.awardXP(userId, 'PROFICIENCY_MILESTONE');
+            }
+            
+            // Check for achievements after proficiency update
+            await AchievementService.checkAndAwardAchievements(userId);
+        } catch (error) {
+            console.error('Error awarding proficiency XP:', error);
+        }
+    }
+
+    /**
+     * Get comprehensive user progress data
+     */
+    async getUserProgress(userId: string) {
+        try {
+            const [levelInfo, achievements, stats] = await Promise.all([
+                LevelingService.getLevelInfo(userId),
+                AchievementService.getUserAchievements(userId),
+                this.getUserStats(userId)
+            ]);
+
+            return {
+                level: levelInfo,
+                achievements,
+                stats,
+                todaysXP: await LevelingService.getTodaysXP(userId)
+            };
+        } catch (error) {
+            console.error('Error getting user progress:', error);
             return null;
         }
     }

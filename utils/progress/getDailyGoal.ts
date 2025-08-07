@@ -16,13 +16,13 @@ export async function getDailyGoal(): Promise<DailyGoal> {
         // Get today's date in YYYY-MM-DD format
         const today = new Date().toISOString().split('T')[0];
 
-        // Count words learned today
+        // Count words learned today using the correct column name
         const { data: todaysWords, error } = await supabase
             .from('user_words')
             .select('id')
             .eq('user_id', user.id)
-            .gte('created_at', `${today}T00:00:00.000Z`)
-            .lt('created_at', `${today}T23:59:59.999Z`);
+            .gte('learned_at', `${today}T00:00:00.000Z`)  // ✅ CORRECT COLUMN NAME
+            .lt('learned_at', `${today}T23:59:59.999Z`);  // ✅ CORRECT COLUMN NAME
 
         if (error) {
             console.error('Error fetching daily goal:', error);

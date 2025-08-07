@@ -120,7 +120,6 @@ export default function PracticeScreen() {
             if (recordingTimeoutRef.current) {
                 clearTimeout(recordingTimeoutRef.current);
             }
-            RecordingService.cleanup();
             SpeechService.stop();
         };
     }, []);

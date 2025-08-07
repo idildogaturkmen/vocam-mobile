@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import {
     View,
     Text,
@@ -27,8 +28,16 @@ import HumanAvatar, {
     CLOTHING_COLORS
 } from '../../src/components/Avatar';
 import FireStreak from '../../components/Progress/FireStreak';
+import XPBar from '../../components/Progress/XPBar';
 import { getProfile } from '../../utils/progress/getProfile';
-import { MAX_PROF } from '../../constants/constants';
+import { getDailyGoal, DailyGoal } from '../../utils/progress/getDailyGoal';
+import { getAchievements } from '../../utils/progress/getAchievements';
+import { BadgeCard } from '../../components/Progress/BadgeCard';
+import { getAchievementBadge } from '../../utils/progress/getAchievementBadge';
+import { getImageLevel } from '../../utils/progress/getImageLevel';
+import { getImageTrophy } from '../../utils/progress/getImageTrophy';
+import { getImageWord } from '../../utils/progress/getImageWord';
+import { StatBox } from '../../components/Progress/StatBox';
 
 const { width } = Dimensions.get('window');
 
@@ -59,7 +68,9 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 interface UserStats {
-    totalWords: number;
+    uniqueWords: number;
+    totalTranslations: number;
+    totalWords: number;    
     masteredWords: number;
     averageProficiency: number;
     currentStreak: number;
@@ -69,6 +80,15 @@ interface LanguageProgress {
     [key: string]: number;
 }
 
+const getMotivationalMessage = (level: number, streak: number, wordsLearned: number): string => {
+    if (streak >= 7) return "You're on fire! Keep that streak alive!";
+    if (level >= 5) return "You're becoming a vocabulary master!";
+    if (wordsLearned >= 50) return "Incredible progress! You're unstoppable!";
+    if (streak >= 3) return "Great consistency! Keep it up!";
+    if (wordsLearned >= 10) return "Your vocabulary is growing fast!";
+    return "Every word learned is a step forward!";
+};
+
 function ProfileScreen() {
     const [user, setUser] = useState<any>(null);
     const [stats, setStats] = useState<UserStats | null>(null);
@@ -76,6 +96,12 @@ function ProfileScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [savingAvatar, setSavingAvatar] = useState(false);
+    const [level, setLevel] = useState<number>(0);
+    const [exp, setExp] = useState<number>(0);
+    const [achievements, setAchievements] = useState<Record<string, any>[] | []>([]);
+    const [dailyGoal, setDailyGoal] = useState<DailyGoal>({ current: 0, target: 5, percentage: 0 });
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+const router = useRouter();
     
     // FIXED: Updated default avatar configuration with REAL DiceBear parameter values
     const [avatarConfig, setAvatarConfig] = useState<HumanAvatarConfig>({
@@ -100,14 +126,30 @@ function ProfileScreen() {
     const [activeTab, setActiveTab] = useState<'colors' | 'features'>('colors');
 
     useEffect(() => {
-        loadUserData();
+        checkAuthAndLoadUserData();
     }, []);
 
-    const loadUserData = async () => {
+    const checkAuthAndLoadUserData = async () => {
         try {
             const { data: { user: currentUser } } = await supabase.auth.getUser();
+            if (!currentUser) {
+                setIsAuthenticated(false);
+                setLoading(false);
+                return;
+            }
+            
+            setIsAuthenticated(true);
             setUser(currentUser);
+            await loadUserData(currentUser);
+        } catch (error) {
+            console.error('Auth check error:', error);
+            setIsAuthenticated(false);
+            setLoading(false);
+        }
+    };
 
+    const loadUserData = async (currentUser: any) => {
+        try {
             if (currentUser) {
                 const userStats = await SessionService.getUserStats(currentUser.id);
                 setStats(userStats);
@@ -144,6 +186,17 @@ function ProfileScreen() {
                 });
                 
                 setLanguageProgress(langProgress);
+
+                // Load progress data from existing utility functions
+                const profile = await getProfile();
+                setLevel(profile?.level || 0);
+                setExp(profile?.exp || 0);
+                
+                const achievementsList = await getAchievements();
+                setAchievements(achievementsList);
+                
+                const goalData = await getDailyGoal();
+                setDailyGoal(goalData);
             }
         } catch (error) {
             console.error('Error loading user data:', error);
@@ -156,7 +209,7 @@ function ProfileScreen() {
 
     const onRefresh = () => {
         setRefreshing(true);
-        loadUserData();
+        checkAuthAndLoadUserData();
     };
 
     const saveAvatarConfig = async () => {
@@ -220,6 +273,40 @@ function ProfileScreen() {
         );
     }
 
+    // Show login warning if not authenticated
+    if (isAuthenticated === false) {
+        return (
+            <View style={[styles.container, { backgroundColor: 'white' }]}> 
+                <View style={styles.authHeader}> 
+                    <View>
+                        <Text style={styles.authHeaderTitle}>Profile</Text>
+                    </View>
+                </View>
+                <View style={styles.authRequiredContainer}>
+                    <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
+                    <Text style={styles.authRequiredTitle}>Login Required</Text>
+                    <Text style={styles.authRequiredText}>
+                        You must be logged in to view and manage your profile.
+                    </Text>
+                    <Text style={styles.authRequiredSubtext}>
+                        Login to access your stats, achievements, avatar customization, and settings.
+                    </Text>
+                    <TouchableOpacity
+                        style={styles.loginButton}
+                        onPress={() => router.replace('/App')}
+                    >
+                        <Text style={styles.loginButtonText}>Go to Login</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.continueButton}
+                        onPress={() => router.replace('/(tabs)/detection')}
+                    >
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
+
     return (
         <ScrollView 
             style={styles.container}
@@ -276,22 +363,99 @@ function ProfileScreen() {
                 </View>
             </View>
 
-            {/* Progress Stats */}
+            {/* Motivational Quote */}
+            <View style={styles.quoteContainer}>
+                <Text style={styles.quote}>
+                    {getMotivationalMessage(level, stats?.currentStreak || 0, stats?.uniqueWords || 0)}
+                </Text>
+            </View>
+
+            {/* Progress Stats - Enhanced */}
             <View style={styles.statsSection}>
                 <Text style={styles.sectionTitle}>Learning Progress</Text>
+                
+                <View style={styles.statsRow}>
+                    <StatBox
+                        label="Level"
+                        value={level}
+                        image={async () => await getImageLevel(level)}
+                    />
+                    <StatBox
+                        label="Trophies"
+                        value={achievements.length}
+                        image={() => getImageTrophy(achievements.length)}
+                    />
+                    <StatBox
+                        label="Words Learned"
+                        value={stats?.uniqueWords || 0}
+                        image={async () => await getImageWord(stats?.uniqueWords || 0)}
+                    />
+                </View>
+                
+                <XPBar currentXP={exp} xpToNextLevel={100} />
                 
                 <View style={styles.statsGrid}>
                     <View style={styles.statCard}>
                         <Ionicons name="book" size={24} color="#3498db" />
-                        <Text style={styles.statNumber}>{stats?.totalWords || 0}</Text>
-                        <Text style={styles.statLabel}>Words Learned</Text>
+                        <Text style={styles.statNumber}>{stats?.uniqueWords || 0}</Text>
+                        <Text style={styles.statLabel}>Unique Words</Text>
+                        <Text style={styles.statSubLabel}>({stats?.totalTranslations || 0} translations)</Text>
                     </View>
                     
                     <View style={styles.statCard}>
                         <Ionicons name="trophy" size={24} color="#f39c12" />
                         <Text style={styles.statNumber}>{stats?.masteredWords || 0}</Text>
                         <Text style={styles.statLabel}>Mastered</Text>
+                        <Text style={styles.statSubLabel}>(80%+ proficiency)</Text>
                     </View>
+                </View>
+                
+                <View style={styles.statsGrid}>
+                    <View style={styles.statCard}>
+                        <Ionicons name="trending-up" size={24} color="#2ecc71" />
+                        <Text style={styles.statNumber}>{stats?.averageProficiency || 0}%</Text>
+                        <Text style={styles.statLabel}>Avg Proficiency</Text>
+                    </View>
+                </View>
+
+                {/* Daily Goal Progress */}
+                <View style={styles.dailyGoalContainer}>
+                    <View style={styles.goalHeader}>
+                        <Text style={styles.goalTitle}>Daily Goal</Text>
+                        <Text style={styles.goalProgress}>{dailyGoal.current}/{dailyGoal.target} words</Text>
+                    </View>
+                    <View style={styles.goalBar}>
+                        <View style={[styles.goalFill, { width: `${dailyGoal.percentage}%` }]} />
+                    </View>
+                    <Text style={styles.goalText}>
+                        {dailyGoal.current >= dailyGoal.target 
+                            ? "Great job! You've completed today's goal!" 
+                            : `Learn ${dailyGoal.target - dailyGoal.current} more words to complete today's goal!`
+                        }
+                    </Text>
+                </View>
+            </View>
+
+            {/* Learning Streak Calendar */}
+            <View style={styles.streakSection}>
+                <Text style={styles.sectionTitle}>Learning Streak</Text>
+                <View style={styles.streakCalendar}>
+                    {Array.from({ length: 7 }, (_, i) => (
+                        <View
+                            key={i}
+                            style={[
+                                styles.streakDay,
+                                i < (stats?.currentStreak || 0) ? styles.streakDayActive : styles.streakDayInactive
+                            ]}
+                        >
+                            <Text style={[
+                                styles.streakDayText,
+                                i < (stats?.currentStreak || 0) ? styles.streakDayTextActive : styles.streakDayTextInactive
+                            ]}>
+                                {i + 1}
+                            </Text>
+                        </View>
+                    ))}
                 </View>
             </View>
 
@@ -916,6 +1080,71 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#bdc3c7',
     },
+    authRequiredContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    authRequiredTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#2c3e50',
+        marginTop: 20,
+        marginBottom: 10,
+    },
+    authRequiredText: {
+        fontSize: 16,
+        color: '#7f8c8d',
+        textAlign: 'center',
+        marginBottom: 30,
+        lineHeight: 22,
+    },
+    authRequiredSubtext: {
+        fontSize: 14,
+        color: '#95a5a6',
+        textAlign: 'center',
+        marginBottom: 20,
+        paddingHorizontal: 20,
+        lineHeight: 20,
+    },
+    loginButton: {
+        backgroundColor: '#3498db',
+        paddingHorizontal: 30,
+        paddingVertical: 15,
+        borderRadius: 25,
+    },
+    loginButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    continueButton: {
+        marginTop: 15,
+        paddingHorizontal: 30,
+        paddingVertical: 12,
+    },
+authHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 50,
+        paddingBottom: 20,
+        backgroundColor: 'white',
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 5,
+    },
+    authHeaderTitle: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#2c3e50',
+    },
     // Modal Styles
     modalOverlay: {
         flex: 1,
@@ -1077,6 +1306,139 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         marginLeft: 6,
+    },
+    statSubLabel: {
+        fontSize: 10,
+        color: '#7f8c8d',
+        textAlign: 'center',
+        marginTop: 2,
+        fontStyle: 'italic',
+    },
+    // New styles for enhanced progress features
+    quoteContainer: {
+        backgroundColor: '#f8f9ff',
+        borderRadius: 16,
+        padding: 16,
+        marginHorizontal: 20,
+        marginTop: 20,
+        borderLeftWidth: 4,
+        borderLeftColor: '#3498db',
+        shadowColor: '#3498db',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    quote: {
+        fontSize: 16,
+        color: '#2c3e50',
+        fontStyle: 'italic',
+        textAlign: 'center',
+        fontWeight: '500',
+    },
+    statsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 15,
+    },
+    dailyGoalContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 16,
+        marginTop: 15,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
+    },
+    goalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    goalTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#2c3e50',
+    },
+    goalProgress: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#e74c3c',
+    },
+    goalBar: {
+        height: 8,
+        backgroundColor: '#ecf0f1',
+        borderRadius: 4,
+        marginBottom: 8,
+        overflow: 'hidden',
+    },
+    goalFill: {
+        height: '100%',
+        backgroundColor: '#e74c3c',
+        borderRadius: 4,
+    },
+    goalText: {
+        fontSize: 12,
+        color: '#7f8c8d',
+        textAlign: 'center',
+        fontWeight: '500',
+    },
+    achievementsSection: {
+        padding: 20,
+        paddingTop: 0,
+    },
+    achievementsScroll: {
+        marginBottom: 20,
+    },
+    streakSection: {
+        padding: 20,
+        paddingTop: 0,
+    },
+    streakCalendar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    streakDay: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginHorizontal: 2,
+    },
+    streakDayActive: {
+        backgroundColor: '#ff6b35',
+        shadowColor: '#ff6b35',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    streakDayInactive: {
+        backgroundColor: '#ecf0f1',
+    },
+    streakDayText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    streakDayTextActive: {
+        color: '#fff',
+    },
+    streakDayTextInactive: {
+        color: '#bdc3c7',
     },
 });
 

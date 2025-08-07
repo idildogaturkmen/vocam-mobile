@@ -19,7 +19,7 @@ export default function TabLayout() {
           paddingTop: 8,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: '500',
         },
       }}>
@@ -30,7 +30,7 @@ export default function TabLayout() {
         options={{
           title: 'Camera',
           tabBarIcon: ({ color }: { color: string }) => (
-            <Entypo name="camera" size={24} color={color} />
+            <Entypo name="camera" size={30} color={color} />
           ),
         }}
       />
@@ -41,7 +41,7 @@ export default function TabLayout() {
         options={{
           title: 'Vocabulary',
           tabBarIcon: ({ color }: { color: string }) => (
-            <MaterialCommunityIcons name="bookshelf" size={24} color={color} />
+            <MaterialCommunityIcons name="bookshelf" size={30} color={color} />
           ),
         }}
       />
@@ -52,31 +52,18 @@ export default function TabLayout() {
         options={{
           title: 'Practice',
           tabBarIcon: ({ color }: { color: string }) => (
-            <FontAwesome6 name="brain" size={24} color={color} />
-          ),
-        }}
-      />
-
-      {/* 4. Progress Tab */}
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: 'Progress',
-          tabBarIcon: ({ color }: { color: string }) => (
-            <Entypo name="bar-graph" size={24} color={color} />
+            <FontAwesome6 name="brain" size={30} color={color} />
           ),
         }}
       />
       
-      
-      
-      {/* 5. Profile Tab (formerly Settings) */}
+      {/* 4. Profile Tab (formerly Settings) */}
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
           tabBarIcon: ({ color }: { color: string }) => (
-            <Ionicons name="person-circle" size={24} color={color} />
+            <Ionicons name="person-circle" size={30} color={color} />
           ),
         }}
       />

@@ -225,7 +225,7 @@ export default function DetectionScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'Images',
         allowsEditing: false,
         quality: 0.8,
       });
@@ -427,8 +427,7 @@ export default function DetectionScreen() {
       }
 
       setSelectedWords(new Set());
-      setDetections([]);
-      
+      // Do NOT clear photo or detections here, so user stays on results screen
     } catch (error) {
       console.error('Save error:', error);
       Alert.alert('Error', 'Failed to save vocabulary. Please try again.');

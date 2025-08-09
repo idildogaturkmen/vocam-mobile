@@ -305,12 +305,12 @@ export default function VocabularyScreen() {
     };
 
     const getProficiencyInfo = (level: number) => {
-        const clamped = Math.min(level, 100);
-        if (level >= 80) return { color: '#27ae60', label: 'Expert', emoji: '🏆' };
-        if (level >= 60) return { color: '#f39c12', label: 'Advanced', emoji: '🌟' };
-        if (level >= 40) return { color: '#e67e22', label: 'Intermediate', emoji: '📈' };
-        if (level >= 20) return { color: '#3498db', label: 'Beginner', emoji: '🌱' };
-        return { color: '#9b59b6', label: 'Learning', emoji: '🔥' };
+        const clamped = Math.min(Math.max(level, 0), 100); // Ensure between 0-100
+        if (clamped >= 80) return { color: '#27ae60', label: 'Expert', icon: 'trophy' };
+        if (clamped >= 60) return { color: '#f39c12', label: 'Advanced', icon: 'star' };
+        if (clamped >= 40) return { color: '#e67e22', label: 'Intermediate', icon: 'trending-up' };
+        if (clamped >= 20) return { color: '#3498db', label: 'Beginner', icon: 'leaf' };
+        return { color: '#9b59b6', label: 'Learning', icon: 'flash' };
     };
 
     const getCategoryColor = (category: string) => {
@@ -400,16 +400,33 @@ export default function VocabularyScreen() {
                         </TouchableOpacity>
                         
                         <View style={[styles.proficiencyContainer, { borderColor: proficiencyInfo.color }]}>
-                            <View style={[styles.proficiencyFill, { 
-                                backgroundColor: proficiencyInfo.color,
-                                width: `${word.proficiency}%`
-                            }]} />
-                            <Text style={[styles.proficiencyLabel, { color: proficiencyInfo.color }]}>
-                                {proficiencyInfo.emoji} {word.proficiency}%
-                            </Text>
-                            <Text style={[styles.proficiencyLevel, { color: proficiencyInfo.color }]}>
-                                {proficiencyInfo.label}
-                            </Text>
+                            <View 
+                                style={[
+                                    styles.proficiencyFill, 
+                                    { 
+                                        backgroundColor: proficiencyInfo.color,
+                                        width: Math.min(word.proficiency, 100) * 1.04, // Use actual pixel calculation
+                                        borderTopRightRadius: word.proficiency >= 100 ? 10 : 0,
+                                        borderBottomRightRadius: word.proficiency >= 100 ? 10 : 0,
+                                    }
+                                ]} 
+                            />
+                            <View style={styles.proficiencyContent}>
+                                <View style={styles.proficiencyIconRow}>
+                                    <Ionicons 
+                                        name={proficiencyInfo.icon as any} 
+                                        size={16} 
+                                        color={proficiencyInfo.color} 
+                                        style={{ zIndex: 2 }}
+                                    />
+                                    <Text style={[styles.proficiencyLabel, { color: proficiencyInfo.color }]}>
+                                        {Math.min(word.proficiency, 100)}%
+                                    </Text>
+                                </View>
+                                <Text style={[styles.proficiencyLevel, { color: proficiencyInfo.color }]}>
+                                    {proficiencyInfo.label}
+                                </Text>
+                            </View>
                         </View>
 
                         <View style={styles.expandIndicator}>
@@ -491,7 +508,7 @@ export default function VocabularyScreen() {
                     </Text>
                     <View style={[styles.flashcardProficiency, { backgroundColor: proficiencyInfo.color }]}>
                         <Text style={styles.flashcardProficiencyText}>
-                            {proficiencyInfo.emoji} {word.proficiency}%
+                            {word.proficiency}% {proficiencyInfo.label}
                         </Text>
                     </View>
                 </View>
@@ -1196,29 +1213,55 @@ const styles = StyleSheet.create({
     },
     proficiencyContainer: {
         alignItems: 'center',
+        justifyContent: 'center',
         padding: 12,
         borderRadius: 12,
         borderWidth: 2,
         backgroundColor: '#f8f9fa',
-        minWidth: 80,
+        width: 104,
+        height: 60,
+        position: 'relative',
+        overflow: 'hidden',
     },
     proficiencyFill: {
         position: 'absolute',
         left: 0,
         top: 0,
         bottom: 0,
-        borderRadius: 10,
-        opacity: 0.1,
+        borderTopLeftRadius: 10,
+        borderBottomLeftRadius: 10,
+        opacity: 0.16,
+        zIndex: 1,
     },
     proficiencyLabel: {
         fontSize: 14,
         fontWeight: 'bold',
         marginBottom: 2,
+        zIndex: 2,
+        textShadowColor: 'rgba(255, 255, 255, 0.8)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
     },
     proficiencyLevel: {
         fontSize: 10,
         fontWeight: '600',
         textTransform: 'uppercase',
+        zIndex: 2,
+        textShadowColor: 'rgba(255, 255, 255, 0.8)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
+    },
+    proficiencyContent: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2,
+        position: 'relative',
+    },
+    proficiencyIconRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginBottom: 2,
     },
     expandIndicator: {
         backgroundColor: '#ecf0f1',

@@ -197,10 +197,17 @@ class SessionService {
             }
 
             const uniqueWords = userWords?.length || 0;
-            const masteredWords = userWords?.filter(w => w.proficiency >= 80).length || 0;
+            const masteredUniqueWords = userWords?.filter(w => w.proficiency >= 80).length || 0;
             const averageProficiency = uniqueWords > 0 
                 ? userWords.reduce((sum, w) => sum + (w.proficiency || 0), 0) / uniqueWords 
                 : 0;
+
+            // Calculate total mastered translations (estimate based on unique word mastery)
+            const masteryRatio = uniqueWords > 0 ? masteredUniqueWords / uniqueWords : 0;
+            const totalMasteredTranslations = Math.round(totalTranslations * masteryRatio);
+
+            // Update streak first to ensure current data
+            await StreakService.updateStreak(userId);
 
             // Get user profile with correct table name
             const { data: profile, error: profileError } = await supabase
@@ -214,10 +221,11 @@ class SessionService {
             }
 
             return {
-                uniqueWords,           // Count of unique words (32)
-                totalTranslations,     // Count of word-language pairs (116)
-                totalWords: uniqueWords, // For backwards compatibility
-                masteredWords,
+                uniqueWords,                    // Count of unique words (34)
+                totalTranslations,              // Count of word-language pairs (120)
+                totalWords: uniqueWords,        // For backwards compatibility
+                masteredWords: masteredUniqueWords,     // Unique words mastered
+                totalMasteredTranslations,      // Estimated total translations mastered
                 averageProficiency: Math.round(averageProficiency),
                 currentStreak: profile?.streak || 0
             };

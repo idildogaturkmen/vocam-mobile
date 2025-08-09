@@ -1,7 +1,7 @@
 // Load environment variables
 require('dotenv').config();
 
-export default {
+module.exports = {
   expo: {
     name: "Vocam",
     slug: "vocam",

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import {
     View,
     Text,
@@ -30,10 +31,13 @@ import HumanAvatar, {
 import FireStreak from '../../components/Progress/FireStreak';
 import XPBar from '../../components/Progress/XPBar';
 import { getProfile } from '../../utils/progress/getProfile';
-import { getDailyGoal, DailyGoal } from '../../utils/progress/getDailyGoal';
-import { getAchievements } from '../../utils/progress/getAchievements';
+import { getDailyGoal, getDailyGoalFromLog, DailyGoal } from '../../utils/progress/getDailyGoal';
+import { AchievementService } from '../../src/services/AchievementService';
+import type { Achievement } from '../../src/services/AchievementService';
+import { LevelingService } from '../../src/services/LevelingService';
 import { BadgeCard } from '../../components/Progress/BadgeCard';
 import { getAchievementBadge } from '../../utils/progress/getAchievementBadge';
+import AchievementCard from '../../components/Progress/AchievementCard';
 import { getImageLevel } from '../../utils/progress/getImageLevel';
 import { getImageTrophy } from '../../utils/progress/getImageTrophy';
 import { getImageWord } from '../../utils/progress/getImageWord';
@@ -98,8 +102,9 @@ function ProfileScreen() {
     const [savingAvatar, setSavingAvatar] = useState(false);
     const [level, setLevel] = useState<number>(0);
     const [exp, setExp] = useState<number>(0);
-    const [achievements, setAchievements] = useState<Record<string, any>[] | []>([]);
+    const [achievements, setAchievements] = useState<Achievement[]>([]);
     const [dailyGoal, setDailyGoal] = useState<DailyGoal>({ current: 0, target: 5, percentage: 0 });
+    const [profileData, setProfileData] = useState<any>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 const router = useRouter();
     
@@ -128,6 +133,41 @@ const router = useRouter();
     useEffect(() => {
         checkAuthAndLoadUserData();
     }, []);
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        const interval = setInterval(() => {
+            if (!refreshing) {
+                checkAuthAndLoadUserData();
+            }
+        }, 30000); // 30 seconds for full refresh
+
+        return () => clearInterval(interval);
+    }, [isAuthenticated, refreshing]);
+
+    // More frequent daily goal refresh
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        const goalInterval = setInterval(() => {
+            if (!refreshing) {
+                refreshDailyGoal();
+            }
+        }, 3000); // 3 seconds for daily goal only
+
+        return () => clearInterval(goalInterval);
+    }, [isAuthenticated, refreshing]);
+
+    // Refresh when screen comes into focus
+    useFocusEffect(
+        useCallback(() => {
+            if (isAuthenticated && !loading) {
+                checkAuthAndLoadUserData();
+            }
+        }, [isAuthenticated, loading])
+    );
 
     const checkAuthAndLoadUserData = async () => {
         try {
@@ -189,13 +229,38 @@ const router = useRouter();
 
                 // Load progress data from existing utility functions
                 const profile = await getProfile();
+                setProfileData(profile);
                 setLevel(profile?.level || 0);
-                setExp(profile?.exp || 0);
+                setExp(profile?.totalXP || 0); // Use totalXP instead of exp
                 
-                const achievementsList = await getAchievements();
+                // Sync user level in case there's a discrepancy
+                try {
+                    const syncResult = await LevelingService.syncUserLevel(currentUser.id);
+                    if (syncResult && syncResult.oldLevel !== syncResult.newLevel) {
+                        console.log(`Level synced: ${syncResult.oldLevel} -> ${syncResult.newLevel}`);
+                        // Reload profile data after sync
+                        const updatedProfile = await getProfile();
+                        setProfileData(updatedProfile);
+                        setLevel(updatedProfile?.level || 0);
+                    }
+                } catch (error) {
+                    console.error('Error syncing user level:', error);
+                }
+                
+                // Load achievements with progress
+                const achievementsList = await AchievementService.getAllAchievementsWithProgress(currentUser.id);
                 setAchievements(achievementsList);
                 
-                const goalData = await getDailyGoal();
+                // Check for new achievements
+                const newAchievements = await AchievementService.checkAndAwardAchievements(currentUser.id);
+                if (newAchievements.length > 0) {
+                    console.log('New achievements earned:', newAchievements);
+                    // Reload achievements to include newly earned ones
+                    const updatedAchievements = await AchievementService.getAllAchievementsWithProgress(currentUser.id);
+                    setAchievements(updatedAchievements);
+                }
+                
+                const goalData = await getDailyGoalFromLog();
                 setDailyGoal(goalData);
             }
         } catch (error) {
@@ -204,6 +269,16 @@ const router = useRouter();
         } finally {
             setLoading(false);
             setRefreshing(false);
+        }
+    };
+
+    const refreshDailyGoal = async () => {
+        try {
+            // Try the enhanced version first, fallback to original
+            const goalData = await getDailyGoalFromLog();
+            setDailyGoal(goalData);
+        } catch (error) {
+            console.error('Error refreshing daily goal:', error);
         }
     };
 
@@ -382,8 +457,8 @@ const router = useRouter();
                     />
                     <StatBox
                         label="Trophies"
-                        value={achievements.length}
-                        image={() => getImageTrophy(achievements.length)}
+                        value={achievements.filter(a => a.earned).length}
+                        image={() => getImageTrophy(achievements.filter(a => a.earned).length)}
                     />
                     <StatBox
                         label="Words Learned"
@@ -392,21 +467,40 @@ const router = useRouter();
                     />
                 </View>
                 
-                <XPBar currentXP={exp} xpToNextLevel={100} />
+                <XPBar 
+                    currentXP={profileData?.exp || 0} 
+                    xpToNextLevel={profileData?.xpForNextLevel || 100} 
+                />
                 
                 <View style={styles.statsGrid}>
                     <View style={styles.statCard}>
                         <Ionicons name="book" size={24} color="#3498db" />
                         <Text style={styles.statNumber}>{stats?.uniqueWords || 0}</Text>
                         <Text style={styles.statLabel}>Unique Words</Text>
-                        <Text style={styles.statSubLabel}>({stats?.totalTranslations || 0} translations)</Text>
+                        <Text style={styles.statSubLabel}>Distinct vocabulary</Text>
                     </View>
                     
                     <View style={styles.statCard}>
+                        <Ionicons name="language" size={24} color="#2ecc71" />
+                        <Text style={styles.statNumber}>{stats?.totalTranslations || 0}</Text>
+                        <Text style={styles.statLabel}>Total Learned</Text>
+                        <Text style={styles.statSubLabel}>All languages</Text>
+                    </View>
+                </View>
+                
+                <View style={styles.statsGrid}>
+                    <View style={styles.statCard}>
                         <Ionicons name="trophy" size={24} color="#f39c12" />
                         <Text style={styles.statNumber}>{stats?.masteredWords || 0}</Text>
-                        <Text style={styles.statLabel}>Mastered</Text>
-                        <Text style={styles.statSubLabel}>(80%+ proficiency)</Text>
+                        <Text style={styles.statLabel}>Unique Mastered</Text>
+                        <Text style={styles.statSubLabel}>80%+ proficiency</Text>
+                    </View>
+                    
+                    <View style={styles.statCard}>
+                        <Ionicons name="medal" size={24} color="#e74c3c" />
+                        <Text style={styles.statNumber}>{(stats as any)?.totalMasteredTranslations || 0}</Text>
+                        <Text style={styles.statLabel}>Total Mastered</Text>
+                        <Text style={styles.statSubLabel}>All languages</Text>
                     </View>
                 </View>
                 
@@ -457,6 +551,63 @@ const router = useRouter();
                         </View>
                     ))}
                 </View>
+            </View>
+
+            {/* Achievements Section */}
+            <View style={styles.achievementsSection}>
+                <Text style={styles.sectionTitle}>Achievements</Text>
+                
+                {achievements.length > 0 ? (
+                    <>
+                        {/* Show earned achievements first - hardest/most recent */}
+                        {achievements
+                            .filter(achievement => achievement.earned && achievement.id)
+                            .sort((a, b) => {
+                                // First sort by requirement value (hardest first)
+                                const reqDiff = (b.requirement_value || 0) - (a.requirement_value || 0);
+                                if (reqDiff !== 0) return reqDiff;
+                                // Then by achievement date (most recent first)
+                                const dateA = new Date(a.achieved_at || 0).getTime();
+                                const dateB = new Date(b.achieved_at || 0).getTime();
+                                return dateB - dateA;
+                            })
+                            .slice(0, 3) // Show only first 3 earned
+                            .map(achievement => (
+                                <AchievementCard
+                                    key={achievement.slug}
+                                    achievement={{...achievement, id: achievement.id!, earned: achievement.earned ?? false}}
+                                />
+                            ))}
+                        
+                        {/* Show progress on closest unearned achievements */}
+                        {achievements
+                            .filter(achievement => !achievement.earned && (achievement.progress || 0) > 0 && achievement.id)
+                            .sort((a, b) => (b.progress || 0) - (a.progress || 0))
+                            .slice(0, 2) // Show 2 achievements in progress
+                            .map(achievement => (
+                                <AchievementCard
+                                    key={achievement.slug}
+                                    achievement={{...achievement, id: achievement.id!, earned: achievement.earned ?? false}}
+                                />
+                            ))}
+                        
+                        <TouchableOpacity 
+                            style={styles.viewAllAchievements}
+                            onPress={() => router.push('/achievements')}
+                        >
+                            <Text style={styles.viewAllText}>
+                                View All Achievements ({achievements.filter(a => a.earned).length}/{achievements.length})
+                            </Text>
+                            <Ionicons name="arrow-forward" size={18} color="#3498db" />
+                        </TouchableOpacity>
+                    </>
+                ) : (
+                    <View style={styles.noAchievements}>
+                        <Ionicons name="trophy" size={48} color="#bdc3c7" />
+                        <Text style={styles.noAchievementsText}>No achievements yet</Text>
+                        <Text style={styles.noAchievementsSubtext}>Keep learning to unlock your first achievement!</Text>
+                    </View>
+                )}
             </View>
 
             {/* Languages Section */}
@@ -1392,9 +1543,7 @@ authHeader: {
         padding: 20,
         paddingTop: 0,
     },
-    achievementsScroll: {
-        marginBottom: 20,
-    },
+// Duplicate removed
     streakSection: {
         padding: 20,
         paddingTop: 0,
@@ -1439,6 +1588,45 @@ authHeader: {
     },
     streakDayTextInactive: {
         color: '#bdc3c7',
+    },
+    viewAllAchievements: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f8f9fa',
+        padding: 16,
+        borderRadius: 12,
+        marginTop: 12,
+    },
+    viewAllText: {
+        fontSize: 16,
+        color: '#3498db',
+        fontWeight: '600',
+        marginRight: 8,
+    },
+    noAchievements: {
+        backgroundColor: 'white',
+        padding: 40,
+        borderRadius: 15,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    noAchievementsText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#2c3e50',
+        marginTop: 15,
+        marginBottom: 8,
+    },
+    noAchievementsSubtext: {
+        fontSize: 14,
+        color: '#7f8c8d',
+        textAlign: 'center',
+        lineHeight: 20,
     },
 });
 

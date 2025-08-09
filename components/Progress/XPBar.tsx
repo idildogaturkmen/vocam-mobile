@@ -48,8 +48,8 @@ export default function XPBar({ currentXP, xpToNextLevel }: XPBarProps) {
                 </Text>
             </View>
             <View style={styles.progressBarContainer}>
-                <Animated.View style={[styles.progressBar, progressBarStyle]} />
                 <View style={styles.progressBarBackground} />
+                <Animated.View style={[styles.progressBar, progressBarStyle]} />
             </View>
             {remainingXP > 0 && (
                 <Text style={styles.remainingText}>
@@ -101,6 +101,7 @@ const styles = StyleSheet.create({
         right: 0,
         bottom: 0,
         backgroundColor: '#e8f4ff',
+        zIndex: 1,
     },
     progressBar: {
         height: '100%',
@@ -113,6 +114,7 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.3,
         shadowRadius: 4,
+        zIndex: 2,
     },
     remainingText: {
         fontSize: 12,

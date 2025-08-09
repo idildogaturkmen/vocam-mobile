@@ -29,11 +29,26 @@ export class LevelingService {
 
     /**
      * Calculate XP required for a given level
-     * Uses exponential growth: XP = 100 * (level^1.5)
+     * Uses clean, intuitive numbers that are easy to understand
+     * Progression: 500, 1000, 1500, 2000, 2500, 3000, etc.
      */
     static getXPRequiredForLevel(level: number): number {
         if (level <= 1) return 0;
-        return Math.floor(100 * Math.pow(level - 1, 1.5));
+        
+        // Clean, predictable progression using round numbers
+        if (level <= 10) {
+            // Levels 1-10: Simple increments of 500 XP
+            // Level 2: 500, Level 3: 1000, Level 4: 1500, etc.
+            return level * 500 - 500;
+        } else if (level <= 20) {
+            // Levels 11-20: 1000 XP increments starting from 5000
+            // Level 11: 5000, Level 12: 6000, Level 13: 7000, etc.
+            return 4000 + ((level - 10) * 1000);
+        } else {
+            // Levels 21+: 2000 XP increments starting from 15000
+            // Level 21: 15000, Level 22: 17000, Level 23: 19000, etc.
+            return 13000 + ((level - 20) * 2000);
+        }
     }
 
     /**
@@ -231,6 +246,57 @@ export class LevelingService {
         } catch (error) {
             console.error('Error in getTodaysXP:', error);
             return 0;
+        }
+    }
+
+    /**
+     * Sync user level data - recalculate and update level based on total XP
+     * Useful for fixing level sync issues
+     */
+    static async syncUserLevel(userId: string): Promise<{ success: boolean; oldLevel: number; newLevel: number } | null> {
+        try {
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('total_xp, level, exp')
+                .eq('user_id', userId)
+                .single();
+
+            if (profileError) {
+                console.error('Error fetching profile for sync:', profileError);
+                return null;
+            }
+
+            const totalXP = profile?.total_xp || 0;
+            const oldLevel = profile?.level || 0;
+            const correctLevel = this.getLevelFromXP(totalXP);
+            
+            // Get detailed level info for current XP calculation
+            const levelInfo = await this.getLevelInfo(userId);
+            
+            // Update the profile with correct level and XP data
+            const { error: updateError } = await supabase
+                .from('profiles')
+                .update({
+                    level: correctLevel,
+                    exp: levelInfo?.currentXP || 0,
+                    // Keep total_xp as is - it's correct
+                })
+                .eq('user_id', userId);
+
+            if (updateError) {
+                console.error('Error syncing user level:', updateError);
+                return null;
+            }
+
+            // Level synced silently
+            return {
+                success: true,
+                oldLevel,
+                newLevel: correctLevel
+            };
+        } catch (error) {
+            console.error('Error in syncUserLevel:', error);
+            return null;
         }
     }
 

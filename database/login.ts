@@ -2,6 +2,7 @@ import { Alert } from 'react-native';
 import { supabase } from './config';
 import { writeUserData } from './crudOperations';
 import { findEmailInUse } from '@/utils/emailInUse';
+import { UserProgressService } from '../src/services/UserProgressService';
 
 export async function createUser(
     email: string,
@@ -58,6 +59,14 @@ export async function login(
             Items: [{ user_id: data.user.id, email, username, streak: 0 }],
         });
     }
+    
+    // Update streak on every login
+    try {
+        await UserProgressService.updateStreak(data.user.id);
+    } catch (error) {
+        console.error('Error updating streak on login:', error);
+    }
+    
     console.log('User logged in successfully');
     return data;
 }

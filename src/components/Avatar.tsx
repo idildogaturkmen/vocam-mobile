@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Image, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
+import { supabase } from '../../database/config';
 
 export type AvatarStyle = 'personas';
 
@@ -144,6 +145,8 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(false);
   const [retryCount, setRetryCount] = React.useState(0);
+  const [imageLoaded, setImageLoaded] = React.useState(false);
+  const [cachedAvatarUrl, setCachedAvatarUrl] = React.useState<string | null>(null);
 
   // FIXED: Use correct DiceBear Personas parameters
   const buildAvatarUrl = (simplified = false) => {
@@ -151,10 +154,8 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
     const params = new URLSearchParams();
 
     // Clean seed 
-    if (seed) {
-      const cleanSeed = seed.replace(/[^a-zA-Z0-9]/g, '');
-      params.append('seed', cleanSeed);
-    }
+    const cleanSeed = seed ? seed.replace(/[^a-zA-Z0-9]/g, '') : 'user';
+    params.append('seed', cleanSeed);
     
     // Size parameter (PNG supports up to 256x256)
     const finalSize = Math.min(size, 256);
@@ -212,11 +213,50 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
     return finalUrl;
   };
 
-  const [avatarUrl, setAvatarUrl] = React.useState(() => buildAvatarUrl());
+  // Load avatar URL from database or generate new one
+  const loadAvatarUrl = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return buildAvatarUrl();
+
+      // Try to get existing avatar URL from database
+      const { data: avatarData } = await supabase
+        .from('avatars')
+        .select('avatar_url')
+        .eq('user_id', user.id)
+        .single();
+
+      if (avatarData?.avatar_url) {
+        return avatarData.avatar_url;
+      } else {
+        // Generate new URL and store it
+        const newUrl = buildAvatarUrl();
+        
+        await supabase
+          .from('avatars')
+          .upsert({
+            user_id: user.id,
+            avatar_url: newUrl,
+            avatar_config: config,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id'
+          });
+        
+        return newUrl;
+      }
+    } catch (error) {
+      console.error('Error loading avatar URL:', error);
+      return buildAvatarUrl();
+    }
+  };
+
+  const [avatarUrl, setAvatarUrl] = React.useState<string>('');
 
   const handleImageLoad = () => {
     setLoading(false);
     setError(false);
+    setImageLoaded(true);
     setRetryCount(0);
     onLoad?.();
   };
@@ -225,76 +265,109 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
     console.error('❌ Avatar failed to load:', errorEvent.nativeEvent?.error || 'Unknown error');
     console.error('❌ Avatar URL was:', avatarUrl);
     
-    // Progressive fallback strategy
-    if (retryCount < 3) {
+    // Try a simpler URL on error
+    if (retryCount < 1) {
       setRetryCount(prev => prev + 1);
-      
-      if (retryCount === 0) {
-        // First retry: try simplified version (colors only)
-        setAvatarUrl(buildAvatarUrl(true));
-      } else if (retryCount === 1) {
-        // Second retry: try with just seed and size
-        const cleanSeed = seed ? seed.replace(/[^a-zA-Z0-9]/g, '').substring(0, 10) : 'user';
-        const basicUrl = `https://api.dicebear.com/9.x/personas/png?seed=${cleanSeed}&size=${Math.min(size, 256)}`;
-        setAvatarUrl(basicUrl);
-      } else {
-        // Third retry: try absolute minimal URL
-        const minimalUrl = `https://api.dicebear.com/9.x/personas/png?seed=default&size=100`;
-        setAvatarUrl(minimalUrl);
-      }
-      
+      const cleanSeed = seed ? seed.replace(/[^a-zA-Z0-9]/g, '') : 'user';
+      const simpleUrl = `https://api.dicebear.com/9.x/personas/png?seed=${cleanSeed}&size=${Math.min(size, 256)}`;
+      setAvatarUrl(simpleUrl);
       setLoading(true);
-      setError(false);
+      setImageLoaded(false);
     } else {
-      console.log('❌ All retry attempts failed, showing fallback');
       setLoading(false);
       setError(true);
-      onError?.();
+      setImageLoaded(false);
+    }
+    
+    onError?.();
+  };
+
+  // Update avatar URL in database when config changes
+  const updateAvatarUrl = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const newUrl = buildAvatarUrl();
+      
+      await supabase
+        .from('avatars')
+        .upsert({
+          user_id: user.id,
+          avatar_url: newUrl,
+          avatar_config: config,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
+      
+      setAvatarUrl(newUrl);
+      setLoading(true);
+      setImageLoaded(false);
+      setError(false);
+    } catch (error) {
+      console.error('Error updating avatar URL:', error);
     }
   };
 
-  // Reset URL when config changes
+  // Load initial avatar URL from database
   React.useEffect(() => {
-    setRetryCount(0);
-    setError(false);
-    setLoading(true);
-    setAvatarUrl(buildAvatarUrl());
-  }, [config, seed, size]);
+    const initializeAvatar = async () => {
+      const url = await loadAvatarUrl();
+      setAvatarUrl(url);
+      setLoading(true);
+      setImageLoaded(false);
+      setError(false);
+    };
+
+    if (!avatarUrl) {
+      initializeAvatar();
+    }
+  }, []);
+
+  // Update avatar URL when config changes (only when user customizes)
+  React.useEffect(() => {
+    if (avatarUrl && config) {
+      // Only update if this is triggered by user changing config, not initial load
+      const configString = JSON.stringify(config);
+      const isInitialLoad = !cachedAvatarUrl;
+      
+      if (!isInitialLoad) {
+        updateAvatarUrl();
+      }
+    }
+  }, [config]);
+
+  // Debug logging for render state
+  const showSpinner = loading && !imageLoaded && !error;
+  if (showSpinner) {
+  }
 
   return (
     <View style={[styles.container, { width: size, height: size }, style]}>
-      {loading && !error && (
-        <View style={[styles.loadingOverlay, { width: size, height: size, borderRadius: size / 2 }]}>
-          <ActivityIndicator size="small" color="#999" />
-        </View>
+      {/* Only show image if we have a URL */}
+      {avatarUrl && (
+        <Image
+          source={{ uri: avatarUrl }}
+          style={[
+            styles.avatar,
+            { 
+              width: size, 
+              height: size, 
+              borderRadius: size / 2,
+              opacity: imageLoaded ? 1 : 0.3 // Show partially transparent while loading
+            }
+          ]}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          key={`${avatarUrl}-${retryCount}`}
+        />
       )}
       
-      <Image
-        source={{ uri: avatarUrl }}
-        style={[
-          styles.avatar,
-          { width: size, height: size, borderRadius: size / 2 }
-        ]}
-        onLoad={handleImageLoad}
-        onError={handleImageError}
-        key={avatarUrl}
-      />
-      
-      {error && (
-        <View style={[styles.errorContainer, { width: size, height: size, borderRadius: size / 2 }]}>
-          <View style={[styles.fallbackAvatar, { width: size, height: size, borderRadius: size / 2 }]}>
-            <View style={styles.fallbackContent}>
-              <View style={[
-                styles.fallbackIcon, 
-                { 
-                  backgroundColor: config.backgroundColor ? `#${config.backgroundColor}` : '#e0e0e0',
-                  width: size * 0.3,
-                  height: size * 0.3,
-                  borderRadius: size * 0.15
-                }
-              ]} />
-            </View>
-          </View>
+      {/* Show loading spinner only while loading and image hasn't loaded yet */}
+      {showSpinner && (
+        <View style={[styles.loadingOverlay, { width: size, height: size, borderRadius: size / 2 }]}>
+          <ActivityIndicator size="small" color="#3498db" />
         </View>
       )}
     </View>
@@ -317,27 +390,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(248, 249, 250, 0.8)',
     zIndex: 1,
-  },
-  errorContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fallbackAvatar: {
-    backgroundColor: '#e0e0e0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fallbackContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fallbackIcon: {
-    backgroundColor: '#b6e3f4',
   },
 });
 

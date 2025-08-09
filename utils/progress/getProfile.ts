@@ -1,5 +1,6 @@
 import { supabase } from '../../database/config';
 import { LevelingService } from '../../src/services/LevelingService';
+import { UserProgressService } from '../../src/services/UserProgressService';
 
 interface Profile {
     level: number;
@@ -22,6 +23,13 @@ export async function getProfile(): Promise<Profile | null> {
                 xpForNextLevel: 100, 
                 progressToNextLevel: 0 
             };
+        }
+
+        // Update streak to ensure current data
+        try {
+            await UserProgressService.updateStreak(user.id);
+        } catch (error) {
+            console.error('Error updating streak in getProfile:', error);
         }
 
         // Get detailed level information

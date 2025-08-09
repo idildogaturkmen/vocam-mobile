@@ -1,4 +1,5 @@
 import { supabase } from '../../database/config';
+import { recordLearningActivity, incrementDailyGoal } from '../../utils/progress/getDailyGoal';
 import { Alert } from 'react-native';
 import uuid from 'react-native-uuid';
 
@@ -309,6 +310,18 @@ class VocabularyService {
                     console.error('User words insert error:', userWordsError);
                     throw userWordsError;
                 }
+
+                // Record learning activity for each new word learned
+                for (const userWord of newUserWords) {
+                    // Count translations for this specific word
+                    const { data: wordTranslations } = await supabase
+                        .from('translations')
+                        .select('id')
+                        .eq('word_id', userWord.word_id);
+                    
+                    const translationCount = wordTranslations?.length || 1;
+                    await recordLearningActivity(userId, userWord.word_id, translationCount);
+                }
             }
 
             // Handle duplicate counts in the result
@@ -405,12 +418,14 @@ class VocabularyService {
                     }
                 }
             } else {
-                // Create new word
+                // Create new word (use upsert to handle duplicates)
                 const { data: newWord, error: wordError } = await supabase
                     .from('words')
-                    .insert({
+                    .upsert({
                         original: original.toLowerCase(),
                         created_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'original'
                     })
                     .select('word_id')
                     .single();
@@ -461,6 +476,15 @@ class VocabularyService {
                     console.error('Error adding to user vocabulary:', userWordError);
                     return 'error';
                 }
+
+                // Record learning activity for new word learned
+                const { data: wordTranslations } = await supabase
+                    .from('translations')
+                    .select('id')
+                    .eq('word_id', wordId);
+                
+                const translationCount = wordTranslations?.length || 1;
+                await recordLearningActivity(userId, wordId, translationCount);
             }
 
             return 'success';

@@ -321,7 +321,6 @@ const router = useRouter();
 
     // FIXED: Updated random avatar generation with REAL DiceBear parameter values
     const generateRandomAvatar = () => {
-        
         const randomConfig: HumanAvatarConfig = {
             style: 'personas', // Always personas
             backgroundColor: BACKGROUND_COLORS[Math.floor(Math.random() * BACKGROUND_COLORS.length)].id,
@@ -336,7 +335,8 @@ const router = useRouter();
             body: AVATAR_OPTIONS.body[Math.floor(Math.random() * AVATAR_OPTIONS.body.length)].id,
         };
         
-        setTempAvatarConfig(randomConfig);
+        // Force state update by creating completely new object
+        setTempAvatarConfig({...randomConfig});
     };
 
     if (loading) {
@@ -403,7 +403,7 @@ const router = useRouter();
                             <HumanAvatar
                                 config={avatarConfig}
                                 size={80}
-                                seed={user?.email || 'default'}
+                                seed={`${user?.email || 'default'}-${JSON.stringify(avatarConfig)}`}
                             />
                         </TouchableOpacity>
                         <View style={styles.avatarBorder} />
@@ -705,7 +705,7 @@ const router = useRouter();
                             <HumanAvatar
                                 config={tempAvatarConfig}
                                 size={140}
-                                seed={user?.email || 'default'}
+                                seed={`${user?.email || 'default'}-${JSON.stringify(tempAvatarConfig)}`}
                             />
                         </View>
 

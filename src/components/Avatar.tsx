@@ -310,11 +310,33 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
     }
   };
 
-  // Load initial avatar URL from database
+  // Load initial avatar URL only once on mount
   React.useEffect(() => {
     const initializeAvatar = async () => {
-      const url = await loadAvatarUrl();
-      setAvatarUrl(url);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          // For authenticated users, try to load from database
+          const { data: avatarData } = await supabase
+            .from('avatars')
+            .select('avatar_config')
+            .eq('user_id', user.id)
+            .single();
+          
+          // If we have saved config, use it; otherwise use current config
+          const configToUse = avatarData?.avatar_config || config;
+          const url = buildAvatarUrl();
+          setAvatarUrl(url);
+        } else {
+          // For non-authenticated users, just generate URL from config
+          const url = buildAvatarUrl();
+          setAvatarUrl(url);
+        }
+      } catch (error) {
+        // Fallback to building URL from config
+        const url = buildAvatarUrl();
+        setAvatarUrl(url);
+      }
       setLoading(true);
       setImageLoaded(false);
       setError(false);
@@ -325,18 +347,17 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
     }
   }, []);
 
-  // Update avatar URL when config changes (only when user customizes)
+  // Update avatar URL when config changes
   React.useEffect(() => {
-    if (avatarUrl && config) {
-      // Only update if this is triggered by user changing config, not initial load
-      const configString = JSON.stringify(config);
-      const isInitialLoad = !cachedAvatarUrl;
-      
-      if (!isInitialLoad) {
-        updateAvatarUrl();
-      }
+    if (config && Object.keys(config).length > 0) {
+      const newUrl = buildAvatarUrl();
+      setAvatarUrl(newUrl);
+      setLoading(true);
+      setImageLoaded(false);
+      setError(false);
+      setRetryCount(0);
     }
-  }, [config]);
+  }, [config, size, seed]);
 
   // Debug logging for render state
   const showSpinner = loading && !imageLoaded && !error;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
+import { View, Image, StyleSheet, ViewStyle } from 'react-native';
 import { supabase } from '../../database/config';
 
 export type AvatarStyle = 'personas';
@@ -142,7 +142,6 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
   onLoad,
   onError 
 }) => {
-  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(false);
   const [retryCount, setRetryCount] = React.useState(0);
   const [imageLoaded, setImageLoaded] = React.useState(false);
@@ -254,12 +253,12 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
   const [avatarUrl, setAvatarUrl] = React.useState<string>('');
 
   const handleImageLoad = () => {
-    setLoading(false);
     setError(false);
     setImageLoaded(true);
     setRetryCount(0);
     onLoad?.();
   };
+
 
   const handleImageError = (errorEvent: any) => {
     console.error('❌ Avatar failed to load:', errorEvent.nativeEvent?.error || 'Unknown error');
@@ -271,10 +270,8 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
       const cleanSeed = seed ? seed.replace(/[^a-zA-Z0-9]/g, '') : 'user';
       const simpleUrl = `https://api.dicebear.com/9.x/personas/png?seed=${cleanSeed}&size=${Math.min(size, 256)}`;
       setAvatarUrl(simpleUrl);
-      setLoading(true);
       setImageLoaded(false);
     } else {
-      setLoading(false);
       setError(true);
       setImageLoaded(false);
     }
@@ -302,7 +299,6 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
         });
       
       setAvatarUrl(newUrl);
-      setLoading(true);
       setImageLoaded(false);
       setError(false);
     } catch (error) {
@@ -337,7 +333,6 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
         const url = buildAvatarUrl();
         setAvatarUrl(url);
       }
-      setLoading(true);
       setImageLoaded(false);
       setError(false);
     };
@@ -347,22 +342,20 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
     }
   }, []);
 
+
   // Update avatar URL when config changes
   React.useEffect(() => {
     if (config && Object.keys(config).length > 0) {
       const newUrl = buildAvatarUrl();
-      setAvatarUrl(newUrl);
-      setLoading(true);
-      setImageLoaded(false);
-      setError(false);
-      setRetryCount(0);
+      // Only update if URL actually changed
+      if (newUrl !== avatarUrl) {
+        setAvatarUrl(newUrl);
+        setImageLoaded(false); // Reset to let onLoad handle it
+        setError(false);
+        setRetryCount(0);
+      }
     }
-  }, [config, size, seed]);
-
-  // Debug logging for render state
-  const showSpinner = loading && !imageLoaded && !error;
-  if (showSpinner) {
-  }
+  }, [config, size, seed, avatarUrl]);
 
   return (
     <View style={[styles.container, { width: size, height: size }, style]}>
@@ -376,20 +369,13 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
               width: size, 
               height: size, 
               borderRadius: size / 2,
-              opacity: imageLoaded ? 1 : 0.3 // Show partially transparent while loading
+              opacity: 1 // Always full opacity - no loading state
             }
           ]}
           onLoad={handleImageLoad}
           onError={handleImageError}
           key={`${avatarUrl}-${retryCount}`}
         />
-      )}
-      
-      {/* Show loading spinner only while loading and image hasn't loaded yet */}
-      {showSpinner && (
-        <View style={[styles.loadingOverlay, { width: size, height: size, borderRadius: size / 2 }]}>
-          <ActivityIndicator size="small" color="#3498db" />
-        </View>
       )}
     </View>
   );
@@ -402,17 +388,6 @@ const styles = StyleSheet.create({
   },
   avatar: {
     backgroundColor: '#f0f0f0',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(248, 249, 250, 0.8)',
-    zIndex: 1,
   },
 });
 

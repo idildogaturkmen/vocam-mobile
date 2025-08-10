@@ -130,14 +130,16 @@ const router = useRouter();
     const tabs = ['colors', 'features'] as const;
     const [activeTab, setActiveTab] = useState<'colors' | 'features'>('colors');
 
-    // Memoize the image function to prevent multiple calls
-    const imageFn = useCallback(async () => await getImageWord(stats?.uniqueWords || 0), [stats?.uniqueWords]);
+    // Memoize all image functions to prevent multiple calls
+    const wordImageFn = useCallback(async () => await getImageWord(stats?.uniqueWords || 0), [stats?.uniqueWords]);
+    const levelImageFn = useCallback(async () => await getImageLevel(level), [level]);
+    const trophyImageFn = useCallback(() => getImageTrophy(achievements.filter(a => a.earned).length), [achievements]);
 
     useEffect(() => {
         checkAuthAndLoadUserData();
     }, []);
 
-    // Auto-refresh every 30 seconds
+    // Reduced auto-refresh for better performance
     useEffect(() => {
         if (!isAuthenticated) return;
 
@@ -146,32 +148,41 @@ const router = useRouter();
             const { data: { user } } = await supabase.auth.getUser();
             if (!user || refreshing) return;
             
-            checkAuthAndLoadUserData();
-        }, 30000); // 30 seconds for full refresh
+            // Only refresh basic stats, not full profile
+            try {
+                const userStats = await SessionService.getUserStats(user.id);
+                setStats(userStats);
+                const goalData = await getDailyGoalFromLog();
+                setDailyGoal(goalData);
+            } catch (error) {
+                console.error('Background refresh error:', error);
+            }
+        }, 120000); // 2 minutes instead of 30 seconds
 
         return () => clearInterval(interval);
     }, [isAuthenticated, refreshing]);
 
-    // More frequent daily goal refresh
-    useEffect(() => {
-        if (!isAuthenticated) return;
-
-        const goalInterval = setInterval(async () => {
-            // Double-check authentication before running operations
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user || refreshing) return;
-            
-            refreshDailyGoal();
-        }, 3000); // 3 seconds for daily goal only
-
-        return () => clearInterval(goalInterval);
-    }, [isAuthenticated, refreshing]);
-
-    // Refresh when screen comes into focus
+    // Refresh when screen comes into focus (but less aggressive)
     useFocusEffect(
         useCallback(() => {
             if (isAuthenticated && !loading) {
-                checkAuthAndLoadUserData();
+                // Only do light refresh on focus, full refresh on pull-to-refresh
+                const lightRefresh = async () => {
+                    try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (!user) return;
+                        
+                        const [userStats, goalData] = await Promise.all([
+                            SessionService.getUserStats(user.id),
+                            getDailyGoalFromLog()
+                        ]);
+                        setStats(userStats);
+                        setDailyGoal(goalData);
+                    } catch (error) {
+                        console.error('Focus refresh error:', error);
+                    }
+                };
+                lightRefresh();
             }
         }, [isAuthenticated, loading])
     );
@@ -198,20 +209,36 @@ const router = useRouter();
     const loadUserData = async (currentUser: any) => {
         try {
             if (currentUser) {
-                const userStats = await SessionService.getUserStats(currentUser.id);
-                setStats(userStats);
+                // Make independent API calls in parallel for faster loading
+                const [
+                    userStats,
+                    avatarResult,
+                    vocabulary,
+                    profile,
+                    goalData
+                ] = await Promise.all([
+                    SessionService.getUserStats(currentUser.id),
+                    supabase
+                        .from('avatars')
+                        .select('avatar_config')
+                        .eq('user_id', currentUser.id)
+                        .single(),
+                    VocabularyService.getUserVocabulary(currentUser.id),
+                    getProfile(),
+                    getDailyGoalFromLog()
+                ]);
 
-                // FIXED: Load avatar configuration from new avatars table
-                const { data: avatarData, error: avatarError } = await supabase
-                    .from('avatars')
-                    .select('avatar_config')
-                    .eq('user_id', currentUser.id)
-                    .single();
-                
+                // Set basic data immediately
+                setStats(userStats);
+                setProfileData(profile);
+                setLevel(profile?.level || 0);
+                setExp(profile?.totalXP || 0);
+                setDailyGoal(goalData);
+
+                // Handle avatar config
+                const { data: avatarData, error: avatarError } = avatarResult;
                 if (avatarData?.avatar_config && !avatarError) {
-                    // avatar_config is already parsed JSON (jsonb type)
                     const config = avatarData.avatar_config;
-                    // Ensure it's always personas style and merge with defaults
                     const cleanConfig = { ...avatarConfig, ...config, style: 'personas' as AvatarStyle };
                     setAvatarConfig(cleanConfig);
                     setTempAvatarConfig(cleanConfig);
@@ -221,54 +248,46 @@ const router = useRouter();
                     }
                 }
 
-                // Load language progress
-                const vocabulary = await VocabularyService.getUserVocabulary(currentUser.id);
+                // Process language progress
                 const langProgress: LanguageProgress = {};
-                
                 vocabulary.forEach(word => {
                     const lang = word.language;
                     if (lang) {
                         langProgress[lang] = (langProgress[lang] || 0) + 1;
                     }
                 });
-                
                 setLanguageProgress(langProgress);
 
-                // Load progress data from existing utility functions
-                const profile = await getProfile();
-                setProfileData(profile);
-                setLevel(profile?.level || 0);
-                setExp(profile?.totalXP || 0); // Use totalXP instead of exp
-                
-                // Sync user level in case there's a discrepancy
-                try {
-                    const syncResult = await LevelingService.syncUserLevel(currentUser.id);
+                // Handle level sync and achievements in parallel (these can be slower)
+                Promise.all([
+                    LevelingService.syncUserLevel(currentUser.id).catch(error => {
+                        console.error('Error syncing user level:', error);
+                        return null;
+                    }),
+                    AchievementService.getAllAchievementsWithProgress(currentUser.id)
+                ]).then(async ([syncResult, achievementsList]) => {
+                    // Handle level sync if needed
                     if (syncResult && syncResult.oldLevel !== syncResult.newLevel) {
                         console.log(`Level synced: ${syncResult.oldLevel} -> ${syncResult.newLevel}`);
-                        // Reload profile data after sync
                         const updatedProfile = await getProfile();
                         setProfileData(updatedProfile);
                         setLevel(updatedProfile?.level || 0);
                     }
-                } catch (error) {
-                    console.error('Error syncing user level:', error);
-                }
-                
-                // Load achievements with progress
-                const achievementsList = await AchievementService.getAllAchievementsWithProgress(currentUser.id);
-                setAchievements(achievementsList);
-                
-                // Check for new achievements
-                const newAchievements = await AchievementService.checkAndAwardAchievements(currentUser.id);
-                if (newAchievements.length > 0) {
-                    console.log('New achievements earned:', newAchievements);
-                    // Reload achievements to include newly earned ones
-                    const updatedAchievements = await AchievementService.getAllAchievementsWithProgress(currentUser.id);
-                    setAchievements(updatedAchievements);
-                }
-                
-                const goalData = await getDailyGoalFromLog();
-                setDailyGoal(goalData);
+                    
+                    // Set achievements
+                    setAchievements(achievementsList);
+                    
+                    // Check for new achievements (this is less critical, can be slower)
+                    AchievementService.checkAndAwardAchievements(currentUser.id).then(newAchievements => {
+                        if (newAchievements.length > 0) {
+                            console.log('New achievements earned:', newAchievements);
+                            // Reload achievements to include newly earned ones
+                            AchievementService.getAllAchievementsWithProgress(currentUser.id).then(updatedAchievements => {
+                                setAchievements(updatedAchievements);
+                            });
+                        }
+                    }).catch(error => console.error('Error checking new achievements:', error));
+                }).catch(error => console.error('Error in background tasks:', error));
             }
         } catch (error) {
             console.error('Error loading user data:', error);
@@ -460,17 +479,17 @@ const router = useRouter();
                     <StatBox
                         label="Level"
                         value={level}
-                        image={async () => await getImageLevel(level)}
+                        image={levelImageFn}
                     />
                     <StatBox
                         label="Trophies"
                         value={achievements.filter(a => a.earned).length}
-                        image={() => getImageTrophy(achievements.filter(a => a.earned).length)}
+                        image={trophyImageFn}
                     />
                     <StatBox
                         label="Words Learned"
                         value={stats?.uniqueWords || 0}
-                        image={imageFn}
+                        image={wordImageFn}
                     />
                 </View>
                 

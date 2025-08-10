@@ -268,9 +268,24 @@ class VocabularyService {
                     newUserWords.push({
                         user_id: userId,
                         word_id: wordId,
-                        proficiency: Math.floor(Math.random() * 20) + 10,
+                        proficiency: 0, // Start at beginner level
                         learned_at: new Date().toISOString()
                     });
+                }
+                // If user has the word but not in this language, reset proficiency to 0 for fresh start
+                else if (userHasWord && !userHasInThisLanguage) {
+                    // Update existing record to completely reset proficiency for new language
+                    const existingWordId = userWordMap.get(original);
+                    if (existingWordId) {
+                        await supabase
+                            .from('user_words')
+                            .update({ 
+                                proficiency: 0, // Always start at 0 for new language, no exceptions
+                                learned_at: new Date().toISOString()
+                            })
+                            .eq('word_id', existingWordId)
+                            .eq('user_id', userId);
+                    }
                 }
 
                 // This is a new word for the user in this language
@@ -468,7 +483,7 @@ class VocabularyService {
                     .insert({
                         user_id: userId,
                         word_id: wordId,
-                        proficiency: Math.floor(Math.random() * 20) + 10,
+                        proficiency: 0, // Start at beginner level
                         learned_at: new Date().toISOString()
                     });
 

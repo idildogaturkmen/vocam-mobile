@@ -312,7 +312,7 @@ class SessionService {
         try {
             const [levelInfo, achievements, stats] = await Promise.all([
                 LevelingService.getLevelInfo(userId),
-                AchievementService.getUserAchievements(userId),
+                AchievementService.getAllAchievementsWithProgress(userId),
                 this.getUserStats(userId)
             ]);
 

@@ -130,6 +130,9 @@ const router = useRouter();
     const tabs = ['colors', 'features'] as const;
     const [activeTab, setActiveTab] = useState<'colors' | 'features'>('colors');
 
+    // Memoize the image function to prevent multiple calls
+    const imageFn = useCallback(async () => await getImageWord(stats?.uniqueWords || 0), [stats?.uniqueWords]);
+
     useEffect(() => {
         checkAuthAndLoadUserData();
     }, []);
@@ -467,7 +470,7 @@ const router = useRouter();
                     <StatBox
                         label="Words Learned"
                         value={stats?.uniqueWords || 0}
-                        image={async () => await getImageWord(stats?.uniqueWords || 0)}
+                        image={imageFn}
                     />
                 </View>
                 

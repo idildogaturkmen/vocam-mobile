@@ -10,6 +10,7 @@ import Entypo from '@expo/vector-icons/Entypo';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useTranslation } from 'react-i18next';
 
 export default function CameraControls({
   facing,
@@ -23,6 +24,7 @@ export default function CameraControls({
   // User stats props
   userStats = null
 }) {
+  const { t } = useTranslation();
   // Determine user level based on total words
   const getUserLevel = (totalWords) => {
     if (totalWords >= 200) return { level: 'Expert', color: '#e74c3c' };
@@ -113,19 +115,19 @@ export default function CameraControls({
           {modelStatus === 'loading' && (
             <View style={styles.statusRow}>
               <ActivityIndicator size="small" color="white" />
-              <Text style={styles.statusText}>Loading AI Model...</Text>
+              <Text style={styles.statusText}>{t('camera.aiModelLoading')}</Text>
             </View>
           )}
           {modelStatus === 'ready' && (
             <View style={styles.statusRow}>
               <Ionicons name="checkmark-done" size={20} color="#27ae60" />
-              <Text style={styles.statusText}>Ready to detect objects</Text>
+              <Text style={styles.statusText}>{t('camera.readyToDetect')}</Text>
             </View>
           )}
           {modelStatus === 'error' && (
             <View style={styles.statusRow}>
               <Ionicons name="close-circle" size={20} color="#ff4444" />
-              <Text style={styles.statusText}>AI Error - Check API key</Text>
+              <Text style={styles.statusText}>{t('camera.aiError')}</Text>
             </View>
           )}
         </View>

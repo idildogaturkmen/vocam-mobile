@@ -1,0 +1,81 @@
+{
+    "common": {
+        "loading": "로딩 중...",
+        "error": "오류",
+        "success": "성공",
+        "save": "저장",
+        "cancel": "취소",
+        "ok": "확인",
+        "yes": "예",
+        "no": "아니오",
+        "continue": "계속",
+        "back": "뒤로",
+        "next": "다음",
+        "done": "완료",
+        "retry": "다시 시도"
+    },
+    "splash": {
+        "appName": "Vocam",
+        "tagline": "시각적으로 언어 학습"
+    },
+    "languageSelection": {
+        "title": "언어를 선택하세요",
+        "subtitle": "앱 사용을 위한 선호 언어를 선택하세요",
+        "continue": "계속"
+    },
+    "auth": {
+        "login": "로그인",
+        "signup": "회원가입",
+        "email": "이메일",
+        "password": "비밀번호",
+        "confirmPassword": "비밀번호 확인",
+        "forgotPassword": "비밀번호를 잊으셨나요?",
+        "loginFailed": "로그인 실패",
+        "signupFailed": "회원가입 실패",
+        "logout": "로그아웃",
+        "confirmLogout": "로그아웃 확인",
+        "logoutMessage": "로그아웃 하시겠습니까?"
+    },
+    "navigation": {
+        "camera": "카메라",
+        "practice": "연습",
+        "vocabulary": "어휘",
+        "progress": "진행 상황",
+        "profile": "프로필"
+    },
+    "practice": {
+        "title": "연습",
+        "selectLanguage": "언어 선택",
+        "noLanguages": "연습할 언어가 없습니다",
+        "startPractice": "연습 시작",
+        "loading": "연습 세션을 로드하는 중..."
+    },
+    "vocabulary": {
+        "title": "내 어휘",
+        "searchPlaceholder": "단어 검색...",
+        "noWords": "단어를 찾을 수 없습니다",
+        "addWord": "단어 추가"
+    },
+    "progress": {
+        "title": "진행 상황",
+        "level": "레벨",
+        "xp": "XP",
+        "streak": "연속 기록",
+        "wordsLearned": "학습한 단어",
+        "achievements": "성취"
+    },
+    "profile": {
+        "title": "프로필",
+        "personalInfo": "개인 정보",
+        "settings": "설정",
+        "achievements": "성취",
+        "dailyGoal": "일일 목표",
+        "language": "앱 언어"
+    },
+    "achievements": {
+        "title": "성취",
+        "unlocked": "잠금 해제",
+        "locked": "잠김",
+        "progress": "진행 상황"
+    }
+}

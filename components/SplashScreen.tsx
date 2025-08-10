@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, StyleSheet, Image, Text, useColorScheme } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 export default function SplashScreen() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -14,8 +16,8 @@ export default function SplashScreen() {
           resizeMode="contain"
         />
       </View>
-      <Text style={[styles.appName, { color: isDark ? '#64B5F6' : '#3498db' }]}>Vocam</Text>
-      <Text style={[styles.tagline, { color: isDark ? '#BDBDBD' : '#7f8c8d' }]}>Learn Languages Visually</Text>
+      <Text style={[styles.appName, { color: isDark ? '#64B5F6' : '#3498db' }]}>{t('splash.appName')}</Text>
+      <Text style={[styles.tagline, { color: isDark ? '#BDBDBD' : '#7f8c8d' }]}>{t('splash.tagline')}</Text>
     </View>
   );
 }

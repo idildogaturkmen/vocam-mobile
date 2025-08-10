@@ -1,0 +1,81 @@
+{
+    "common": {
+        "loading": "جارٍ التحميل...",
+        "error": "خطأ",
+        "success": "نجح",
+        "save": "حفظ",
+        "cancel": "إلغاء",
+        "ok": "موافق",
+        "yes": "نعم",
+        "no": "لا",
+        "continue": "متابعة",
+        "back": "عودة",
+        "next": "التالي",
+        "done": "تم",
+        "retry": "إعادة المحاولة"
+    },
+    "splash": {
+        "appName": "Vocam",
+        "tagline": "تعلم اللغات بصرياً"
+    },
+    "languageSelection": {
+        "title": "اختر لغتك",
+        "subtitle": "اختر لغتك المفضلة لاستخدام التطبيق",
+        "continue": "متابعة"
+    },
+    "auth": {
+        "login": "تسجيل الدخول",
+        "signup": "إنشاء حساب",
+        "email": "البريد الإلكتروني",
+        "password": "كلمة المرور",
+        "confirmPassword": "تأكيد كلمة المرور",
+        "forgotPassword": "هل نسيت كلمة المرور؟",
+        "loginFailed": "فشل تسجيل الدخول",
+        "signupFailed": "فشل إنشاء الحساب",
+        "logout": "تسجيل الخروج",
+        "confirmLogout": "تأكيد تسجيل الخروج",
+        "logoutMessage": "هل أنت متأكد من رغبتك في تسجيل الخروج؟"
+    },
+    "navigation": {
+        "camera": "الكاميرا",
+        "practice": "الممارسة",
+        "vocabulary": "المفردات",
+        "progress": "التقدم",
+        "profile": "الملف الشخصي"
+    },
+    "practice": {
+        "title": "الممارسة",
+        "selectLanguage": "اختر اللغة",
+        "noLanguages": "لا توجد لغات متاحة للممارسة",
+        "startPractice": "بدء الممارسة",
+        "loading": "جارٍ تحميل جلسة الممارسة..."
+    },
+    "vocabulary": {
+        "title": "مفرداتي",
+        "searchPlaceholder": "ابحث عن الكلمات...",
+        "noWords": "لم يتم العثور على كلمات",
+        "addWord": "إضافة كلمة"
+    },
+    "progress": {
+        "title": "التقدم",
+        "level": "المستوى",
+        "xp": "XP",
+        "streak": "السلسلة",
+        "wordsLearned": "الكلمات المتعلمة",
+        "achievements": "الإنجازات"
+    },
+    "profile": {
+        "title": "الملف الشخصي",
+        "personalInfo": "المعلومات الشخصية",
+        "settings": "الإعدادات",
+        "achievements": "الإنجازات",
+        "dailyGoal": "الهدف اليومي",
+        "language": "لغة التطبيق"
+    },
+    "achievements": {
+        "title": "الإنجازات",
+        "unlocked": "مفتوح",
+        "locked": "مغلق",
+        "progress": "التقدم"
+    }
+}

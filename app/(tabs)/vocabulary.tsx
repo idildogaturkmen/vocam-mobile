@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLanguageChange } from '../../src/hooks/useLanguageChange';
 import { 
     View, 
     Text, 
@@ -80,6 +82,9 @@ type LanguageName = keyof typeof languages;
 type ViewMode = 'cards' | 'flashcard';
 
 export default function VocabularyScreen() {
+    const { t } = useTranslation();
+    useLanguageChange(); // This will force re-render on language change
+    
     const [vocabulary, setVocabulary] = useState<SavedWord[]>([]);
     const [filteredVocabulary, setFilteredVocabulary] = useState<SavedWord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -442,7 +447,7 @@ export default function VocabularyScreen() {
                 {/* Tap to expand hint */}
                 {!isExpanded && (
                     <View style={styles.tapHint}>
-                        <Text style={styles.tapHintText}><AntDesign name="upcircle" size={15} color="white" /> Tap to see example & more</Text>
+                        <Text style={styles.tapHintText}><AntDesign name="upcircle" size={15} color="white" /> {t('camera.tapToSeeMore')}</Text>
                     </View>
                 )}
 
@@ -614,7 +619,7 @@ export default function VocabularyScreen() {
             <View style={[styles.container, { backgroundColor: 'white' }]}> 
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.title}>My Vocabulary</Text>
+                        <Text style={styles.title}>{t('vocabulary.title')}</Text>
                     </View>
                 </View>
                 
@@ -651,7 +656,7 @@ export default function VocabularyScreen() {
             {/* Header */}
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.title}>My Vocabulary</Text>
+                    <Text style={styles.title}>{t('vocabulary.title')}</Text>
                     <Text style={styles.subtitle}>
                         {filteredVocabulary.length} word{filteredVocabulary.length !== 1 ? 's' : ''} 
                         {searchQuery || filterLanguage !== 'All' ? ` (filtered)` : ' learned'}
@@ -742,7 +747,7 @@ export default function VocabularyScreen() {
                     onPress={() => setShowSortFilter(true)}
                 >
                     <Ionicons name="funnel" size={18} color="#3498db" />
-                    <Text style={styles.filterChipText}>Sort</Text>
+                    <Text style={styles.filterChipText}>{t('vocabulary.sort')}</Text>
                     <Ionicons name="chevron-down" size={16} color="#3498db" />
                 </TouchableOpacity>
                 
@@ -769,8 +774,8 @@ export default function VocabularyScreen() {
                         <Text style={styles.emptyTitle}>No words to practice</Text>
                         <Text style={styles.emptyText}>
                             {filterLanguage !== 'All' || searchQuery
-                                ? 'Try adjusting your filters'
-                                : 'Start learning by using the Camera tab!'}
+                                ? t('vocabulary.adjustFilters')
+                                : t('vocabulary.startLearning')}
                         </Text>
                     </View>
                 )
@@ -797,8 +802,8 @@ export default function VocabularyScreen() {
                             <Text style={styles.emptyTitle}>No words yet</Text>
                             <Text style={styles.emptyText}>
                                 {filterLanguage !== 'All' || searchQuery
-                                    ? 'No words match your search'
-                                    : 'Start learning by using the Camera tab!'}
+                                    ? t('vocabulary.noWordsMatch')
+                                    : t('vocabulary.startLearning')}
                             </Text>
                         </View>
                     )}
@@ -870,7 +875,7 @@ export default function VocabularyScreen() {
                                         <Text style={[
                                             styles.optionText,
                                             filterLanguage === 'All' && styles.optionTextActive
-                                        ]}>All Languages</Text>
+                                        ]}>{t('vocabulary.all')}</Text>
                                         {filterLanguage === 'All' && (
                                             <Ionicons name="checkmark" size={20} color="#3498db" />
                                         )}
@@ -932,15 +937,15 @@ export default function VocabularyScreen() {
                                 style={styles.modalContent}
                                 onPress={(e) => e.stopPropagation()}
                             >
-                                <Text style={styles.modalTitle}>Sort by</Text>
+                                <Text style={styles.modalTitle}>{t('vocabulary.sort')}</Text>
 
                                 <View style={styles.optionsList}>
                                     {[
-                                        { value: 'newest', label: 'Newest First', icon: 'time' },
-                                        { value: 'oldest', label: 'Oldest First', icon: 'time-outline' },
-                                        { value: 'alphabetical', label: 'Alphabetical', icon: 'text' },
-                                        { value: 'proficiency-high', label: 'High Proficiency', icon: 'trending-up' },
-                                        { value: 'proficiency-low', label: 'Low Proficiency', icon: 'trending-down' }
+                                        { value: 'newest', label: t('vocabulary.newestFirst'), icon: 'time' },
+                                        { value: 'oldest', label: t('vocabulary.oldestFirst'), icon: 'time-outline' },
+                                        { value: 'alphabetical', label: t('vocabulary.alphabetical'), icon: 'text' },
+                                        { value: 'proficiency-high', label: t('vocabulary.highProficiency'), icon: 'trending-up' },
+                                        { value: 'proficiency-low', label: t('vocabulary.lowProficiency'), icon: 'trending-down' }
                                     ].map(option => (
                                         <TouchableOpacity
                                             key={option.value}

@@ -3,8 +3,13 @@ import Entypo from '@expo/vector-icons/Entypo';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useTranslation } from 'react-i18next';
+import { useLanguageChange } from '../../src/hooks/useLanguageChange';
 
 export default function TabLayout() {
+  const { t } = useTranslation();
+  useLanguageChange(); // This will force re-render on language change
+  
   return (
     <Tabs
       screenOptions={{
@@ -28,7 +33,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="detection"
         options={{
-          title: 'Camera',
+          title: t('navigation.camera') || 'Camera',
           tabBarIcon: ({ color }: { color: string }) => (
             <Entypo name="camera" size={30} color={color} />
           ),
@@ -39,7 +44,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="vocabulary"
         options={{
-          title: 'Vocabulary',
+          title: t('navigation.vocabulary'),
           tabBarIcon: ({ color }: { color: string }) => (
             <MaterialCommunityIcons name="bookshelf" size={30} color={color} />
           ),
@@ -50,7 +55,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="practice"
         options={{
-          title: 'Practice',
+          title: t('navigation.practice'),
           tabBarIcon: ({ color }: { color: string }) => (
             <FontAwesome6 name="brain" size={30} color={color} />
           ),
@@ -61,7 +66,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('navigation.profile'),
           tabBarIcon: ({ color }: { color: string }) => (
             <Ionicons name="person-circle" size={30} color={color} />
           ),

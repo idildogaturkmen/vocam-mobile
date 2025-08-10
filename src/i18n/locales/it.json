@@ -1,0 +1,81 @@
+{
+    "common": {
+        "loading": "Caricamento...",
+        "error": "Errore",
+        "success": "Successo",
+        "save": "Salva",
+        "cancel": "Annulla",
+        "ok": "OK",
+        "yes": "Sì",
+        "no": "No",
+        "continue": "Continua",
+        "back": "Indietro",
+        "next": "Avanti",
+        "done": "Fatto",
+        "retry": "Riprova"
+    },
+    "splash": {
+        "appName": "Vocam",
+        "tagline": "Impara le Lingue Visualmente"
+    },
+    "languageSelection": {
+        "title": "Scegli la Tua Lingua",
+        "subtitle": "Seleziona la tua lingua preferita per utilizzare l'app",
+        "continue": "Continua"
+    },
+    "auth": {
+        "login": "Accedi",
+        "signup": "Registrati",
+        "email": "Email",
+        "password": "Password",
+        "confirmPassword": "Conferma Password",
+        "forgotPassword": "Password dimenticata?",
+        "loginFailed": "Accesso fallito",
+        "signupFailed": "Registrazione fallita",
+        "logout": "Esci",
+        "confirmLogout": "Conferma Uscita",
+        "logoutMessage": "Sei sicuro di voler uscire?"
+    },
+    "navigation": {
+        "camera": "Fotocamera",
+        "practice": "Pratica",
+        "vocabulary": "Vocabolario",
+        "progress": "Progresso",
+        "profile": "Profilo"
+    },
+    "practice": {
+        "title": "Pratica",
+        "selectLanguage": "Seleziona Lingua",
+        "noLanguages": "Nessuna lingua disponibile per la pratica",
+        "startPractice": "Inizia Pratica",
+        "loading": "Caricamento sessione di pratica..."
+    },
+    "vocabulary": {
+        "title": "Il Mio Vocabolario",
+        "searchPlaceholder": "Cerca parole...",
+        "noWords": "Nessuna parola trovata",
+        "addWord": "Aggiungi Parola"
+    },
+    "progress": {
+        "title": "Progresso",
+        "level": "Livello",
+        "xp": "XP",
+        "streak": "Serie",
+        "wordsLearned": "Parole Imparate",
+        "achievements": "Risultati"
+    },
+    "profile": {
+        "title": "Profilo",
+        "personalInfo": "Informazioni Personali",
+        "settings": "Impostazioni",
+        "achievements": "Risultati",
+        "dailyGoal": "Obiettivo Giornaliero",
+        "language": "Lingua dell'App"
+    },
+    "achievements": {
+        "title": "Risultati",
+        "unlocked": "Sbloccato",
+        "locked": "Bloccato",
+        "progress": "Progresso"
+    }
+}

@@ -1,0 +1,81 @@
+{
+    "common": {
+        "loading": "Laden...",
+        "error": "Fehler",
+        "success": "Erfolg",
+        "save": "Speichern",
+        "cancel": "Abbrechen",
+        "ok": "OK",
+        "yes": "Ja",
+        "no": "Nein",
+        "continue": "Weiter",
+        "back": "Zurück",
+        "next": "Weiter",
+        "done": "Fertig",
+        "retry": "Wiederholen"
+    },
+    "splash": {
+        "appName": "Vocam",
+        "tagline": "Sprachen Visuell Lernen"
+    },
+    "languageSelection": {
+        "title": "Wählen Sie Ihre Sprache",
+        "subtitle": "Wählen Sie Ihre bevorzugte Sprache für die Nutzung der App",
+        "continue": "Weiter"
+    },
+    "auth": {
+        "login": "Anmelden",
+        "signup": "Registrieren",
+        "email": "E-Mail",
+        "password": "Passwort",
+        "confirmPassword": "Passwort Bestätigen",
+        "forgotPassword": "Passwort vergessen?",
+        "loginFailed": "Anmeldung fehlgeschlagen",
+        "signupFailed": "Registrierung fehlgeschlagen",
+        "logout": "Abmelden",
+        "confirmLogout": "Abmeldung Bestätigen",
+        "logoutMessage": "Sind Sie sicher, dass Sie sich abmelden möchten?"
+    },
+    "navigation": {
+        "camera": "Kamera",
+        "practice": "Übung",
+        "vocabulary": "Vokabular",
+        "progress": "Fortschritt",
+        "profile": "Profil"
+    },
+    "practice": {
+        "title": "Übung",
+        "selectLanguage": "Sprache Auswählen",
+        "noLanguages": "Keine Sprachen zum Üben verfügbar",
+        "startPractice": "Übung Starten",
+        "loading": "Übungssitzung wird geladen..."
+    },
+    "vocabulary": {
+        "title": "Mein Vokabular",
+        "searchPlaceholder": "Wörter suchen...",
+        "noWords": "Keine Wörter gefunden",
+        "addWord": "Wort Hinzufügen"
+    },
+    "progress": {
+        "title": "Fortschritt",
+        "level": "Level",
+        "xp": "XP",
+        "streak": "Serie",
+        "wordsLearned": "Gelernte Wörter",
+        "achievements": "Erfolge"
+    },
+    "profile": {
+        "title": "Profil",
+        "personalInfo": "Persönliche Informationen",
+        "settings": "Einstellungen",
+        "achievements": "Erfolge",
+        "dailyGoal": "Tagesziel",
+        "language": "App-Sprache"
+    },
+    "achievements": {
+        "title": "Erfolge",
+        "unlocked": "Freigeschaltet",
+        "locked": "Gesperrt",
+        "progress": "Fortschritt"
+    }
+}

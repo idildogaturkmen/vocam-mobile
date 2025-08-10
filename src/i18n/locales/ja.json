@@ -1,0 +1,81 @@
+{
+    "common": {
+        "loading": "読み込み中...",
+        "error": "エラー",
+        "success": "成功",
+        "save": "保存",
+        "cancel": "キャンセル",
+        "ok": "OK",
+        "yes": "はい",
+        "no": "いいえ",
+        "continue": "続行",
+        "back": "戻る",
+        "next": "次へ",
+        "done": "完了",
+        "retry": "再試行"
+    },
+    "splash": {
+        "appName": "Vocam",
+        "tagline": "視覚的に言語を学習"
+    },
+    "languageSelection": {
+        "title": "言語を選択",
+        "subtitle": "アプリを使用する言語を選択してください",
+        "continue": "続行"
+    },
+    "auth": {
+        "login": "ログイン",
+        "signup": "サインアップ",
+        "email": "メールアドレス",
+        "password": "パスワード",
+        "confirmPassword": "パスワードの確認",
+        "forgotPassword": "パスワードを忘れましたか？",
+        "loginFailed": "ログインに失敗しました",
+        "signupFailed": "サインアップに失敗しました",
+        "logout": "ログアウト",
+        "confirmLogout": "ログアウトの確認",
+        "logoutMessage": "ログアウトしてもよろしいですか？"
+    },
+    "navigation": {
+        "camera": "カメラ",
+        "practice": "練習",
+        "vocabulary": "語彙",
+        "progress": "進行状況",
+        "profile": "プロファイル"
+    },
+    "practice": {
+        "title": "練習",
+        "selectLanguage": "言語を選択",
+        "noLanguages": "練習できる言語がありません",
+        "startPractice": "練習を開始",
+        "loading": "練習セッションを読み込み中..."
+    },
+    "vocabulary": {
+        "title": "私の語彙",
+        "searchPlaceholder": "単語を検索...",
+        "noWords": "単語が見つかりません",
+        "addWord": "単語を追加"
+    },
+    "progress": {
+        "title": "進行状況",
+        "level": "レベル",
+        "xp": "XP",
+        "streak": "連続記録",
+        "wordsLearned": "学習した単語",
+        "achievements": "実績"
+    },
+    "profile": {
+        "title": "プロファイル",
+        "personalInfo": "個人情報",
+        "settings": "設定",
+        "achievements": "実績",
+        "dailyGoal": "日次目標",
+        "language": "アプリの言語"
+    },
+    "achievements": {
+        "title": "実績",
+        "unlocked": "アンロック済み",
+        "locked": "ロック中",
+        "progress": "進行状況"
+    }
+}

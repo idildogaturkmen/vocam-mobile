@@ -2,8 +2,10 @@ import { supabase } from '@/database/config';
 import { Button } from '@rneui/base';
 import { useRouter } from 'expo-router';
 import { Alert, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 export default function LogoutButton(): React.ReactElement {
+    const { t } = useTranslation();
     const router = useRouter();
 
     const handleLogout = async () => {
@@ -14,17 +16,17 @@ export default function LogoutButton(): React.ReactElement {
             return;
         }
 
-        router.replace('/App');
+        router.replace('/');
     };
 
     const confirmLogout = async () => {
         Alert.alert(
-            'Confirm Logout',
-            'Are you sure you want to log out?',
+            t('auth.confirmLogout'),
+            t('auth.logoutMessage'),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('common.cancel'), style: 'cancel' },
                 {
-                    text: 'Logout',
+                    text: t('auth.logout'),
                     style: 'destructive',
                     onPress: () => {
                         handleLogout();
@@ -38,7 +40,7 @@ export default function LogoutButton(): React.ReactElement {
     return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
             <Button
-                title="Logout"
+                title={t('auth.logout')}
                 onPress={confirmLogout}
                 buttonStyle={{ backgroundColor: 'red', paddingHorizontal: 24 }}
             />

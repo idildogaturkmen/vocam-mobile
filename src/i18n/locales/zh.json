@@ -1,0 +1,81 @@
+{
+    "common": {
+        "loading": "加载中...",
+        "error": "错误",
+        "success": "成功",
+        "save": "保存",
+        "cancel": "取消",
+        "ok": "确定",
+        "yes": "是",
+        "no": "否",
+        "continue": "继续",
+        "back": "返回",
+        "next": "下一步",
+        "done": "完成",
+        "retry": "重试"
+    },
+    "splash": {
+        "appName": "Vocam",
+        "tagline": "视觉化学习语言"
+    },
+    "languageSelection": {
+        "title": "选择您的语言",
+        "subtitle": "选择您使用应用程序的首选语言",
+        "continue": "继续"
+    },
+    "auth": {
+        "login": "登录",
+        "signup": "注册",
+        "email": "邮箱",
+        "password": "密码",
+        "confirmPassword": "确认密码",
+        "forgotPassword": "忘记密码？",
+        "loginFailed": "登录失败",
+        "signupFailed": "注册失败",
+        "logout": "退出",
+        "confirmLogout": "确认退出",
+        "logoutMessage": "您确定要退出吗？"
+    },
+    "navigation": {
+        "camera": "相机",
+        "practice": "练习",
+        "vocabulary": "词汇",
+        "progress": "进度",
+        "profile": "个人资料"
+    },
+    "practice": {
+        "title": "练习",
+        "selectLanguage": "选择语言",
+        "noLanguages": "没有可练习的语言",
+        "startPractice": "开始练习",
+        "loading": "加载练习会话中..."
+    },
+    "vocabulary": {
+        "title": "我的词汇",
+        "searchPlaceholder": "搜索单词...",
+        "noWords": "未找到单词",
+        "addWord": "添加单词"
+    },
+    "progress": {
+        "title": "进度",
+        "level": "等级",
+        "xp": "XP",
+        "streak": "连续记录",
+        "wordsLearned": "已学单词",
+        "achievements": "成就"
+    },
+    "profile": {
+        "title": "个人资料",
+        "personalInfo": "个人信息",
+        "settings": "设置",
+        "achievements": "成就",
+        "dailyGoal": "日目标",
+        "language": "应用语言"
+    },
+    "achievements": {
+        "title": "成就",
+        "unlocked": "已解锁",
+        "locked": "已锁定",
+        "progress": "进度"
+    }
+}

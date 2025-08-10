@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
+import { useLanguageChange } from '../../src/hooks/useLanguageChange';
+import { quickChangeToSpanish, quickChangeToEnglish } from '../../src/i18n/i18n';
 import {
     View,
     Text,
@@ -15,6 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LogoutButton from '../../components/Auth/Logout';
+import LanguageSelector from '../../components/Profile/LanguageSelector';
 import MicrophoneTest from '../../src/components/MicrophoneTest';
 import SessionService from '../../src/services/SessionService';
 import VocabularyService from '../../src/services/VocabularyService';
@@ -94,6 +98,9 @@ const getMotivationalMessage = (level: number, streak: number, wordsLearned: num
 };
 
 function ProfileScreen() {
+    const { t } = useTranslation();
+    useLanguageChange(); // This will force re-render on language change
+    
     const [user, setUser] = useState<any>(null);
     const [stats, setStats] = useState<UserStats | null>(null);
     const [languageProgress, setLanguageProgress] = useState<LanguageProgress>({});
@@ -358,23 +365,23 @@ const router = useRouter();
             <View style={[styles.container, { backgroundColor: 'white' }]}> 
                 <View style={styles.authHeader}> 
                     <View>
-                        <Text style={styles.authHeaderTitle}>Profile</Text>
+                        <Text style={styles.authHeaderTitle}>{t('profile.title')}</Text>
                     </View>
                 </View>
                 <View style={styles.authRequiredContainer}>
                     <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
-                    <Text style={styles.authRequiredTitle}>Login Required</Text>
+                    <Text style={styles.authRequiredTitle}>{t('profile.loginRequired')}</Text>
                     <Text style={styles.authRequiredText}>
-                        You must be logged in to view and manage your profile.
+                        {t('profile.loginRequiredMessage')}
                     </Text>
                     <Text style={styles.authRequiredSubtext}>
-                        Login to access your stats, achievements, avatar customization, and settings.
+                        {t('profile.loginRequiredSubtext')}
                     </Text>
                     <TouchableOpacity
                         style={styles.loginButton}
                         onPress={() => router.replace('/App')}
                     >
-                        <Text style={styles.loginButtonText}>Go to Login</Text>
+                        <Text style={styles.loginButtonText}>{t('profile.goToLogin')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.continueButton}
@@ -393,6 +400,21 @@ const router = useRouter();
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
         >
+            {/* Quick Language Test - Remove after fixing */}
+            <View style={{ flexDirection: 'row', padding: 10, backgroundColor: '#ff6b6b', justifyContent: 'space-around' }}>
+                <TouchableOpacity 
+                    style={{ backgroundColor: 'white', padding: 8, borderRadius: 8, flex: 1, marginRight: 5 }}
+                    onPress={quickChangeToEnglish}
+                >
+                    <Text style={{ textAlign: 'center', fontWeight: 'bold' }}>🇺🇸 EN</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    style={{ backgroundColor: 'white', padding: 8, borderRadius: 8, flex: 1, marginLeft: 5 }}
+                    onPress={quickChangeToSpanish}
+                >
+                    <Text style={{ textAlign: 'center', fontWeight: 'bold' }}>🇪🇸 ES</Text>
+                </TouchableOpacity>
+            </View>
             {/* Header Section */}
             <View style={styles.header}>
                 <View style={styles.profileSection}>
@@ -649,15 +671,15 @@ const router = useRouter();
 
             {/* Settings Section */}
             <View style={styles.settingsSection}>
-                <Text style={styles.sectionTitle}>Settings & Tools</Text>
+                <Text style={styles.sectionTitle}>{t('profile.settingsAndTools')}</Text>
 
                 <View style={styles.settingCard}>
                     <View style={styles.settingHeader}>
                         <Ionicons name="mic" size={20} color="#3498db" />
-                        <Text style={styles.settingTitle}>Audio & Microphone</Text>
+                        <Text style={styles.settingTitle}>{t('profile.audioAndMicrophone')}</Text>
                     </View>
                     <Text style={styles.settingDescription}>
-                        Test your microphone to ensure voice recording works properly for pronunciation practice.
+                        {t('profile.testMicrophone')}
                     </Text>
                     <MicrophoneTest style={styles.micTest} />
                 </View>
@@ -665,11 +687,12 @@ const router = useRouter();
                 <View style={styles.settingCard}>
                     <View style={styles.settingHeader}>
                         <Ionicons name="person" size={20} color="#e74c3c" />
-                        <Text style={styles.settingTitle}>Account</Text>
+                        <Text style={styles.settingTitle}>{t('profile.account')}</Text>
                     </View>
                     <Text style={styles.settingDescription}>
-                        Manage your account settings and sign out when needed.
+                        {t('profile.accountDescription')}
                     </Text>
+                    <LanguageSelector />
                     <LogoutButton />
                 </View>
             </View>

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLanguageChange } from '../../src/hooks/useLanguageChange';
 import {
     View,
     Text,
@@ -28,6 +30,9 @@ const useFocusEffect = require('@react-navigation/native').useFocusEffect;
 const { width } = Dimensions.get('window');
 
 export default function PracticeScreen() {
+    const { t } = useTranslation();
+    useLanguageChange(); // This will force re-render on language change
+    
     const [loading, setLoading] = useState(false);
     const [session, setSession] = useState<PracticeSession | null>(null);
     const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
@@ -570,7 +575,7 @@ export default function PracticeScreen() {
                         onPress={() => {}}
                     >
                         <View style={styles.resultsTitleContainer}>
-                            <Text style={styles.resultsTitle}>Practice Complete!</Text>
+                            <Text style={styles.resultsTitle}>{t('practice.practiceComplete')}</Text>
                             <MaterialIcons name="celebration" size={32} color="#f39c12" />
                         </View>
                         
@@ -578,7 +583,7 @@ export default function PracticeScreen() {
                             <Text style={styles.scoreText}>
                                 {session.correctAnswers} / {session.totalQuestions}
                             </Text>
-                            <Text style={styles.accuracyText}>{accuracy.toFixed(0)}% Accuracy</Text>
+                            <Text style={styles.accuracyText}>{t('practice.accuracy', { accuracy: accuracy.toFixed(0) })}</Text>
                         </View>
 
                         <View style={styles.xpEarned}>
@@ -589,12 +594,12 @@ export default function PracticeScreen() {
                             <View style={styles.statItem}>
                                 <Ionicons name="checkmark-circle" size={32} color="#27ae60" />
                                 <Text style={styles.statValue}>{session.correctAnswers}</Text>
-                                <Text style={styles.statLabel}>Correct</Text>
+                                <Text style={styles.statLabel}>{t('practice.correct')}</Text>
                             </View>
                             <View style={styles.statItem}>
                                 <Ionicons name="close-circle" size={32} color="#e74c3c" />
                                 <Text style={styles.statValue}>{session.totalQuestions - session.correctAnswers}</Text>
-                                <Text style={styles.statLabel}>Incorrect</Text>
+                                <Text style={styles.statLabel}>{t('practice.incorrect')}</Text>
                             </View>
                         </View>
 
@@ -602,7 +607,7 @@ export default function PracticeScreen() {
                             style={[styles.continueButton, { backgroundColor: '#3498db', borderRadius: 12 }]}
                             onPress={handleContinueFromResults}
                         >
-                            <Text style={styles.continueButtonText}>Continue</Text>
+                            <Text style={styles.continueButtonText}>{t('common.continue')}</Text>
                         </TouchableOpacity>
                     </TouchableOpacity>
                 </TouchableOpacity>
@@ -616,23 +621,23 @@ export default function PracticeScreen() {
             <View style={[styles.container, { backgroundColor: 'white' }]}> 
                 <View style={styles.header}> 
                     <View>
-                        <Text style={styles.title}>Practice</Text>
+                        <Text style={styles.title}>{t('practice.title')}</Text>
                     </View>
                 </View>
                 <View style={styles.authRequiredContainer}>
                     <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
-                    <Text style={styles.authRequiredTitle}>Login Required</Text>
+                    <Text style={styles.authRequiredTitle}>{t('practice.loginRequired')}</Text>
                     <Text style={styles.authRequiredText}>
-                        You must be logged in to practice. Please log in to continue and unlock all features.
+                        {t('practice.loginRequiredMessage')}
                     </Text>
                     <Text style={styles.authRequiredSubtext}>
-                        Login to save words, track progress, and access your vocabulary across devices.
+                        {t('practice.loginRequiredSubtext')}
                     </Text>
                     <TouchableOpacity
                         style={styles.loginButton}
                         onPress={() => router.replace('/App')}
                     >
-                        <Text style={styles.loginButtonText}>Go to Login</Text>
+                        <Text style={styles.loginButtonText}>{t('practice.goToLogin')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.continueButton}
@@ -649,8 +654,8 @@ export default function PracticeScreen() {
             <View style={styles.container}>
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.title}>Practice</Text>
-                        <Text style={styles.subtitle}>Improve your vocabulary</Text>
+                        <Text style={styles.title}>{t('practice.title')}</Text>
+                        <Text style={styles.subtitle}>{t('practice.subtitle')}</Text>
                     </View>
                     <TouchableOpacity
                         style={styles.refreshButton}
@@ -695,7 +700,7 @@ export default function PracticeScreen() {
             {/* Question Counter */}
             <View style={styles.questionHeader}>
                 <Text style={styles.questionCounter}>
-                    Question {Math.min(session.currentQuestion + 1, session.totalQuestions)} of {session.totalQuestions}
+                    {t('practice.questionCounter', { current: Math.min(session.currentQuestion + 1, session.totalQuestions), total: session.totalQuestions })}
                 </Text>
                 <TouchableOpacity onPress={async () => {
                     await SpeechService.stop();
@@ -739,12 +744,12 @@ export default function PracticeScreen() {
                         />
                     ) : (
                         <View style={styles.errorContainer}>
-                            <Text style={styles.errorText}>Error loading question</Text>
+                            <Text style={styles.errorText}>{t('practice.errorLoadingQuestion')}</Text>
                             <TouchableOpacity 
                                 style={styles.skipButton}
                                 onPress={nextQuestion}
                             >
-                                <Text style={styles.skipButtonText}>Skip Question</Text>
+                                <Text style={styles.skipButtonText}>{t('practice.skipQuestion')}</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -757,7 +762,7 @@ export default function PracticeScreen() {
                             onPress={nextQuestion}
                         >
                             <Text style={styles.nextButtonText}>
-                                {session.currentQuestion < session.totalQuestions - 1 ? 'Next Question' : 'Finish'}
+                                {session.currentQuestion < session.totalQuestions - 1 ? t('practice.nextQuestion') : t('practice.finish')}
                             </Text>
                             <Ionicons name="arrow-forward" size={18} color="white" />
                         </TouchableOpacity>
@@ -791,7 +796,7 @@ export default function PracticeScreen() {
                             }
                         }}
                     > 
-                        <Text style={styles.skipQuestionButtonText}>Skip Question</Text>
+                        <Text style={styles.skipQuestionButtonText}>{t('practice.skipQuestion')}</Text>
                         <Ionicons name="arrow-forward" size={18} color="white" />
                     </TouchableOpacity>
                 )}
@@ -814,8 +819,8 @@ export default function PracticeScreen() {
                             }] }}>
                                 <Ionicons name="refresh" size={48} color="#3498db" />
                             </Animated.View>
-                            <Text style={{ fontSize: 18, color: '#3498db', fontWeight: '600', marginBottom: 4 }}>Processing...</Text>
-                            <Text style={{ fontSize: 14, color: '#7f8c8d', textAlign: 'center' }}>Please wait while we check your pronunciation.</Text>
+                            <Text style={{ fontSize: 18, color: '#3498db', fontWeight: '600', marginBottom: 4 }}>{t('practice.processing')}</Text>
+                            <Text style={{ fontSize: 14, color: '#7f8c8d', textAlign: 'center' }}>{t('practice.processingMessage')}</Text>
                         </View>
                     </View>
                 </Modal>

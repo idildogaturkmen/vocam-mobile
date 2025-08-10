@@ -1,6 +1,8 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLanguageChange } from '../../src/hooks/useLanguageChange';
 import {
   ActivityIndicator,
   Alert,
@@ -64,6 +66,9 @@ const deduplicateDetections = (detections: Detection[]): Detection[] => {
 };
 
 export default function DetectionScreen() {
+  const { t } = useTranslation();
+  useLanguageChange(); // This will force re-render on language change
+  
   // Camera states
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [permission, requestPermission] = useCameraPermissions();
@@ -556,7 +561,7 @@ export default function DetectionScreen() {
                     <FontAwesome name="save" size={24} color="white" />
                   </Text>
                   <Text style={styles.saveButtonText}>
-                    Save Selected ({selectedWords.size})
+{t('camera.saveSelected')} ({selectedWords.size})
                   </Text>
                 </TouchableOpacity>
 
@@ -571,7 +576,7 @@ export default function DetectionScreen() {
                   <Text style={styles.retakeButtonIcon}>
                     <Entypo name="camera" size={20} color="white" />
                   </Text>
-                  <Text style={styles.retakeButtonText}>Take Another</Text>
+                  <Text style={styles.retakeButtonText}>{t('camera.takeAnother')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -600,7 +605,7 @@ export default function DetectionScreen() {
               style={styles.modalContent}
               onPress={(e) => e.stopPropagation()}
             >
-              <Text style={styles.modalTitle}>Select Language</Text>
+              <Text style={styles.modalTitle}>{t('camera.selectLanguage')}</Text>
               
               <View style={styles.modalSearchContainer}>
                 <Ionicons name="search" size={20} color="#7f8c8d" />

@@ -8,6 +8,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 interface PracticeStartScreenProps {
     availableLanguages: { code: string; name: string; wordCount: number }[];
@@ -27,12 +28,12 @@ interface QuizOption {
     requiredWords: number;
 }
 
-const quizOptions: QuizOption[] = [
+const getQuizOptions = (t: any): QuizOption[] => [
     {
         questions: 5,
         icon: 'flash',
-        title: 'Quick Practice',
-        subtitle: '2-3 minutes',
+        title: t('practice.quickPractice'),
+        subtitle: t('practice.quickPracticeTime'),
         color: '#3498db',
         reward: '+50 XP',
         requiredWords: 4
@@ -40,8 +41,8 @@ const quizOptions: QuizOption[] = [
     {
         questions: 10,
         icon: 'flame',
-        title: 'Standard Session',
-        subtitle: '5-7 minutes',
+        title: t('practice.standardSession'),
+        subtitle: t('practice.standardSessionTime'),
         color: '#e74c3c',
         reward: '+120 XP',
         requiredWords: 8
@@ -49,8 +50,8 @@ const quizOptions: QuizOption[] = [
     {
         questions: 20,
         icon: 'trophy',
-        title: 'Challenge Mode',
-        subtitle: '10-15 minutes',
+        title: t('practice.challengeMode'),
+        subtitle: t('practice.challengeModeTime'),
         color: '#f39c12',
         reward: '+300 XP',
         requiredWords: 16
@@ -64,6 +65,7 @@ export default function PracticeStartScreen({
     onSelectLanguage,
     onStartPractice
 }: PracticeStartScreenProps) {
+    const { t } = useTranslation();
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -76,9 +78,9 @@ export default function PracticeStartScreen({
         return (
             <View style={styles.emptyContainer}>
                 <MaterialCommunityIcons name="book-open-variant" size={64} color="#bdc3c7" />
-                <Text style={styles.emptyText}>No vocabulary available</Text>
+                <Text style={styles.emptyText}>{t('practice.noVocabulary')}</Text>
                 <Text style={styles.emptySubtext}>
-                    Add at least 4 words in a language to start practicing
+                    {t('practice.needMoreWords')}
                 </Text>
             </View>
         );
@@ -92,7 +94,7 @@ export default function PracticeStartScreen({
         >
             {/* Language Selection */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Choose Your Language</Text>
+                <Text style={styles.sectionTitle}>{t('practice.chooseYourLanguage')}</Text>
                 <ScrollView 
                     horizontal 
                     showsHorizontalScrollIndicator={false}
@@ -115,7 +117,7 @@ export default function PracticeStartScreen({
                                     {lang.name}
                                 </Text>
                                 <Text style={styles.wordCount}>
-                                    {lang.wordCount} words
+                                    {lang.wordCount} {t('vocabulary.wordCount')}
                                 </Text>
                             </View>
                             {selectedLanguage === lang.code && (
@@ -131,9 +133,9 @@ export default function PracticeStartScreen({
             {/* Quiz Options */}
             {selectedLanguage && (
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Choose Your Challenge</Text>
+                    <Text style={styles.sectionTitle}>{t('practice.chooseYourChallenge')}</Text>
                     <View style={styles.quizOptionsContainer}>
-                        {quizOptions.map((option) => {
+                        {getQuizOptions(t).map((option) => {
                             const selectedLang = availableLanguages.find(lang => lang.code === selectedLanguage);
                             const currentWordCount = selectedLang?.wordCount || 0;
                             const isLocked = currentWordCount < option.requiredWords;
@@ -158,7 +160,7 @@ export default function PracticeStartScreen({
                                                 <Ionicons name="lock-closed" size={32} color="#7f8c8d" />
                                             </View>
                                             <Text style={styles.lockText}>
-                                                Need {wordsNeeded} more word{wordsNeeded !== 1 ? 's' : ''}
+                                                {t('practice.needWords', { count: wordsNeeded })}
                                             </Text>
                                         </View>
                                     )}
@@ -208,7 +210,7 @@ export default function PracticeStartScreen({
                                                 styles.questionLabel,
                                                 isLocked && styles.lockedText
                                             ]}>
-                                                questions
+                                                {t('practice.questions')}
                                             </Text>
                                         </View>
                                     </View>
@@ -219,7 +221,7 @@ export default function PracticeStartScreen({
                                             { backgroundColor: isLocked ? '#bdc3c7' : option.color }
                                         ]}>
                                             <FontAwesome5 name="play" size={14} color="white" />
-                                            <Text style={styles.startButtonText}>Start</Text>
+                                            <Text style={styles.startButtonText}>{t('practice.start')}</Text>
                                         </View>
                                     </View>
                                 </TouchableOpacity>
@@ -231,7 +233,7 @@ export default function PracticeStartScreen({
                     <View style={styles.motivationCard}>
                         <Ionicons name="bulb" size={24} color="#f39c12" />
                         <Text style={styles.motivationText}>
-                            Complete longer sessions to earn more XP and improve faster! Learn more words to unlock additional challenge modes.
+                            {t('practice.motivationMessage')}
                         </Text>
                     </View>
                 </View>

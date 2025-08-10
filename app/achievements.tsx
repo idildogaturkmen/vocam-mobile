@@ -16,6 +16,7 @@ import { AchievementService } from '../src/services/AchievementService';
 import type { Achievement } from '../src/services/AchievementService';
 import AchievementCard from '../components/Progress/AchievementCard';
 import { getImageTrophy } from '../utils/progress/getImageTrophy';
+import { useCache } from '../src/services/CacheService';
 
 const { width } = Dimensions.get('window');
 
@@ -25,12 +26,13 @@ interface ExtendedAchievement extends Achievement {
 }
 
 export default function AchievementsScreen() {
+    const { fetchCached } = useCache();
     const router = useRouter();
     const [achievements, setAchievements] = useState<ExtendedAchievement[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'earned' | 'unearned'>('all');
 
-    const loadAchievements = async () => {
+    const loadAchievements = async (forceRefresh = false) => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
@@ -38,7 +40,12 @@ export default function AchievementsScreen() {
                 return;
             }
 
-            const userAchievements = await AchievementService.getAllAchievementsWithProgress(user.id);
+            const userAchievements = await fetchCached(
+                `achievements_${user.id}`,
+                () => AchievementService.getAllAchievementsWithProgress(user.id, forceRefresh),
+                'ACHIEVEMENTS',
+                forceRefresh
+            );
             
             const extendedAchievements: ExtendedAchievement[] = userAchievements.map((achievement, index) => ({
                 ...achievement,

@@ -12,10 +12,12 @@ interface StatBoxProps {
     label: string;
     value: number | string;
     image: () => Promise<any> | any;
+    showValueWhenImageLoading?: boolean; // Option to hide value until image loads
 }
 
-export function StatBox({ label, value, image }: StatBoxProps) {
+export function StatBox({ label, value, image, showValueWhenImageLoading = true }: StatBoxProps) {
     const [imageSource, setImageSource] = useState<any>(null);
+    const [imageLoaded, setImageLoaded] = useState(false);
     const scale = useSharedValue(1);
     const rotate = useSharedValue(0);
 
@@ -24,8 +26,10 @@ export function StatBox({ label, value, image }: StatBoxProps) {
             try {
                 const result = await image();
                 setImageSource(result);
+                setImageLoaded(true);
             } catch (error) {
                 console.error('Failed to load image:', error);
+                setImageLoaded(true); // Still mark as loaded even on error
             }
         };
         loadImage();
@@ -59,7 +63,9 @@ export function StatBox({ label, value, image }: StatBoxProps) {
                         <Image source={imageSource} style={styles.image} />
                     )}
                 </View>
-                <Text style={styles.value}>{value}</Text>
+                <Text style={styles.value}>
+                    {(showValueWhenImageLoading || imageLoaded) ? value : '...'}
+                </Text>
                 <Text style={styles.label}>{label}</Text>
             </Animated.View>
         </TouchableOpacity>

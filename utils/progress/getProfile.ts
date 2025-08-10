@@ -1,6 +1,7 @@
 import { supabase } from '../../database/config';
 import { LevelingService } from '../../src/services/LevelingService';
 import { UserProgressService } from '../../src/services/UserProgressService';
+import { CacheKeys, CACHE_CONFIG } from '../../src/services/CacheService';
 
 interface Profile {
     level: number;
@@ -11,7 +12,30 @@ interface Profile {
     progressToNextLevel: number;
 }
 
-export async function getProfile(): Promise<Profile | null> {
+// Create a simple cache for the profile utility
+let profileCache: { [key: string]: { data: Profile; timestamp: number } } = {};
+
+function getCachedProfile(userId: string): Profile | null {
+    const cached = profileCache[userId];
+    if (!cached) return null;
+    
+    const isExpired = Date.now() - cached.timestamp > CACHE_CONFIG.PROFILE;
+    if (isExpired) {
+        delete profileCache[userId];
+        return null;
+    }
+    
+    return cached.data;
+}
+
+function setCachedProfile(userId: string, profile: Profile): void {
+    profileCache[userId] = {
+        data: profile,
+        timestamp: Date.now()
+    };
+}
+
+export async function getProfile(forceRefresh = false): Promise<Profile | null> {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
@@ -23,6 +47,14 @@ export async function getProfile(): Promise<Profile | null> {
                 xpForNextLevel: 100, 
                 progressToNextLevel: 0 
             };
+        }
+        
+        // Check cache first if not forcing refresh
+        if (!forceRefresh) {
+            const cached = getCachedProfile(user.id);
+            if (cached) {
+                return cached;
+            }
         }
 
         // Update streak to ensure current data
@@ -55,7 +87,7 @@ export async function getProfile(): Promise<Profile | null> {
             };
         }
 
-        return {
+        const result = {
             level: levelInfo?.currentLevel || profile?.level || 1,
             exp: levelInfo?.currentXP || profile?.exp || 0,
             streak: profile?.streak || 0,
@@ -63,8 +95,27 @@ export async function getProfile(): Promise<Profile | null> {
             xpForNextLevel: levelInfo?.xpForNextLevel || 100,
             progressToNextLevel: levelInfo?.progressToNextLevel || 0
         };
+        
+        // Cache the result
+        setCachedProfile(user.id, result);
+        return result;
     } catch (error) {
         console.error('Failed to get profile:', error);
+        
+        // Try to return cached data on error
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const cached = getCachedProfile(user.id);
+                if (cached) {
+                    console.warn('Returning cached profile due to error');
+                    return cached;
+                }
+            }
+        } catch (authError) {
+            console.error('Auth error in fallback:', authError);
+        }
+        
         return { 
             level: 1, 
             exp: 0, 

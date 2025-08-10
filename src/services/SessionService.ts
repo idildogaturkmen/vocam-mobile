@@ -2,6 +2,8 @@ import { supabase } from '../../database/config';
 import { StreakService } from './StreakService';
 import { LevelingService } from './LevelingService';
 import { AchievementService } from './AchievementService';
+import { CacheKeys, CACHE_CONFIG } from './CacheService';
+import { debugUtils } from '../utils/DebuggingUtils';
 
 interface SessionData {
     id: string;
@@ -15,6 +17,37 @@ interface SessionData {
 
 class SessionService {
     private currentSession: SessionData | null = null;
+    private cache: Map<string, { data: any; timestamp: number; expiresIn: number }> = new Map();
+    private loginProcessed: Set<string> = new Set(); // Track processed logins to prevent duplicates
+
+    // Cache helper methods
+    private getFromCache<T>(key: string): T | null {
+        const entry = this.cache.get(key);
+        if (!entry) return null;
+
+        const isExpired = Date.now() - entry.timestamp > entry.expiresIn;
+        if (isExpired) {
+            this.cache.delete(key);
+            return null;
+        }
+        return entry.data;
+    }
+
+    private setCache<T>(key: string, data: T, expiresIn: number): void {
+        this.cache.set(key, {
+            data,
+            timestamp: Date.now(),
+            expiresIn
+        });
+    }
+
+    private invalidateCache(keyPattern: string): void {
+        for (const key of this.cache.keys()) {
+            if (key.includes(keyPattern)) {
+                this.cache.delete(key);
+            }
+        }
+    }
 
     /**
      * Start a new learning session with streak and achievement tracking
@@ -162,9 +195,18 @@ class SessionService {
     }
 
     /**
-     * Get user statistics
+     * Get user statistics with caching
      */
-    async getUserStats(userId: string) {
+    async getUserStats(userId: string, forceRefresh = false) {
+        const cacheKey = CacheKeys.userStats(userId);
+        
+        // Return cached data if available and not forcing refresh
+        if (!forceRefresh) {
+            const cached = this.getFromCache(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        }
         try {
             // Get total unique words learned (user_words entries)
             const { data: userWords, error: wordsError } = await supabase
@@ -220,7 +262,7 @@ class SessionService {
                 console.error('Error fetching profile:', profileError);
             }
 
-            return {
+            const stats = {
                 uniqueWords,                    // Count of unique words (34)
                 totalTranslations,              // Count of word-language pairs (120)
                 totalWords: uniqueWords,        // For backwards compatibility
@@ -229,17 +271,45 @@ class SessionService {
                 averageProficiency: Math.round(averageProficiency),
                 currentStreak: profile?.streak || 0
             };
+            
+            // Cache the result
+            this.setCache(cacheKey, stats, CACHE_CONFIG.USER_STATS);
+            return stats;
         } catch (error) {
             console.error('Error getting user stats:', error);
+            // Try to return cached data on error
+            const cached = this.getFromCache(cacheKey);
+            if (cached) {
+                console.warn('Returning cached user stats due to error');
+                return cached;
+            }
             return null;
         }
     }
 
     /**
-     * Update user progress on login (streak, achievements, XP)
+     * Update user progress on login (streak, achievements, XP) - with deduplication
      */
     private async updateUserProgressOnLogin(userId: string): Promise<void> {
         try {
+            // Create a unique key for today's login to prevent duplicates
+            const today = new Date().toDateString();
+            const loginKey = `${userId}_${today}`;
+            
+            // Skip if we've already processed this user's login today
+            if (this.loginProcessed.has(loginKey)) {
+                console.log('[SessionService] Login already processed today for user:', userId);
+                return;
+            }
+            
+            // Track this operation for debugging
+            if (!debugUtils.trackLoginProcess(userId)) {
+                console.warn('[SessionService] Potential duplicate login processing detected');
+                return;
+            }
+            
+            console.log('[SessionService] Processing login for user:', userId);
+            
             // Update streak and check if it increased
             const { newStreak, streakIncreased } = await StreakService.updateStreak(userId);
             
@@ -253,10 +323,36 @@ class SessionService {
                 }
             }
 
-            // Check for new achievements
+            // Check for new achievements and invalidate related caches
             await AchievementService.checkAndAwardAchievements(userId);
+            
+            // Mark this login as processed
+            this.loginProcessed.add(loginKey);
+            
+            // Invalidate caches that might be affected by progress updates
+            this.invalidateCache(userId);
+            
+            // Clean up old login tracking entries (keep only last 7 days)
+            this.cleanupOldLoginTracking();
         } catch (error) {
             console.error('Error updating user progress on login:', error);
+        }
+    }
+    
+    /**
+     * Clean up old login tracking entries to prevent memory leaks
+     */
+    private cleanupOldLoginTracking(): void {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        
+        for (const loginKey of this.loginProcessed) {
+            const datePart = loginKey.split('_').slice(1).join('_'); // Get date part after userId
+            const loginDate = new Date(datePart);
+            
+            if (loginDate < sevenDaysAgo) {
+                this.loginProcessed.delete(loginKey);
+            }
         }
     }
 
@@ -298,17 +394,29 @@ class SessionService {
                 await LevelingService.awardXP(userId, 'PROFICIENCY_MILESTONE');
             }
             
-            // Check for achievements after proficiency update
+            // Check for achievements after proficiency update and invalidate caches
             await AchievementService.checkAndAwardAchievements(userId);
+            
+            // Invalidate user stats cache as proficiency affects stats
+            this.invalidateCache(userId);
         } catch (error) {
             console.error('Error awarding proficiency XP:', error);
         }
     }
 
     /**
-     * Get comprehensive user progress data
+     * Get comprehensive user progress data with caching
      */
-    async getUserProgress(userId: string) {
+    async getUserProgress(userId: string, forceRefresh = false) {
+        const cacheKey = `userProgress_${userId}`;
+        
+        // Return cached data if available and not forcing refresh
+        if (!forceRefresh) {
+            const cached = this.getFromCache(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        }
         try {
             const [levelInfo, achievements, stats] = await Promise.all([
                 LevelingService.getLevelInfo(userId),
@@ -316,14 +424,24 @@ class SessionService {
                 this.getUserStats(userId)
             ]);
 
-            return {
+            const progress = {
                 level: levelInfo,
                 achievements,
                 stats,
                 todaysXP: await LevelingService.getTodaysXP(userId)
             };
+            
+            // Cache the result
+            this.setCache(cacheKey, progress, CACHE_CONFIG.PROFILE);
+            return progress;
         } catch (error) {
             console.error('Error getting user progress:', error);
+            // Try to return cached data on error
+            const cached = this.getFromCache(cacheKey);
+            if (cached) {
+                console.warn('Returning cached user progress due to error');
+                return cached;
+            }
             return null;
         }
     }

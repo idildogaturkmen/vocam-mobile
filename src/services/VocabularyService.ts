@@ -2,6 +2,7 @@ import { supabase } from '../../database/config';
 import { recordLearningActivity, incrementDailyGoal } from '../../utils/progress/getDailyGoal';
 import { Alert } from 'react-native';
 import uuid from 'react-native-uuid';
+import { CacheKeys, CACHE_CONFIG } from './CacheService';
 
 interface VocabularyItem {
     word_id?: string;
@@ -94,6 +95,36 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 class VocabularyService {
+    private cache: Map<string, { data: any; timestamp: number; expiresIn: number }> = new Map();
+
+    // Cache helper methods
+    private getFromCache<T>(key: string): T | null {
+        const entry = this.cache.get(key);
+        if (!entry) return null;
+
+        const isExpired = Date.now() - entry.timestamp > entry.expiresIn;
+        if (isExpired) {
+            this.cache.delete(key);
+            return null;
+        }
+        return entry.data;
+    }
+
+    private setCache<T>(key: string, data: T, expiresIn: number): void {
+        this.cache.set(key, {
+            data,
+            timestamp: Date.now(),
+            expiresIn
+        });
+    }
+
+    private invalidateUserCache(userId: string): void {
+        for (const key of this.cache.keys()) {
+            if (key.includes(userId)) {
+                this.cache.delete(key);
+            }
+        }
+    }
     /**
      * Get language name from code
      */
@@ -345,6 +376,9 @@ class VocabularyService {
                 console.log(`Removed ${duplicateCount} duplicate detections`);
             }
 
+            // Invalidate vocabulary cache after batch save
+            this.invalidateUserCache(userId);
+            
             return result;
         } catch (error) {
             console.error('Batch save error:', error);
@@ -502,6 +536,9 @@ class VocabularyService {
                 await recordLearningActivity(userId, wordId, translationCount);
             }
 
+            // Invalidate vocabulary cache after successful save
+            this.invalidateUserCache(userId);
+            
             return 'success';
         } catch (error) {
             console.error('Error saving word:', error);
@@ -509,9 +546,18 @@ class VocabularyService {
         }
     }
     /**
-     * Get all vocabulary for a user
+     * Get all vocabulary for a user (cached)
      */
-    async getUserVocabulary(userId: string, languageFilter?: string): Promise<SavedWord[]> {
+    async getUserVocabulary(userId: string, languageFilter?: string, forceRefresh = false): Promise<SavedWord[]> {
+        const cacheKey = CacheKeys.vocabulary(userId, languageFilter);
+        
+        // Return cached data if available and not forcing refresh
+        if (!forceRefresh) {
+            const cached = this.getFromCache<SavedWord[]>(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        }
         try {
             // First, get all user words
             const { data: userWordsData, error: userWordsError } = await supabase
@@ -602,9 +648,17 @@ class VocabularyService {
                 });
             }
 
+            // Cache the result
+            this.setCache(cacheKey, vocabulary, CACHE_CONFIG.VOCABULARY);
             return vocabulary;
         } catch (error) {
             console.error('Error getting vocabulary:', error);
+            // Try to return cached data on error
+            const cached = this.getFromCache<SavedWord[]>(cacheKey);
+            if (cached) {
+                console.warn('Returning cached vocabulary due to error');
+                return cached;
+            }
             return [];
         }
     }
@@ -626,7 +680,10 @@ class VocabularyService {
                 console.error('Error updating proficiency:', error);
                 return false;
             }
-
+            
+            // Invalidate cache after proficiency update
+            this.invalidateUserCache(userWordId.split('_')[0]);
+            
             return true;
         } catch (error) {
             console.error('Error updating proficiency:', error);
@@ -651,7 +708,10 @@ class VocabularyService {
                 console.error('Error deleting word:', error);
                 return false;
             }
-
+            
+            // Invalidate cache after word deletion
+            this.invalidateUserCache(userWordId.split('_')[0]);
+            
             return true;
         } catch (error) {
             console.error('Error deleting word:', error);

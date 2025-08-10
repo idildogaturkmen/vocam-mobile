@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -32,6 +32,7 @@ import FireStreak from '../../components/Progress/FireStreak';
 import XPBar from '../../components/Progress/XPBar';
 import { getProfile } from '../../utils/progress/getProfile';
 import { getDailyGoal, getDailyGoalFromLog, DailyGoal } from '../../utils/progress/getDailyGoal';
+import { useCache } from '../../src/services/CacheService';
 import { AchievementService } from '../../src/services/AchievementService';
 import type { Achievement } from '../../src/services/AchievementService';
 import { LevelingService } from '../../src/services/LevelingService';
@@ -94,6 +95,7 @@ const getMotivationalMessage = (level: number, streak: number, wordsLearned: num
 };
 
 function ProfileScreen() {
+    const { fetchCached, invalidateCache } = useCache();
     const [user, setUser] = useState<any>(null);
     const [stats, setStats] = useState<UserStats | null>(null);
     const [languageProgress, setLanguageProgress] = useState<LanguageProgress>({});
@@ -103,6 +105,7 @@ function ProfileScreen() {
     const [level, setLevel] = useState<number>(0);
     const [exp, setExp] = useState<number>(0);
     const [achievements, setAchievements] = useState<Achievement[]>([]);
+    const [achievementsLoaded, setAchievementsLoaded] = useState(false);
     const [dailyGoal, setDailyGoal] = useState<DailyGoal>({ current: 0, target: 5, percentage: 0 });
     const [profileData, setProfileData] = useState<any>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -133,10 +136,50 @@ const router = useRouter();
     // Memoize all image functions to prevent multiple calls
     const wordImageFn = useCallback(async () => await getImageWord(stats?.uniqueWords || 0), [stats?.uniqueWords]);
     const levelImageFn = useCallback(async () => await getImageLevel(level), [level]);
-    const trophyImageFn = useCallback(() => getImageTrophy(achievements.filter(a => a.earned).length), [achievements]);
+    // Memoize trophy count to prevent recalculation and flashing
+    const earnedAchievementCount = useMemo(() => {
+        if (!achievementsLoaded || !achievements.length) {
+            return null; // Return null when not loaded yet
+        }
+        return achievements.filter(a => a.earned).length;
+    }, [achievements, achievementsLoaded]);
+    
+    // Only show trophy image when achievements are actually loaded
+    const trophyImageFn = useCallback(() => {
+        if (earnedAchievementCount === null) {
+            // Show a neutral trophy image while loading
+            return getImageTrophy(1);
+        }
+        return getImageTrophy(earnedAchievementCount);
+    }, [earnedAchievementCount]);
 
     useEffect(() => {
         checkAuthAndLoadUserData();
+        
+        // Check for cached achievements immediately on mount
+        const checkCachedAchievements = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    // Try to get cached achievements immediately
+                    const cached = await fetchCached(
+                        `achievements_${user.id}`,
+                        () => Promise.resolve([]), // Empty fallback, won't be called if cached
+                        'ACHIEVEMENTS',
+                        false // Don't force refresh
+                    );
+                    
+                    if (cached && cached.length > 0) {
+                        setAchievements(cached);
+                        setAchievementsLoaded(true);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading cached achievements:', error);
+            }
+        };
+        
+        checkCachedAchievements();
     }, []);
 
     // Reduced auto-refresh for better performance
@@ -150,9 +193,17 @@ const router = useRouter();
             
             // Only refresh basic stats, not full profile
             try {
-                const userStats = await SessionService.getUserStats(user.id);
+                const userStats = await fetchCached(
+                    `userStats_${user.id}`,
+                    () => SessionService.getUserStats(user.id),
+                    'USER_STATS'
+                );
                 setStats(userStats);
-                const goalData = await getDailyGoalFromLog();
+                const goalData = await fetchCached(
+                    `dailyGoal_${user.id}`,
+                    () => getDailyGoalFromLog(),
+                    'DAILY_GOAL'
+                );
                 setDailyGoal(goalData);
             } catch (error) {
                 console.error('Background refresh error:', error);
@@ -160,12 +211,12 @@ const router = useRouter();
         }, 120000); // 2 minutes instead of 30 seconds
 
         return () => clearInterval(interval);
-    }, [isAuthenticated, refreshing]);
+    }, [isAuthenticated, refreshing, fetchCached]);
 
     // Refresh when screen comes into focus (but less aggressive)
     useFocusEffect(
         useCallback(() => {
-            if (isAuthenticated && !loading) {
+            if (isAuthenticated && !loading && !refreshing) {
                 // Only do light refresh on focus, full refresh on pull-to-refresh
                 const lightRefresh = async () => {
                     try {
@@ -173,8 +224,16 @@ const router = useRouter();
                         if (!user) return;
                         
                         const [userStats, goalData] = await Promise.all([
-                            SessionService.getUserStats(user.id),
-                            getDailyGoalFromLog()
+                            fetchCached(
+                                `userStats_${user.id}`,
+                                () => SessionService.getUserStats(user.id),
+                                'USER_STATS'
+                            ),
+                            fetchCached(
+                                `dailyGoal_${user.id}`,
+                                () => getDailyGoalFromLog(),
+                                'DAILY_GOAL'
+                            )
                         ]);
                         setStats(userStats);
                         setDailyGoal(goalData);
@@ -184,10 +243,10 @@ const router = useRouter();
                 };
                 lightRefresh();
             }
-        }, [isAuthenticated, loading])
+        }, [isAuthenticated, loading, refreshing, fetchCached])
     );
 
-    const checkAuthAndLoadUserData = async () => {
+    const checkAuthAndLoadUserData = async (forceRefresh = false) => {
         try {
             const { data: { user: currentUser } } = await supabase.auth.getUser();
             if (!currentUser) {
@@ -198,7 +257,7 @@ const router = useRouter();
             
             setIsAuthenticated(true);
             setUser(currentUser);
-            await loadUserData(currentUser);
+            await loadUserData(currentUser, forceRefresh);
         } catch (error) {
             console.error('Auth check error:', error);
             setIsAuthenticated(false);
@@ -206,10 +265,22 @@ const router = useRouter();
         }
     };
 
-    const loadUserData = async (currentUser: any) => {
+    const loadUserData = async (currentUser: any, forceRefresh = false) => {
         try {
             if (currentUser) {
-                // Make independent API calls in parallel for faster loading
+                // Load achievements first to prevent trophy flashing
+                const achievementsList = await fetchCached(
+                    `achievements_${currentUser.id}`,
+                    () => AchievementService.getAllAchievementsWithProgress(currentUser.id, forceRefresh),
+                    'ACHIEVEMENTS',
+                    forceRefresh
+                );
+                
+                // Set achievements immediately to prevent trophy flashing
+                setAchievements(achievementsList);
+                setAchievementsLoaded(true);
+                
+                // Load other data in parallel
                 const [
                     userStats,
                     avatarResult,
@@ -217,15 +288,40 @@ const router = useRouter();
                     profile,
                     goalData
                 ] = await Promise.all([
-                    SessionService.getUserStats(currentUser.id),
-                    supabase
-                        .from('avatars')
-                        .select('avatar_config')
-                        .eq('user_id', currentUser.id)
-                        .single(),
-                    VocabularyService.getUserVocabulary(currentUser.id),
-                    getProfile(),
-                    getDailyGoalFromLog()
+                    fetchCached(
+                        `userStats_${currentUser.id}`,
+                        () => SessionService.getUserStats(currentUser.id, forceRefresh),
+                        'USER_STATS',
+                        forceRefresh
+                    ),
+                    fetchCached(
+                        `avatarConfig_${currentUser.id}`,
+                        () => supabase
+                            .from('avatars')
+                            .select('avatar_config')
+                            .eq('user_id', currentUser.id)
+                            .single(),
+                        'AVATAR_CONFIG',
+                        forceRefresh
+                    ),
+                    fetchCached(
+                        `vocabulary_${currentUser.id}`,
+                        () => VocabularyService.getUserVocabulary(currentUser.id, undefined, forceRefresh),
+                        'VOCABULARY',
+                        forceRefresh
+                    ),
+                    fetchCached(
+                        `profile_${currentUser.id}`,
+                        () => getProfile(forceRefresh),
+                        'PROFILE',
+                        forceRefresh
+                    ),
+                    fetchCached(
+                        `dailyGoal_${currentUser.id}`,
+                        () => getDailyGoalFromLog(),
+                        'DAILY_GOAL',
+                        forceRefresh
+                    )
                 ]);
 
                 // Set basic data immediately
@@ -258,36 +354,28 @@ const router = useRouter();
                 });
                 setLanguageProgress(langProgress);
 
-                // Handle level sync and achievements in parallel (these can be slower)
-                Promise.all([
-                    LevelingService.syncUserLevel(currentUser.id).catch(error => {
-                        console.error('Error syncing user level:', error);
-                        return null;
-                    }),
-                    AchievementService.getAllAchievementsWithProgress(currentUser.id)
-                ]).then(async ([syncResult, achievementsList]) => {
+                // Handle level sync in background (achievements already loaded above)
+                LevelingService.syncUserLevel(currentUser.id).then(async (syncResult) => {
                     // Handle level sync if needed
                     if (syncResult && syncResult.oldLevel !== syncResult.newLevel) {
                         console.log(`Level synced: ${syncResult.oldLevel} -> ${syncResult.newLevel}`);
-                        const updatedProfile = await getProfile();
+                        const updatedProfile = await getProfile(true);
                         setProfileData(updatedProfile);
                         setLevel(updatedProfile?.level || 0);
                     }
-                    
-                    // Set achievements
-                    setAchievements(achievementsList);
-                    
-                    // Check for new achievements (this is less critical, can be slower)
-                    AchievementService.checkAndAwardAchievements(currentUser.id).then(newAchievements => {
-                        if (newAchievements.length > 0) {
-                            console.log('New achievements earned:', newAchievements);
-                            // Reload achievements to include newly earned ones
-                            AchievementService.getAllAchievementsWithProgress(currentUser.id).then(updatedAchievements => {
-                                setAchievements(updatedAchievements);
-                            });
-                        }
-                    }).catch(error => console.error('Error checking new achievements:', error));
-                }).catch(error => console.error('Error in background tasks:', error));
+                }).catch(error => console.error('Error syncing user level:', error));
+                
+                // Check for new achievements (this is less critical, can be slower)
+                AchievementService.checkAndAwardAchievements(currentUser.id).then(newAchievements => {
+                    if (newAchievements.length > 0) {
+                        console.log('New achievements earned:', newAchievements);
+                        // Invalidate achievements cache and reload
+                        invalidateCache(`achievements_${currentUser.id}`);
+                        AchievementService.getAllAchievementsWithProgress(currentUser.id, true).then(updatedAchievements => {
+                            setAchievements(updatedAchievements);
+                        });
+                    }
+                }).catch(error => console.error('Error checking new achievements:', error));
             }
         } catch (error) {
             console.error('Error loading user data:', error);
@@ -310,7 +398,8 @@ const router = useRouter();
 
     const onRefresh = () => {
         setRefreshing(true);
-        checkAuthAndLoadUserData();
+        // Force refresh to bypass cache
+        checkAuthAndLoadUserData(true);
     };
 
     const saveAvatarConfig = async () => {
@@ -483,7 +572,7 @@ const router = useRouter();
                     />
                     <StatBox
                         label="Trophies"
-                        value={achievements.filter(a => a.earned).length}
+                        value={earnedAchievementCount !== null ? earnedAchievementCount : '...'}
                         image={trophyImageFn}
                     />
                     <StatBox

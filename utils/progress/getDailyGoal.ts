@@ -86,8 +86,7 @@ export async function recordLearningActivity(userId: string, wordId: string, tra
             });
 
         if (logError) {
-            console.log('Daily learning log not available, using fallback tracking');
-            // Fallback: use the existing daily_progress table
+            // Expected: daily_learning_log table doesn't exist, using fallback
             await incrementDailyGoal(userId, translationCount);
         }
     } catch (error) {

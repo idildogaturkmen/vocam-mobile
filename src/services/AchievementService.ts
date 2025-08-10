@@ -1,5 +1,7 @@
 import { supabase } from '../../database/config';
 import { LevelingService } from './LevelingService';
+import { CacheKeys, CACHE_CONFIG } from './CacheService';
+import { debugUtils } from '../utils/DebuggingUtils';
 
 export interface Achievement {
     id?: string;
@@ -31,10 +33,50 @@ export interface UserStats {
 }
 
 export class AchievementService {
+    private static cache: Map<string, { data: any; timestamp: number; expiresIn: number }> = new Map();
+    private static processingUsers: Set<string> = new Set(); // Track users currently being processed
+
+    // Cache helper methods
+    private static getFromCache<T>(key: string): T | null {
+        const entry = this.cache.get(key);
+        if (!entry) return null;
+
+        const isExpired = Date.now() - entry.timestamp > entry.expiresIn;
+        if (isExpired) {
+            this.cache.delete(key);
+            return null;
+        }
+        return entry.data;
+    }
+
+    private static setCache<T>(key: string, data: T, expiresIn: number): void {
+        this.cache.set(key, {
+            data,
+            timestamp: Date.now(),
+            expiresIn
+        });
+    }
+
+    private static invalidateUserCache(userId: string): void {
+        for (const key of this.cache.keys()) {
+            if (key.includes(userId)) {
+                this.cache.delete(key);
+            }
+        }
+    }
     /**
-     * Get all achievements from database with user progress
+     * Get all achievements from database with user progress (cached)
      */
-    static async getAllAchievementsWithProgress(userId: string): Promise<Achievement[]> {
+    static async getAllAchievementsWithProgress(userId: string, forceRefresh = false): Promise<Achievement[]> {
+        const cacheKey = CacheKeys.achievements(userId);
+        
+        // Return cached data if available and not forcing refresh
+        if (!forceRefresh) {
+            const cached = this.getFromCache<Achievement[]>(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        }
         try {
             // Check if user is authenticated
             const { data: { user } } = await supabase.auth.getUser();
@@ -84,7 +126,7 @@ export class AchievementService {
             }
 
             // Combine data
-            return achievements?.map(achievement => ({
+            const result = achievements?.map(achievement => ({
                 ...achievement,
                 earned: earnedSlugs.has(achievement.slug),
                 achieved_at: earnedMap.get(achievement.slug),
@@ -92,8 +134,18 @@ export class AchievementService {
                     ? this.calculateProgress(achievement, stats)
                     : undefined
             })) || [];
+            
+            // Cache the result
+            this.setCache(cacheKey, result, CACHE_CONFIG.ACHIEVEMENTS);
+            return result;
         } catch (error) {
             console.error('Error in getAllAchievementsWithProgress:', error);
+            // Try to return cached data on error
+            const cached = this.getFromCache<Achievement[]>(cacheKey);
+            if (cached) {
+                console.warn('Returning cached achievements due to error');
+                return cached;
+            }
             return [];
         }
     }
@@ -165,7 +217,7 @@ export class AchievementService {
     }
 
     /**
-     * Check and award new achievements for a user
+     * Check and award new achievements for a user (with deduplication)
      */
     static async checkAndAwardAchievements(userId: string): Promise<Achievement[]> {
         try {
@@ -174,6 +226,23 @@ export class AchievementService {
             if (!user || user.id !== userId) {
                 return [];
             }
+            
+            // Prevent duplicate processing for the same user
+            if (this.processingUsers.has(userId)) {
+                console.log('[AchievementService] Already processing achievements for user:', userId);
+                return [];
+            }
+            
+            // Track this operation for debugging
+            if (!debugUtils.trackAchievementCheck(userId)) {
+                console.warn('[AchievementService] Potential duplicate achievement check detected');
+                return [];
+            }
+            
+            // Mark user as being processed
+            this.processingUsers.add(userId);
+            
+            try {
             const stats = await this.getUserStats(userId);
             if (!stats) {
                 return [];
@@ -219,16 +288,31 @@ export class AchievementService {
             }
 
             return newAchievements;
+            } finally {
+                // Always remove user from processing set
+                this.processingUsers.delete(userId);
+            }
         } catch (error) {
             console.error('Error in checkAndAwardAchievements:', error);
+            // Make sure to remove user from processing set on error
+            this.processingUsers.delete(userId);
             return [];
         }
     }
 
     /**
-     * Get user statistics for achievement checking
+     * Get user statistics for achievement checking (cached)
      */
-    static async getUserStats(userId: string): Promise<UserStats | null> {
+    static async getUserStats(userId: string, forceRefresh = false): Promise<UserStats | null> {
+        const cacheKey = `achievementStats_${userId}`;
+        
+        // Return cached data if available and not forcing refresh
+        if (!forceRefresh) {
+            const cached = this.getFromCache<UserStats>(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        }
         try {
             // Check if user is authenticated
             const { data: { user } } = await supabase.auth.getUser();
@@ -291,7 +375,7 @@ export class AchievementService {
                 q.percentage_score === 100 || (q.score === q.total_questions && q.total_questions > 0)
             ).length || 0;
 
-            return {
+            const stats = {
                 totalXP: profile?.total_xp || 0,
                 level: profile?.level || 1,
                 streak: profile?.streak || 0,
@@ -304,8 +388,18 @@ export class AchievementService {
                 averageProficiency: Math.round(averageProficiency),
                 maxStreak: profile?.streak || 0 // TODO: Track max streak separately
             };
+            
+            // Cache the result
+            this.setCache(cacheKey, stats, CACHE_CONFIG.USER_STATS);
+            return stats;
         } catch (error) {
             console.error('Error in getUserStats:', error);
+            // Try to return cached data on error
+            const cached = this.getFromCache<UserStats>(cacheKey);
+            if (cached) {
+                console.warn('Returning cached achievement stats due to error');
+                return cached;
+            }
             return null;
         }
     }
@@ -336,7 +430,10 @@ export class AchievementService {
 
             // Award XP for the achievement
             await LevelingService.awardXP(userId, 'ACHIEVEMENT_UNLOCKED', undefined, achievement.xp_reward / 30);
-
+            
+            // Invalidate all user caches since achievements affect multiple data points
+            this.invalidateUserCache(userId);
+            
             return true;
         } catch (error) {
             console.error('Error in awardAchievement:', error);

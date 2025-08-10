@@ -36,6 +36,11 @@ export class AchievementService {
      */
     static async getAllAchievementsWithProgress(userId: string): Promise<Achievement[]> {
         try {
+            // Check if user is authenticated
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user || user.id !== userId) {
+                return [];
+            }
             // Get all achievements from database
             const { data: achievements, error: achievementsError } = await supabase
                 .from('achievements')
@@ -164,6 +169,11 @@ export class AchievementService {
      */
     static async checkAndAwardAchievements(userId: string): Promise<Achievement[]> {
         try {
+            // Check if user is authenticated
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user || user.id !== userId) {
+                return [];
+            }
             const stats = await this.getUserStats(userId);
             if (!stats) {
                 return [];
@@ -220,6 +230,11 @@ export class AchievementService {
      */
     static async getUserStats(userId: string): Promise<UserStats | null> {
         try {
+            // Check if user is authenticated
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user || user.id !== userId) {
+                return null;
+            }
             // Get profile data
             const { data: profile, error: profileError } = await supabase
                 .from('profiles')
@@ -301,6 +316,11 @@ export class AchievementService {
      */
     static async awardAchievement(userId: string, achievement: Achievement): Promise<boolean> {
         try {
+            // Check if user is authenticated
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user || user.id !== userId) {
+                return false;
+            }
             // Insert the achievement
             const { error: insertError } = await supabase
                 .from('user_achievements')

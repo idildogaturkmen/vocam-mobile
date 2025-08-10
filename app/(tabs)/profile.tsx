@@ -138,10 +138,12 @@ const router = useRouter();
     useEffect(() => {
         if (!isAuthenticated) return;
 
-        const interval = setInterval(() => {
-            if (!refreshing) {
-                checkAuthAndLoadUserData();
-            }
+        const interval = setInterval(async () => {
+            // Double-check authentication before running operations
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user || refreshing) return;
+            
+            checkAuthAndLoadUserData();
         }, 30000); // 30 seconds for full refresh
 
         return () => clearInterval(interval);
@@ -151,10 +153,12 @@ const router = useRouter();
     useEffect(() => {
         if (!isAuthenticated) return;
 
-        const goalInterval = setInterval(() => {
-            if (!refreshing) {
-                refreshDailyGoal();
-            }
+        const goalInterval = setInterval(async () => {
+            // Double-check authentication before running operations
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user || refreshing) return;
+            
+            refreshDailyGoal();
         }, 3000); // 3 seconds for daily goal only
 
         return () => clearInterval(goalInterval);

@@ -1,5 +1,5 @@
 import { supabase } from '@/database/config';
-import { Button } from '@rneui/base';
+import { Button } from 'react-native-elements';
 import { useRouter } from 'expo-router';
 import { Alert, View } from 'react-native';
 
@@ -14,7 +14,7 @@ export default function LogoutButton(): React.ReactElement {
             return;
         }
 
-        router.replace('/App');
+        // No need to navigate - the auth state change will automatically show the login screen
     };
 
     const confirmLogout = async () => {

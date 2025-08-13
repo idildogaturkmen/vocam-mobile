@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react-native';
-import { Button, Input } from '@rneui/themed';
+import { Button, Input } from 'react-native-elements';
 import { createUser, login } from '@/database/login';
 import { Text } from 'react-native';
 

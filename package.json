@@ -29,7 +29,6 @@
     "expo-image-manipulator": "~13.1.7",
     "expo-image-picker": "^16.1.4",
     "expo-linking": "~7.1.7",
-    "expo-permissions": "^14.4.0",
     "expo-router": "^5.1.4",
     "expo-speech": "~13.1.7",
     "expo-sqlite": "~15.2.13",
@@ -67,6 +66,25 @@
   },
   "overrides": {
     "@types/react": "~19.0.10"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "@google-cloud/speech",
+          "@google-cloud/text-to-speech",
+          "ajv",
+          "ajv-keywords",
+          "dotenv",
+          "react-icons",
+          "react-native-boring-avatars",
+          "react-native-elements",
+          "react-native-vector-icons",
+          "react-native-fs"
+        ],
+        "listUnknownPackages": false
+      }
+    }
   },
   "private": true
 }

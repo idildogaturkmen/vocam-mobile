@@ -49,14 +49,9 @@ class PracticeService {
      */
     async getAvailableLanguages(userId: string): Promise<{ code: string; name: string; wordCount: number }[]> {
         try {
-            const vocabulary = await VocabularyService.getUserVocabulary(userId);
-            const languageCounts: Record<string, number> = {};
+            // Use the optimized language counts method instead of loading all vocabulary
+            const languageCounts = await VocabularyService.getUserVocabularyCounts(userId);
             
-            vocabulary.forEach(word => {
-                if (word.language) {
-                    languageCounts[word.language] = (languageCounts[word.language] || 0) + 1;
-                }
-            });
             
             return Object.entries(languageCounts)
                 .map(([code, count]) => ({

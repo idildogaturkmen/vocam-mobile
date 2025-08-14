@@ -192,14 +192,33 @@ export default function DetectionScreen() {
     }
   };
 
+  // Reset camera and detection states
+  const resetCameraState = () => {
+    setPhoto(null);
+    setRotatedPhoto(null);
+    setDetections([]);
+    setSelectedWords(new Set<number>());
+    setIsProcessing(false);
+  };
+
   const takePicture = async () => {
-    if (cameraRef.current && modelStatus === 'ready') {
+    if (cameraRef.current && modelStatus === 'ready' && !isProcessing) {
       try {
+        setIsProcessing(true);
+        
+        // Reset previous photo states to ensure clean capture
+        resetCameraState();
+        setIsProcessing(true); // Set back to processing after reset
+        
         const photoResult = await cameraRef.current.takePictureAsync({ 
           skipProcessing: false,
           quality: 0.8,
           exif: false,
         });
+        
+        if (!photoResult || !photoResult.uri) {
+          throw new Error('Failed to capture photo - no result returned');
+        }
         
         // OPTIMIZED: Use optimized image processing
         const rotatedUri = await getDisplayAndVisionImage(photoResult.uri);
@@ -209,6 +228,9 @@ export default function DetectionScreen() {
       } catch (error) {
         console.error('Picture error:', error);
         Alert.alert('Error', 'Could not take picture. Please try again.');
+        resetCameraState(); // Reset on error
+      } finally {
+        setIsProcessing(false);
       }
     }
   };
@@ -417,7 +439,14 @@ export default function DetectionScreen() {
               const { data: { user } } = await supabase.auth.getUser();
               if (user) {
                 const stats = await SessionService.getUserStats(user.id);
-                setUserStats(stats);
+                if (stats && typeof stats === 'object' && 'totalWords' in stats) {
+                  setUserStats(stats as {
+                    totalWords: number;
+                    masteredWords: number;
+                    averageProficiency: number;
+                    currentStreak: number;
+                  });
+                }
               }
             }
           }]
@@ -461,7 +490,8 @@ export default function DetectionScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.permissionCard}>
-          <Text style={styles.permissionTitle}><Ionicons name="camera-outline" size={64} color="#074173" /> Camera Permission Required</Text>
+          <Ionicons name="camera-outline" size={34} color="#074173"/>
+          <Text style={styles.permissionTitle}> Camera Permission Required</Text>
           <Text style={styles.permissionText}>
             Vocam needs camera access to detect objects and help you learn languages.
           </Text>
@@ -494,7 +524,7 @@ export default function DetectionScreen() {
                      </Text>
                      <TouchableOpacity
                          style={styles.loginButton}
-                         onPress={() => router.replace('/App')}
+                         onPress={() => router.replace('/')}
                      >
                          <Text style={styles.loginButtonText}>Go to Login</Text>
                      </TouchableOpacity>
@@ -739,7 +769,14 @@ export default function DetectionScreen() {
                               text: 'OK',
                               onPress: async () => {
                                 const stats = await SessionService.getUserStats(user.id);
-                                setUserStats(stats);
+                                if (stats && typeof stats === 'object' && 'totalWords' in stats) {
+                                  setUserStats(stats as {
+                                    totalWords: number;
+                                    masteredWords: number;
+                                    averageProficiency: number;
+                                    currentStreak: number;
+                                  });
+                                }
                               }
                             }]
                           );
@@ -788,6 +825,19 @@ export default function DetectionScreen() {
         modelStatus={modelStatus}
         languageName={getCurrentLanguageName()}
       />
+      
+      {/* Retake Photo Button - Show when photo exists */}
+      {photo && (
+        <View style={styles.retakeButtonContainer}>
+          <TouchableOpacity 
+            style={styles.retakeButton}
+            onPress={resetCameraState}
+          >
+            <Ionicons name="camera" size={24} color="white" />
+            <Text style={styles.retakeButtonText}>Retake Photo</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Language Selection Modal */}
       <Modal
@@ -949,7 +999,14 @@ export default function DetectionScreen() {
                             text: 'OK',
                             onPress: async () => {
                               const stats = await SessionService.getUserStats(user.id);
-                              setUserStats(stats);
+                              if (stats && typeof stats === 'object' && 'totalWords' in stats) {
+                                setUserStats(stats as {
+                                  totalWords: number;
+                                  masteredWords: number;
+                                  averageProficiency: number;
+                                  currentStreak: number;
+                                });
+                              }
                             }
                           }]
                         );
@@ -1335,5 +1392,11 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingHorizontal: 30,
     paddingVertical: 12,
-  }
+  },
+  retakeButtonContainer: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    zIndex: 15,
+  },
 });

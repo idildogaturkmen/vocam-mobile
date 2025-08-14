@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Image, StyleSheet, ViewStyle } from 'react-native';
+import { View, Image, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import { supabase } from '../../database/config';
 
 export type AvatarStyle = 'personas';
@@ -145,20 +146,22 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
   const [error, setError] = React.useState(false);
   const [retryCount, setRetryCount] = React.useState(0);
   const [imageLoaded, setImageLoaded] = React.useState(false);
-  const [cachedAvatarUrl, setCachedAvatarUrl] = React.useState<string | null>(null);
+  const [svgData, setSvgData] = React.useState<string | null>(null);
+  const [isLoadingSvg, setIsLoadingSvg] = React.useState(false);
 
-  // FIXED: Use correct DiceBear Personas parameters
+  // OPTIMIZED: Use SVG format for much faster loading
   const buildAvatarUrl = (simplified = false) => {
-    const baseUrl = `https://api.dicebear.com/9.x/personas/png`;
+    const baseUrl = `https://api.dicebear.com/9.x/personas/svg`;
     const params = new URLSearchParams();
 
     // Clean seed 
     const cleanSeed = seed ? seed.replace(/[^a-zA-Z0-9]/g, '') : 'user';
     params.append('seed', cleanSeed);
     
-    // Size parameter (PNG supports up to 256x256)
-    const finalSize = Math.min(size, 256);
-    params.append('size', finalSize.toString());
+    // SVG format - no size limit and much faster loading
+    if (size > 0) {
+      params.append('scale', '100'); // Always use 100% scale for crisp rendering
+    }
 
     if (!simplified) {
       // Colors (these work)
@@ -252,6 +255,25 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
 
   const [avatarUrl, setAvatarUrl] = React.useState<string>('');
 
+  // Fetch SVG data directly for faster rendering
+  const fetchSvgData = async (url: string) => {
+    try {
+      setIsLoadingSvg(true);
+      const response = await fetch(url);
+      const svgText = await response.text();
+      setSvgData(svgText);
+      setError(false);
+      setImageLoaded(true);
+      onLoad?.();
+    } catch (fetchError) {
+      console.error('Error fetching SVG:', fetchError);
+      setError(true);
+      onError?.();
+    } finally {
+      setIsLoadingSvg(false);
+    }
+  };
+
   const handleImageLoad = () => {
     setError(false);
     setImageLoaded(true);
@@ -323,15 +345,18 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
           const configToUse = avatarData?.avatar_config || config;
           const url = buildAvatarUrl();
           setAvatarUrl(url);
+          fetchSvgData(url);
         } else {
           // For non-authenticated users, just generate URL from config
           const url = buildAvatarUrl();
           setAvatarUrl(url);
+          fetchSvgData(url);
         }
       } catch (error) {
         // Fallback to building URL from config
         const url = buildAvatarUrl();
         setAvatarUrl(url);
+        fetchSvgData(url);
       }
       setImageLoaded(false);
       setError(false);
@@ -343,40 +368,57 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
   }, []);
 
 
-  // Update avatar URL when config changes
+  // Update avatar URL when config changes and fetch SVG data
   React.useEffect(() => {
     if (config && Object.keys(config).length > 0) {
       const newUrl = buildAvatarUrl();
       // Only update if URL actually changed
       if (newUrl !== avatarUrl) {
         setAvatarUrl(newUrl);
-        setImageLoaded(false); // Reset to let onLoad handle it
+        setImageLoaded(false);
         setError(false);
         setRetryCount(0);
+        setSvgData(null);
+        // Fetch SVG data immediately for faster rendering
+        fetchSvgData(newUrl);
       }
     }
   }, [config, size, seed, avatarUrl]);
 
   return (
     <View style={[styles.container, { width: size, height: size }, style]}>
-      {/* Only show image if we have a URL */}
-      {avatarUrl && (
-        <Image
-          source={{ uri: avatarUrl }}
-          style={[
-            styles.avatar,
-            { 
-              width: size, 
-              height: size, 
-              borderRadius: size / 2,
-              opacity: 1 // Always full opacity - no loading state
-            }
-          ]}
-          onLoad={handleImageLoad}
-          onError={handleImageError}
-          key={`${avatarUrl}-${retryCount}`}
-        />
-      )}
+      {/* Show SVG if available, otherwise loading indicator */}
+      {svgData ? (
+        <View style={[styles.avatarContainer, { borderRadius: size / 2, overflow: 'hidden' }]}>
+          <SvgXml
+            xml={svgData}
+            width={size}
+            height={size}
+          />
+        </View>
+      ) : isLoadingSvg ? (
+        <View style={[styles.loadingContainer, { width: size, height: size, borderRadius: size / 2 }]}>
+          <ActivityIndicator size="small" color="#3498db" />
+        </View>
+      ) : error ? (
+        <View style={[styles.errorContainer, { width: size, height: size, borderRadius: size / 2 }]}>
+          {/* Fallback to Image component if SVG fails */}
+          <Image
+            source={{ uri: avatarUrl }}
+            style={[
+              styles.avatar,
+              { 
+                width: size, 
+                height: size, 
+                borderRadius: size / 2,
+              }
+            ]}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+            key={`${avatarUrl}-${retryCount}`}
+          />
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -385,6 +427,19 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     overflow: 'hidden',
+  },
+  avatarContainer: {
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    backgroundColor: '#f0f0f0',
   },
   avatar: {
     backgroundColor: '#f0f0f0',

@@ -17,6 +17,7 @@ export async function createUser(
             data: {
                 username, // Store username in user metadata
             },
+            emailRedirectTo: 'https://vocam.app/confirm',
         },
     });
 

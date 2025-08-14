@@ -21,6 +21,14 @@ module.exports = {
       bundler: "metro"
     },
     scheme: "vocam-learning",
+    linking: {
+      prefixes: ["vocam-learning://"],
+      config: {
+        screens: {
+          "auth/confirm": "auth/confirm"
+        }
+      }
+    },
     plugins: [
       "expo-router",
       "expo-sqlite",
@@ -42,7 +50,14 @@ module.exports = {
       router: {},
       eas: {
         projectId: "1eb973cc-affd-4289-ab40-dc2ea91b13b9"
-      }
+      },
+      // API keys for development (only loaded if environment variables exist)
+      ...(process.env.GOOGLE_CLOUD_VISION_API_KEY && { 
+        googleVisionApiKey: process.env.GOOGLE_CLOUD_VISION_API_KEY 
+      }),
+      ...(process.env.GOOGLE_CLOUD_API_KEY && { 
+        googleApiKey: process.env.GOOGLE_CLOUD_API_KEY 
+      })
     }
   }
 };

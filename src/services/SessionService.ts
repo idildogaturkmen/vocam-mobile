@@ -50,6 +50,14 @@ class SessionService {
     }
 
     /**
+     * Public method to invalidate user stats cache (called from other services)
+     */
+    invalidateUserStatsCache(userId: string): void {
+        this.invalidateCache(userId);
+        console.log(`Invalidated user stats cache for user: ${userId}`);
+    }
+
+    /**
      * Start a new learning session with streak and achievement tracking
      */
     async startSession(userId: string): Promise<string | null> {

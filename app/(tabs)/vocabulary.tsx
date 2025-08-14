@@ -144,7 +144,14 @@ export default function VocabularyScreen() {
 
     useEffect(() => {
         applyFiltersAndSort();
-    }, [vocabulary, filterLanguage, sortBy, searchQuery]);
+    }, [vocabulary, sortBy, searchQuery]);
+
+    // Reload vocabulary when language filter changes
+    useEffect(() => {
+        if (isAuthenticated) {
+            loadVocabulary();
+        }
+    }, [filterLanguage, isAuthenticated]);
 
     const loadVocabulary = async () => {
         try {
@@ -154,7 +161,24 @@ export default function VocabularyScreen() {
                 return;
             }
 
-            const words = await VocabularyService.getUserVocabulary(user.id);
+            // CRITICAL FIX: Only load words for selected language, or all if "All" is selected
+            let words: SavedWord[] = [];
+            if (filterLanguage === 'All') {
+                // Load each language separately to avoid unwanted translations
+                const allLanguageCodes = Object.values(languages);
+                const allLanguageWords = await Promise.all(
+                    allLanguageCodes.map(langCode => 
+                        VocabularyService.getUserVocabulary(user.id, langCode)
+                    )
+                );
+                words = allLanguageWords.flat();
+            } else {
+                // Load only the selected language
+                const langCode = languages[filterLanguage as keyof typeof languages];
+                if (langCode) {
+                    words = await VocabularyService.getUserVocabulary(user.id, langCode);
+                }
+            }
             setVocabulary(words);
         } catch (error) {
             console.error('Error loading vocabulary:', error);
@@ -177,13 +201,8 @@ export default function VocabularyScreen() {
             );
         }
 
-        // Apply language filter
-        if (filterLanguage !== 'All') {
-            const langCode = languages[filterLanguage as LanguageName];
-            if (langCode) {
-                filtered = filtered.filter(word => word.language === langCode);
-            }
-        }
+        // Language filtering is now handled at the database level in loadVocabulary()
+        // No need to filter by language here
 
         // Apply sorting
         switch (sortBy) {
@@ -291,12 +310,23 @@ export default function VocabularyScreen() {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
-                        const success = await VocabularyService.deleteWord(word.id);
-                        if (success) {
-                            Alert.alert('Success', 'Word removed from vocabulary');
-                            loadVocabulary();
-                        } else {
+                        // Immediately remove the word from the UI
+                        setVocabulary(prev => prev.filter(v => v.id !== word.id));
+                        setFilteredVocabulary(prev => prev.filter(v => v.id !== word.id));
+                        
+                        try {
+                            const success = await VocabularyService.deleteWord(word.id);
+                            if (success) {
+                                Alert.alert('Success', 'Word removed from vocabulary');
+                            } else {
+                                // If deletion failed, restore the word to the UI
+                                Alert.alert('Error', 'Failed to delete word');
+                                loadVocabulary(); // Reload to restore the word
+                            }
+                        } catch (error) {
+                            // If deletion failed, restore the word to the UI
                             Alert.alert('Error', 'Failed to delete word');
+                            loadVocabulary(); // Reload to restore the word
                         }
                     }
                 }
@@ -474,10 +504,17 @@ export default function VocabularyScreen() {
                         <View style={styles.actionButtons}>
                             <TouchableOpacity
                                 style={styles.practiceButton}
-                                onPress={() => Alert.alert('Practice', 'Practice mode coming soon!')}
+                                onPress={() => {
+                                    // Find the index of this word in the filtered vocabulary
+                                    const wordIndex = filteredVocabulary.findIndex(w => w.id === word.id);
+                                    if (wordIndex !== -1) {
+                                        setCurrentFlashcardIndex(wordIndex);
+                                    }
+                                    setViewMode('flashcard');
+                                }}
                             >
-                                <Ionicons name="fitness" size={18} color="white" />
-                                <Text style={styles.practiceButtonText}>Practice</Text>
+                                <Ionicons name="school" size={18} color="white" />
+                                <Text style={styles.practiceButtonText}>Learn</Text>
                             </TouchableOpacity>
                             
                             <TouchableOpacity
@@ -690,6 +727,7 @@ export default function VocabularyScreen() {
                     <TextInput
                         style={styles.searchInput}
                         placeholder="Search words, languages, or categories..."
+                        placeholderTextColor="#7f8c8d"
                         value={searchQuery}
                         onChangeText={(text) => {
                             setSearchQuery(text);

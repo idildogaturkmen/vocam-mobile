@@ -1,14 +1,5 @@
 import { supabase } from '../../database/config';
 
-// Enable detailed logging for debugging
-const DEBUG = true;
-const log = (message: string, ...args: any[]) => {
-    if (DEBUG) console.log(`[UserProgressService] ${message}`, ...args);
-};
-const logError = (message: string, error: any) => {
-    console.error(`[UserProgressService] ${message}`, error);
-};
-
 export interface UserProfile {
     user_id: string;
     username: string;
@@ -157,7 +148,6 @@ export class UserProgressService {
         levelInfo: LevelInfo | null;
     } | null> {
         try {
-            log(`Awarding ${transaction.amount} XP to user ${userId} for ${transaction.source}`);
 
             // Get current profile data
             const { data: currentProfile, error: fetchError } = await supabase
@@ -167,7 +157,6 @@ export class UserProgressService {
                 .single();
 
             if (fetchError) {
-                logError('Error fetching current profile:', fetchError);
                 return null;
             }
 
@@ -176,8 +165,6 @@ export class UserProgressService {
             const newTotalXP = currentTotalXP + transaction.amount;
             const newLevel = this.getLevelFromXP(newTotalXP);
             const leveledUp = newLevel > currentLevel;
-
-            log(`XP: ${currentTotalXP} → ${newTotalXP}, Level: ${currentLevel} → ${newLevel}, Leveled up: ${leveledUp}`);
 
             // Record XP transaction first
             const { error: xpError } = await supabase
@@ -190,7 +177,6 @@ export class UserProgressService {
                 });
 
             if (xpError) {
-                logError('Error recording XP transaction:', xpError);
                 return null;
             }
 
@@ -209,15 +195,11 @@ export class UserProgressService {
                 .eq('user_id', userId);
 
             if (updateError) {
-                logError('Error updating profile:', updateError);
                 return null;
             }
 
-            log(`Profile updated successfully. New exp in level: ${currentXPInLevel}`);
-
             // If leveled up, check for level achievements and award bonus
             if (leveledUp) {
-                log(`User leveled up! Checking level achievements for level ${newLevel}`);
                 await this.checkLevelAchievements(userId, newLevel);
                 
                 // Award level up bonus (separate transaction to avoid infinite recursion)
@@ -244,7 +226,6 @@ export class UserProgressService {
                 levelInfo: await this.getLevelInfo(userId)
             };
         } catch (error) {
-            logError('Error in awardXP:', error);
             return null;
         }
     }
@@ -261,7 +242,6 @@ export class UserProgressService {
                 .single();
 
             if (fetchError) {
-                logError('Error fetching profile for streak update:', fetchError);
                 return { currentStreak: 0, streakIncreased: false, isNewRecord: false };
             }
 
@@ -310,7 +290,6 @@ export class UserProgressService {
                 .eq('user_id', userId);
 
             if (updateError) {
-                logError('Error updating streak:', updateError);
                 return { currentStreak: profile?.streak || 0, streakIncreased: false, isNewRecord: false };
             }
 
@@ -328,7 +307,6 @@ export class UserProgressService {
 
             return { currentStreak, streakIncreased, isNewRecord };
         } catch (error) {
-            logError('Error in updateStreak:', error);
             return { currentStreak: 0, streakIncreased: false, isNewRecord: false };
         }
     }
@@ -527,7 +505,6 @@ export class UserProgressService {
      */
     private static async unlockAchievement(userId: string, achievementSlug: string): Promise<void> {
         try {
-            log(`Checking achievement unlock: ${achievementSlug} for user ${userId}`);
 
             // Check if already unlocked
             const { data: existing, error: checkError } = await supabase
@@ -538,12 +515,10 @@ export class UserProgressService {
                 .maybeSingle(); // Use maybeSingle instead of single to avoid error when not found
 
             if (checkError) {
-                logError('Error checking existing achievement:', checkError);
                 return;
             }
 
             if (existing) {
-                log(`Achievement ${achievementSlug} already unlocked`);
                 return; // Already unlocked
             }
 
@@ -555,12 +530,10 @@ export class UserProgressService {
                 .maybeSingle();
 
             if (achievementError) {
-                logError('Error checking achievement existence:', achievementError);
                 return;
             }
 
             if (!achievement) {
-                logError(`Achievement ${achievementSlug} does not exist in database`, null);
                 return;
             }
 
@@ -574,11 +547,8 @@ export class UserProgressService {
                 });
 
             if (error) {
-                logError('Error unlocking achievement:', error);
                 return;
             }
-
-            log(`🏆 Achievement unlocked: ${achievementSlug}`);
 
             // Award achievement XP (but don't trigger another achievement check to avoid recursion)
             await supabase
@@ -605,7 +575,6 @@ export class UserProgressService {
             }
 
         } catch (error) {
-            logError('Error in unlockAchievement:', error);
         }
     }
 
@@ -630,7 +599,6 @@ export class UserProgressService {
                 .order('achieved_at', { ascending: false });
 
             if (error) {
-                logError('Error fetching user achievements:', error);
                 return [];
             }
 
@@ -642,7 +610,6 @@ export class UserProgressService {
                 unlocked_at: ua.achieved_at
             })) || [];
         } catch (error) {
-            logError('Error in getUserAchievements:', error);
             return [];
         }
     }
@@ -699,7 +666,6 @@ export class UserProgressService {
      */
     static async initializeUser(userId: string): Promise<void> {
         try {
-            log(`Initializing user progress for ${userId}`);
 
             // First, ensure user profile exists with default values
             const { data: existingProfile, error: profileCheckError } = await supabase
@@ -709,18 +675,15 @@ export class UserProgressService {
                 .maybeSingle();
 
             if (profileCheckError) {
-                logError('Error checking existing profile:', profileCheckError);
                 return;
             }
 
             if (!existingProfile) {
-                logError('Profile does not exist for user - this should be created during signup', null);
                 return;
             }
 
             // Update streak (this will award first login XP)
             const streakInfo = await this.updateStreak(userId);
-            log(`Streak initialized: ${streakInfo.currentStreak}`);
             
             // Award welcome achievement
             await this.unlockAchievement(userId, 'first_login');
@@ -742,10 +705,8 @@ export class UserProgressService {
             if (userWords && userWords.length > 0) {
                 await this.unlockAchievement(userId, 'first_word');
             }
-            
-            log(`User progress initialized successfully for ${userId}`);
+
         } catch (error) {
-            logError('Error initializing user:', error);
         }
     }
 
@@ -759,7 +720,6 @@ export class UserProgressService {
         changes: string[];
     }> {
         try {
-            log(`Recalculating progress for user ${userId}`);
             const changes: string[] = [];
 
             // Get current profile state
@@ -770,7 +730,6 @@ export class UserProgressService {
                 .single();
 
             if (profileError) {
-                logError('Error fetching profile for recalculation:', profileError);
                 return { before: null, after: null, changes: [] };
             }
 
@@ -817,7 +776,6 @@ export class UserProgressService {
                     .eq('user_id', userId);
 
                 if (updateError) {
-                    logError('Error applying profile updates:', updateError);
                 }
             }
 
@@ -831,7 +789,6 @@ export class UserProgressService {
             // Check all achievements should be unlocked
             await this.checkAllAchievements(userId);
 
-            log(`Progress recalculation complete. Changes: ${changes.length}`);
             
             return {
                 before,
@@ -839,7 +796,6 @@ export class UserProgressService {
                 changes
             };
         } catch (error) {
-            logError('Error in recalculateUserProgress:', error);
             return { before: null, after: null, changes: [] };
         }
     }
@@ -927,7 +883,6 @@ export class UserProgressService {
 
             return newAchievements;
         } catch (error) {
-            logError('Error in checkAllAchievements:', error);
             return [];
         }
     }

@@ -22,18 +22,19 @@ export interface UserStats {
     totalXP: number;
     level: number;
     streak: number;
-    wordsLearned: number;           // Unique words learned
-    totalTranslations: number;      // Total translations (word-language pairs)
+    wordsLearned: number; // Unique words learned
+    totalTranslations: number; // Total translations (word-language pairs)
     perfectQuizzes: number;
     totalQuizzes: number;
     daysActive: number;
-    masteredWords: number;          // Unique words mastered
+    masteredWords: number; // Unique words mastered
     averageProficiency: number;
     maxStreak: number;
 }
 
 export class AchievementService {
-    private static cache: Map<string, { data: any; timestamp: number; expiresIn: number }> = new Map();
+    private static cache: Map<string, { data: any; timestamp: number; expiresIn: number }> =
+        new Map();
     private static processingUsers: Set<string> = new Set(); // Track users currently being processed
 
     // Cache helper methods
@@ -53,7 +54,7 @@ export class AchievementService {
         this.cache.set(key, {
             data,
             timestamp: Date.now(),
-            expiresIn
+            expiresIn,
         });
     }
 
@@ -67,9 +68,12 @@ export class AchievementService {
     /**
      * Get all achievements from database with user progress (cached)
      */
-    static async getAllAchievementsWithProgress(userId: string, forceRefresh = false): Promise<Achievement[]> {
+    static async getAllAchievementsWithProgress(
+        userId: string,
+        forceRefresh = false,
+    ): Promise<Achievement[]> {
         const cacheKey = CacheKeys.achievements(userId);
-        
+
         // Return cached data if available and not forcing refresh
         if (!forceRefresh) {
             const cached = this.getFromCache<Achievement[]>(cacheKey);
@@ -79,10 +83,13 @@ export class AchievementService {
         }
         try {
             // Check if user is authenticated
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
             if (!user || user.id !== userId) {
                 return [];
             }
+
             // Get all achievements from database
             const { data: achievements, error: achievementsError } = await supabase
                 .from('achievements')
@@ -90,7 +97,20 @@ export class AchievementService {
                 .order('requirement_value', { ascending: true });
 
             if (achievementsError) {
+                // Handle case where achievements table doesn't exist
+                if (
+                    achievementsError.code === '42P01' ||
+                    achievementsError.message.includes('does not exist')
+                ) {
+                    console.warn('Achievements table does not exist, returning empty array');
+                    return [];
+                }
                 console.error('Error fetching achievements:', achievementsError);
+                return [];
+            }
+
+            // Skip user achievements if no achievements exist
+            if (!achievements || achievements.length === 0) {
                 return [];
             }
 
@@ -101,20 +121,33 @@ export class AchievementService {
                 .eq('user_id', userId);
 
             if (userError) {
-                console.error('Error fetching user achievements:', userError);
+                // Handle case where user_achievements table doesn't exist
+                if (userError.code === '42P01' || userError.message.includes('does not exist')) {
+                    console.warn(
+                        'User achievements table does not exist, treating all achievements as unearned',
+                    );
+                    // Continue with empty user achievements
+                } else {
+                    console.error('Error fetching user achievements:', userError);
+                }
             }
 
             // Get user stats for progress calculation
             const stats = await this.getUserStats(userId);
 
             // Map earned achievements
-            const earnedSlugs = new Set(userAchievements?.map(ua => ua.achievement_slug) || []);
-            const earnedMap = new Map(userAchievements?.map(ua => [ua.achievement_slug, ua.achieved_at]) || []);
+            const earnedSlugs = new Set(userAchievements?.map((ua) => ua.achievement_slug) || []);
+            const earnedMap = new Map(
+                userAchievements?.map((ua) => [ua.achievement_slug, ua.achieved_at]) || [],
+            );
 
             // Check for newly earned achievements and award them
             if (stats && achievements) {
                 for (const achievement of achievements) {
-                    if (!earnedSlugs.has(achievement.slug) && this.meetsRequirement(achievement, stats)) {
+                    if (
+                        !earnedSlugs.has(achievement.slug) &&
+                        this.meetsRequirement(achievement, stats)
+                    ) {
                         // Award the achievement
                         const awarded = await this.awardAchievement(userId, achievement);
                         if (awarded) {
@@ -126,15 +159,17 @@ export class AchievementService {
             }
 
             // Combine data
-            const result = achievements?.map(achievement => ({
-                ...achievement,
-                earned: earnedSlugs.has(achievement.slug),
-                achieved_at: earnedMap.get(achievement.slug),
-                progress: !earnedSlugs.has(achievement.slug) && stats 
-                    ? this.calculateProgress(achievement, stats)
-                    : undefined
-            })) || [];
-            
+            const result =
+                achievements?.map((achievement) => ({
+                    ...achievement,
+                    earned: earnedSlugs.has(achievement.slug),
+                    achieved_at: earnedMap.get(achievement.slug),
+                    progress:
+                        !earnedSlugs.has(achievement.slug) && stats
+                            ? this.calculateProgress(achievement, stats)
+                            : undefined,
+                })) || [];
+
             // Cache the result
             this.setCache(cacheKey, result, CACHE_CONFIG.ACHIEVEMENTS);
             return result;
@@ -155,13 +190,19 @@ export class AchievementService {
      */
     private static calculateProgress(achievement: Achievement, stats: UserStats): number {
         let progress = 0;
-        
+
         switch (achievement.requirement_type) {
             case 'words':
                 // Check if this is about mastered words (proficiency-based) or translations
-                if (achievement.slug.includes('vocabulary_builder') || achievement.description.toLowerCase().includes('master')) {
+                if (
+                    achievement.slug.includes('vocabulary_builder') ||
+                    achievement.description.toLowerCase().includes('master')
+                ) {
                     progress = (stats.masteredWords / achievement.requirement_value) * 100;
-                } else if (achievement.description.toLowerCase().includes('translation') || achievement.slug.includes('word_collector')) {
+                } else if (
+                    achievement.description.toLowerCase().includes('translation') ||
+                    achievement.slug.includes('word_collector')
+                ) {
                     progress = (stats.totalTranslations / achievement.requirement_value) * 100;
                 } else {
                     progress = (stats.wordsLearned / achievement.requirement_value) * 100;
@@ -182,7 +223,7 @@ export class AchievementService {
             default:
                 return 0;
         }
-        
+
         // Don't cap at 99% - let it go to 100% so achievements can be awarded
         return Math.min(Math.round(progress), 100);
     }
@@ -194,9 +235,15 @@ export class AchievementService {
         switch (achievement.requirement_type) {
             case 'words':
                 // Check if this is about mastered words (proficiency-based) or translations
-                if (achievement.slug.includes('vocabulary_builder') || achievement.description.toLowerCase().includes('master')) {
+                if (
+                    achievement.slug.includes('vocabulary_builder') ||
+                    achievement.description.toLowerCase().includes('master')
+                ) {
                     return stats.masteredWords >= achievement.requirement_value;
-                } else if (achievement.description.toLowerCase().includes('translation') || achievement.slug.includes('word_collector')) {
+                } else if (
+                    achievement.description.toLowerCase().includes('translation') ||
+                    achievement.slug.includes('word_collector')
+                ) {
                     return stats.totalTranslations >= achievement.requirement_value;
                 } else {
                     return stats.wordsLearned >= achievement.requirement_value;
@@ -222,72 +269,77 @@ export class AchievementService {
     static async checkAndAwardAchievements(userId: string): Promise<Achievement[]> {
         try {
             // Check if user is authenticated
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
             if (!user || user.id !== userId) {
                 return [];
             }
-            
+
             // Prevent duplicate processing for the same user
             if (this.processingUsers.has(userId)) {
-                console.log('[AchievementService] Already processing achievements for user:', userId);
                 return [];
             }
-            
+
             // Track this operation for debugging
             if (!debugUtils.trackAchievementCheck(userId)) {
-                console.warn('[AchievementService] Potential duplicate achievement check detected');
                 return [];
             }
-            
+
             // Mark user as being processed
             this.processingUsers.add(userId);
-            
+
             try {
-            const stats = await this.getUserStats(userId);
-            if (!stats) {
-                return [];
-            }
+                const stats = await this.getUserStats(userId);
+                if (!stats) {
+                    return [];
+                }
 
-            // Get all achievements
-            const { data: allAchievements, error: achievementsError } = await supabase
-                .from('achievements')
-                .select('*');
+                // Get all achievements
+                const { data: allAchievements, error: achievementsError } = await supabase
+                    .from('achievements')
+                    .select('*');
 
-            if (achievementsError) {
-                console.error('Error fetching achievements for check:', achievementsError);
-                return [];
-            }
+                if (achievementsError) {
+                    console.error('Error fetching achievements for check:', achievementsError);
+                    return [];
+                }
 
-            // Get user's existing achievements
-            const { data: existingAchievements, error: existingError } = await supabase
-                .from('user_achievements')
-                .select('achievement_slug')
-                .eq('user_id', userId);
+                // Get user's existing achievements
+                const { data: existingAchievements, error: existingError } = await supabase
+                    .from('user_achievements')
+                    .select('achievement_slug')
+                    .eq('user_id', userId);
 
-            if (existingError) {
-                console.error('Error fetching existing achievements:', existingError);
-                return [];
-            }
+                if (existingError) {
+                    console.error('Error fetching existing achievements:', existingError);
+                    return [];
+                }
 
-            const existingSlugs = new Set(existingAchievements?.map(a => a.achievement_slug) || []);
-            const newAchievements: Achievement[] = [];
+                const existingSlugs = new Set(
+                    existingAchievements?.map((a) => a.achievement_slug) || [],
+                );
+                const newAchievements: Achievement[] = [];
 
-            // Check each achievement
-            for (const achievement of allAchievements || []) {
-                if (!existingSlugs.has(achievement.slug) && this.meetsRequirement(achievement, stats)) {
-                    // Award the achievement
-                    const awarded = await this.awardAchievement(userId, achievement);
-                    if (awarded) {
-                        newAchievements.push({
-                            ...achievement,
-                            earned: true,
-                            achieved_at: new Date().toISOString()
-                        });
+                // Check each achievement
+                for (const achievement of allAchievements || []) {
+                    if (
+                        !existingSlugs.has(achievement.slug) &&
+                        this.meetsRequirement(achievement, stats)
+                    ) {
+                        // Award the achievement
+                        const awarded = await this.awardAchievement(userId, achievement);
+                        if (awarded) {
+                            newAchievements.push({
+                                ...achievement,
+                                earned: true,
+                                achieved_at: new Date().toISOString(),
+                            });
+                        }
                     }
                 }
-            }
 
-            return newAchievements;
+                return newAchievements;
             } finally {
                 // Always remove user from processing set
                 this.processingUsers.delete(userId);
@@ -305,7 +357,7 @@ export class AchievementService {
      */
     static async getUserStats(userId: string, forceRefresh = false): Promise<UserStats | null> {
         const cacheKey = `achievementStats_${userId}`;
-        
+
         // Return cached data if available and not forcing refresh
         if (!forceRefresh) {
             const cached = this.getFromCache<UserStats>(cacheKey);
@@ -315,7 +367,9 @@ export class AchievementService {
         }
         try {
             // Check if user is authenticated
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
             if (!user || user.id !== userId) {
                 return null;
             }
@@ -331,18 +385,25 @@ export class AchievementService {
                 return null;
             }
 
-            // Get user words data
-            const { data: userWords, error: wordsError } = await supabase
+            // Get user words data (handle missing table gracefully)
+            let userWords: any[] = [];
+            const { data: userWordsData, error: wordsError } = await supabase
                 .from('user_words')
                 .select('word_id, proficiency')
                 .eq('user_id', userId);
 
             if (wordsError) {
-                console.error('Error fetching user words for achievements:', wordsError);
+                if (wordsError.code === '42P01' || wordsError.message.includes('does not exist')) {
+                    console.warn('User words table does not exist, using empty data');
+                } else {
+                    console.error('Error fetching user words for achievements:', wordsError);
+                }
+            } else {
+                userWords = userWordsData || [];
             }
 
             // Get total translations count
-            const userWordIds = userWords?.map(uw => uw.word_id).filter(id => id != null) || [];
+            const userWordIds = userWords?.map((uw) => uw.word_id).filter((id) => id != null) || [];
             let totalTranslations = 0;
             if (userWordIds.length > 0) {
                 const { data: translationsData, error: translationsError } = await supabase
@@ -355,40 +416,55 @@ export class AchievementService {
                 }
             }
 
-            // Get quiz data
-            const { data: quizzes, error: quizzesError } = await supabase
+            // Get quiz data (handle missing table gracefully)
+            let quizzes: any[] = [];
+            const { data: quizzesData, error: quizzesError } = await supabase
                 .from('quiz_sessions')
                 .select('percentage_score, total_questions, score')
                 .eq('user_id', userId);
 
             if (quizzesError) {
-                console.error('Error fetching quiz data for achievements:', quizzesError);
+                if (
+                    quizzesError.code === '42P01' ||
+                    quizzesError.message.includes('does not exist')
+                ) {
+                    console.warn('Quiz sessions table does not exist, using empty data');
+                } else {
+                    console.error('Error fetching quiz data for achievements:', quizzesError);
+                }
+            } else {
+                quizzes = quizzesData || [];
             }
 
             const uniqueWordsLearned = userWords?.length || 0;
-            const masteredUniqueWords = userWords?.filter(w => w.proficiency >= 80).length || 0;
-            const averageProficiency = uniqueWordsLearned > 0 
-                ? userWords!.reduce((sum, w) => sum + (w.proficiency || 0), 0) / uniqueWordsLearned 
-                : 0;
+            const masteredUniqueWords = userWords?.filter((w) => w.proficiency >= 80).length || 0;
+            const averageProficiency =
+                uniqueWordsLearned > 0
+                    ? userWords!.reduce((sum, w) => sum + (w.proficiency || 0), 0) /
+                      uniqueWordsLearned
+                    : 0;
 
-            const perfectQuizzes = quizzes?.filter(q => 
-                q.percentage_score === 100 || (q.score === q.total_questions && q.total_questions > 0)
-            ).length || 0;
+            const perfectQuizzes =
+                quizzes?.filter(
+                    (q) =>
+                        q.percentage_score === 100 ||
+                        (q.score === q.total_questions && q.total_questions > 0),
+                ).length || 0;
 
             const stats = {
                 totalXP: profile?.total_xp || 0,
                 level: profile?.level || 1,
                 streak: profile?.streak || 0,
-                wordsLearned: uniqueWordsLearned,        // Unique words learned
-                totalTranslations,                        // Total translations (word-language pairs)
+                wordsLearned: uniqueWordsLearned, // Unique words learned
+                totalTranslations, // Total translations (word-language pairs)
                 perfectQuizzes,
                 totalQuizzes: quizzes?.length || 0,
                 daysActive: 1, // TODO: Calculate from login history
-                masteredWords: masteredUniqueWords,      // Unique words mastered
+                masteredWords: masteredUniqueWords, // Unique words mastered
                 averageProficiency: Math.round(averageProficiency),
-                maxStreak: profile?.streak || 0 // TODO: Track max streak separately
+                maxStreak: profile?.streak || 0, // TODO: Track max streak separately
             };
-            
+
             // Cache the result
             this.setCache(cacheKey, stats, CACHE_CONFIG.USER_STATS);
             return stats;
@@ -404,24 +480,23 @@ export class AchievementService {
         }
     }
 
-
     /**
      * Award a specific achievement to a user
      */
     static async awardAchievement(userId: string, achievement: Achievement): Promise<boolean> {
         try {
             // Check if user is authenticated
-            const { data: { user } } = await supabase.auth.getUser();
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
             if (!user || user.id !== userId) {
                 return false;
             }
             // Insert the achievement
-            const { error: insertError } = await supabase
-                .from('user_achievements')
-                .insert({
-                    user_id: userId,
-                    achievement_slug: achievement.slug
-                });
+            const { error: insertError } = await supabase.from('user_achievements').insert({
+                user_id: userId,
+                achievement_slug: achievement.slug,
+            });
 
             if (insertError) {
                 console.error('Error awarding achievement:', insertError);
@@ -429,11 +504,16 @@ export class AchievementService {
             }
 
             // Award XP for the achievement
-            await LevelingService.awardXP(userId, 'ACHIEVEMENT_UNLOCKED', undefined, achievement.xp_reward / 30);
-            
+            await LevelingService.awardXP(
+                userId,
+                'ACHIEVEMENT_UNLOCKED',
+                undefined,
+                achievement.xp_reward / 30,
+            );
+
             // Invalidate all user caches since achievements affect multiple data points
             this.invalidateUserCache(userId);
-            
+
             return true;
         } catch (error) {
             console.error('Error in awardAchievement:', error);
@@ -441,4 +521,25 @@ export class AchievementService {
         }
     }
 
+    /**
+     * Get user's earned achievements only
+     */
+    static async getUserAchievements(userId: string): Promise<Record<string, string>[]> {
+        try {
+            const allAchievements = await this.getAllAchievementsWithProgress(userId);
+            return allAchievements
+                .filter(achievement => achievement.earned)
+                .map(achievement => ({
+                    slug: achievement.slug,
+                    title: achievement.title,
+                    description: achievement.description,
+                    icon_name: achievement.icon_name,
+                    icon_color: achievement.icon_color,
+                    achieved_at: achievement.achieved_at || ''
+                }));
+        } catch (error) {
+            console.error('Error getting user achievements:', error);
+            return [];
+        }
+    }
 }

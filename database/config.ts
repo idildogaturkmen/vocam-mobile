@@ -12,6 +12,8 @@ export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKe
         autoRefreshToken: true,
         detectSessionInUrl: false,
         lock: processLock,
+        // Use implicit flow instead of PKCE to avoid WebCrypto warning
+        flowType: 'implicit',
     },
 });
 

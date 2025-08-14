@@ -5,7 +5,9 @@
       "Bash(sed:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run build:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npm run:*)",
+      "Bash(rg:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
     View, 
     Text, 
@@ -18,7 +18,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../database/config';
-import VocabularyService, { SavedWord } from '../../src/services/VocabularyService';
+import VocabularyService, { VocabularyService as VocabularyServiceClass, SavedWord, setVocabularyUpdateCallback } from '../../src/services/VocabularyService';
+import { useCache, CacheKeys } from '../../src/services/CacheService';
+
+// Type definitions removed - no longer needed with simplified queries
 import SpeechService from '../../src/services/SpeechService';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -98,16 +101,29 @@ export default function VocabularyScreen() {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
     const router = useRouter();
 
+    // Use the cache service for request deduplication and performance
+    const { fetchCached, invalidateCache } = useCache();
+
     // Helper function - moved before useMemo that uses it
     const getLanguageName = (code: string): string => {
         const entry = Object.entries(languages).find(([_, c]) => c === code);
         return entry ? entry[0] : code;
     };
 
-    // Get sorted language list
-    const sortedLanguages = useMemo(() => {
-        return Object.keys(languages).sort((a, b) => a.localeCompare(b));
+    // Get sorted language list for the user
+    const [userLanguages, setUserLanguages] = useState<string[]>([]);
+    const [allLanguages, setAllLanguages] = useState<string[]>([]);
+
+    // Initialize languages
+    useEffect(() => {
+        const sorted = Object.keys(languages).sort((a, b) => a.localeCompare(b));
+        setAllLanguages(sorted);
     }, []);
+
+    // Get languages to show in the filter
+    const sortedLanguages = useMemo(() => {
+        return filterLanguage === 'All' ? userLanguages : allLanguages;
+    }, [userLanguages, allLanguages, filterLanguage]);
 
     // Filter languages based on search
     const filteredLanguages = useMemo(() => {
@@ -120,7 +136,22 @@ export default function VocabularyScreen() {
     }, [languageSearchQuery, sortedLanguages]);
 
     useEffect(() => {
+        // Set up callback for vocabulary updates
+        const handleVocabularyUpdate = async () => {
+            await invalidateLanguagesCache();
+            await invalidateVocabularyCache();
+            // Clear vocabulary state first to show loading, then reload
+            setVocabulary([]);
+            loadVocabulary(true); // Force refresh when new words are saved
+        };
+        
+        setVocabularyUpdateCallback(handleVocabularyUpdate);
         checkAuthAndLoadVocabulary();
+        
+        // Cleanup callback on unmount
+        return () => {
+            setVocabularyUpdateCallback(null);
+        };
     }, []);
 
     const checkAuthAndLoadVocabulary = async () => {
@@ -129,12 +160,13 @@ export default function VocabularyScreen() {
             if (!user) {
                 setIsAuthenticated(false);
                 setLoading(false);
-                // Don't show alert immediately, just set the state
                 return;
             }
             
             setIsAuthenticated(true);
-            await loadVocabulary();
+            await loadVocabulary(false);
+            // Update user languages after loading vocabulary once
+            await updateUserLanguages(user.id);
         } catch (error) {
             console.error('Auth check error:', error);
             setIsAuthenticated(false);
@@ -142,43 +174,153 @@ export default function VocabularyScreen() {
         }
     };
 
+    const updateUserLanguages = async (userId: string) => {
+        try {
+            const userLangs = await getUserLanguages(userId);
+            const langNames = userLangs
+                .map(code => {
+                    const entry = Object.entries(languages).find(([_, c]) => c === code);
+                    return entry ? entry[0] : null;
+                })
+                .filter(Boolean) as string[];
+            setUserLanguages(langNames.sort((a, b) => a.localeCompare(b)));
+        } catch (error) {
+            console.error('Error updating user languages:', error);
+        }
+    };
+
     useEffect(() => {
         applyFiltersAndSort();
     }, [vocabulary, sortBy, searchQuery]);
 
-    // Reload vocabulary when language filter changes
+    // Only reload vocabulary when language filter changes (not on initial auth)
     useEffect(() => {
-        if (isAuthenticated) {
-            loadVocabulary();
+        if (isAuthenticated && filterLanguage !== 'All') {
+            loadVocabulary(false);
         }
-    }, [filterLanguage, isAuthenticated]);
+    }, [filterLanguage]);
 
-    const loadVocabulary = async () => {
+    // Cache invalidation helpers
+    const invalidateLanguagesCache = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            invalidateCache(CacheKeys.userLanguages(user.id));
+        }
+    };
+
+    const invalidateVocabularyCache = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            invalidateCache(CacheKeys.vocabulary(user.id, filterLanguage));
+        }
+    };
+
+    // Get all languages that the user has words in
+    const getUserLanguages = async (userId: string): Promise<string[]> => {
+        return fetchCached(
+            CacheKeys.userLanguages(userId),
+            async () => {
+                try {
+                    // Get word_ids for user
+                    const { data: userWords, error: userWordsError } = await supabase
+                        .from('user_words')
+                        .select('word_id')
+                        .eq('user_id', userId);
+                    
+                    if (userWordsError) {
+                        console.error('Error fetching user words for languages:', userWordsError);
+                        return [];
+                    }
+                    
+                    if (!userWords || userWords.length === 0) {
+                        return [];
+                    }
+                    
+                    const languageCodes = new Set<string>();
+                    
+                    // 1. Get languages from translations table (database words)
+                    const wordIds = userWords.map(uw => uw.word_id);
+                    const { data: translations } = await supabase
+                        .from('translations')
+                        .select('language_code')
+                        .in('word_id', wordIds);
+                    
+                    if (translations) {
+                        translations.forEach(t => {
+                            if (t.language_code) {
+                                languageCodes.add(t.language_code);
+                            }
+                        });
+                    }
+                    
+                    // 2. Get languages from cached words (RLS-compatible words)
+                    for (const userWord of userWords) {
+                        const cacheKey = `userWord_${userId}_${userWord.word_id}`;
+                        try {
+                            const cachedWordData = VocabularyServiceClass.getFromGlobalCache<{
+                                original: string;
+                                translation: string;
+                                example: string;
+                                exampleEnglish: string;
+                                language: string;
+                            }>(cacheKey);
+                            if (cachedWordData && cachedWordData.language) {
+                                languageCodes.add(cachedWordData.language);
+                            }
+                        } catch (cacheError) {
+                            // Skip individual cache errors and continue
+                            continue;
+                        }
+                    }
+                    
+                    return Array.from(languageCodes);
+                } catch (error) {
+                    console.error('Error getting user languages:', error);
+                    return [];
+                }
+            },
+            'USER_STATS' // Use existing cache config
+        );
+    };
+
+    const loadVocabulary = async (forceRefresh = false) => {
         try {
+            // Only show loading indicator if we're not already loading and this isn't a background refresh
+            if (!refreshing && !forceRefresh) {
+                setLoading(true);
+            }
+            
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
                 Alert.alert('Error', 'Please log in to view your vocabulary');
+                setLoading(false);
+                setRefreshing(false);
                 return;
             }
 
-            // CRITICAL FIX: Only load words for selected language, or all if "All" is selected
-            let words: SavedWord[] = [];
-            if (filterLanguage === 'All') {
-                // Load each language separately to avoid unwanted translations
-                const allLanguageCodes = Object.values(languages);
-                const allLanguageWords = await Promise.all(
-                    allLanguageCodes.map(langCode => 
-                        VocabularyService.getUserVocabulary(user.id, langCode)
-                    )
-                );
-                words = allLanguageWords.flat();
-            } else {
-                // Load only the selected language
-                const langCode = languages[filterLanguage as keyof typeof languages];
-                if (langCode) {
-                    words = await VocabularyService.getUserVocabulary(user.id, langCode);
-                }
-            }
+            const words = await fetchCached(
+                CacheKeys.vocabulary(user.id, filterLanguage),
+                async () => {
+                    let vocabularyWords: SavedWord[] = [];
+                    if (filterLanguage === 'All') {
+                        // Load all vocabulary at once (much more efficient)
+                        vocabularyWords = await VocabularyService.getUserVocabulary(user.id);
+                    } else {
+                        // Load only the selected language
+                        const langCode = languages[filterLanguage as keyof typeof languages];
+                        if (langCode) {
+                            vocabularyWords = await VocabularyService.getUserVocabulary(user.id, langCode);
+                        } else {
+                            console.warn(`No language code found for: ${filterLanguage}`);
+                            vocabularyWords = [];
+                        }
+                    }
+                    return vocabularyWords;
+                },
+                'VOCABULARY',
+                forceRefresh
+            );
+
             setVocabulary(words);
         } catch (error) {
             console.error('Error loading vocabulary:', error);
@@ -321,12 +463,12 @@ export default function VocabularyScreen() {
                             } else {
                                 // If deletion failed, restore the word to the UI
                                 Alert.alert('Error', 'Failed to delete word');
-                                loadVocabulary(); // Reload to restore the word
+                                loadVocabulary(true); // Reload to restore the word
                             }
                         } catch (error) {
                             // If deletion failed, restore the word to the UI
                             Alert.alert('Error', 'Failed to delete word');
-                            loadVocabulary(); // Reload to restore the word
+                            loadVocabulary(true); // Reload to restore the word
                         }
                     }
                 }
@@ -379,14 +521,16 @@ export default function VocabularyScreen() {
         }
     };
 
-    const renderVocabularyItem = (word: SavedWord) => {
+    const renderVocabularyItem = (word: SavedWord, index: number) => {
         const isExpanded = expandedItems.has(word.id);
         const proficiencyInfo = getProficiencyInfo(word.proficiency);
         const categoryColor = getCategoryColor(word.category || 'general');
+        // Create a more unique key by combining word ID and language code
+        const uniqueKey = `${word.id}_${word.language}_${index}`;
 
         return (
             <TouchableOpacity
-                key={word.id}
+                key={uniqueKey}
                 style={[
                     styles.wordCard,
                     isExpanded && styles.wordCardExpanded
@@ -821,14 +965,14 @@ export default function VocabularyScreen() {
                             refreshing={refreshing}
                             onRefresh={() => {
                                 setRefreshing(true);
-                                loadVocabulary();
+                                loadVocabulary(true);
                             }}
                             colors={['#3498db']}
                         />
                     }
                 >
                     {filteredVocabulary.length > 0 ? (
-                        filteredVocabulary.map(renderVocabularyItem)
+                        filteredVocabulary.map((word, index) => renderVocabularyItem(word, index))
                     ) : (
                         <View style={styles.emptyState}>
                             <Text style={styles.emptyIcon}>📚</Text>

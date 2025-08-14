@@ -18,6 +18,9 @@ expo-env.d.ts
 # metro
 .metro-health-check*
 
+# Never commit secrets or API keys to your repository!
+.env
+
 # debug
 npm-debug.*
 yarn-debug.*

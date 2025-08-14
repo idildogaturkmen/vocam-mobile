@@ -11,12 +11,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Pressable
+  Pressable,
+  Platform
 } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Entypo from '@expo/vector-icons/Entypo';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Services
 import ObjectDetectionService from '../../src/services/ObjectDetectionService';
@@ -159,6 +161,31 @@ export default function DetectionScreen() {
       checkAuthAndInitialize();
   }, []);
 
+  // Handle focus/blur to reset camera state when returning from other screens
+  useFocusEffect(
+    React.useCallback(() => {
+      // Reset any processing state when screen comes into focus
+      console.log('Detection screen focused - resetting camera state');
+      setIsProcessing(false);
+      
+      // Also clear any previous photo states that might be interfering
+      setPhoto(null);
+      setRotatedPhoto(null);
+      setDetections([]);
+      setSelectedWords(new Set<number>());
+      
+      // If we have permission, reinitialize services to ensure proper state
+      if (permission?.granted && isAuthenticated) {
+        initializeServices();
+      }
+      
+      return () => {
+        // Optional cleanup when screen loses focus
+        console.log('Detection screen unfocused');
+      };
+    }, [permission?.granted, isAuthenticated])
+  );
+
   const checkAuthAndInitialize = async () => {
       try {
           const { data: { user } } = await supabase.auth.getUser();
@@ -174,6 +201,25 @@ export default function DetectionScreen() {
           setIsAuthenticated(false);
       }
   };
+
+  // Emergency camera reset function
+  const emergencyResetCamera = () => {
+    console.log('🚨 Emergency camera reset triggered');
+    setIsProcessing(false);
+    setPhoto(null);
+    setRotatedPhoto(null);
+    setDetections([]);
+    setSelectedWords(new Set<number>());
+    console.log('✅ Camera state forcibly reset');
+  };
+
+  // Expose emergency reset globally for debugging
+  React.useEffect(() => {
+    (global as any).resetCamera = emergencyResetCamera;
+    return () => {
+      delete (global as any).resetCamera;
+    };
+  }, []);
 
   const initializeServices = async () => {
     try {
@@ -202,36 +248,100 @@ export default function DetectionScreen() {
   };
 
   const takePicture = async () => {
-    if (cameraRef.current && modelStatus === 'ready' && !isProcessing) {
-      try {
-        setIsProcessing(true);
-        
-        // Reset previous photo states to ensure clean capture
-        resetCameraState();
-        setIsProcessing(true); // Set back to processing after reset
-        
-        const photoResult = await cameraRef.current.takePictureAsync({ 
-          skipProcessing: false,
-          quality: 0.8,
-          exif: false,
-        });
-        
-        if (!photoResult || !photoResult.uri) {
-          throw new Error('Failed to capture photo - no result returned');
-        }
-        
-        // OPTIMIZED: Use optimized image processing
-        const rotatedUri = await getDisplayAndVisionImage(photoResult.uri);
-        setPhoto(rotatedUri);
-        setRotatedPhoto(rotatedUri);
-        await detectObjectsWithAI(rotatedUri);
-      } catch (error) {
-        console.error('Picture error:', error);
-        Alert.alert('Error', 'Could not take picture. Please try again.');
-        resetCameraState(); // Reset on error
-      } finally {
+    // Check if conditions are met
+    if (!cameraRef.current || modelStatus !== 'ready') {
+      console.log('Camera not ready:', { 
+        hasCamera: !!cameraRef.current, 
+        modelStatus, 
+        permission: permission?.granted 
+      });
+      return;
+    }
+
+    // Always allow photo capture, but prevent multiple simultaneous captures
+    if (isProcessing) {
+      console.log('Camera is busy processing, please wait');
+      return;
+    }
+
+    console.log('Taking picture...');
+
+    let safetyTimeout: any = null;
+
+    try {
+      // Reset previous states first (synchronously)
+      setPhoto(null);
+      setRotatedPhoto(null);
+      setDetections([]);
+      setSelectedWords(new Set<number>());
+      
+      // Set processing state after reset
+      setIsProcessing(true);
+
+      // Set a safety timeout to reset processing state if something goes wrong
+      safetyTimeout = setTimeout(() => {
+        console.warn('⚠️ Camera processing timeout - forcing reset');
         setIsProcessing(false);
+      }, 30000); // 30 second timeout
+
+      // Add small delay for Android camera stability
+      if (Platform.OS === 'android') {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
+      
+      // Check camera ref again after delay
+      if (!cameraRef.current) {
+        throw new Error('Camera reference lost during capture');
+      }
+
+      console.log('Calling camera.takePictureAsync...');
+      const photoResult = await cameraRef.current.takePictureAsync({ 
+        skipProcessing: false,
+        quality: 0.7, // Reduce quality slightly for better reliability
+        exif: false,
+        base64: false,
+        imageType: 'jpg',
+      });
+      
+      console.log('Photo result:', { 
+        hasResult: !!photoResult, 
+        hasUri: !!photoResult?.uri 
+      });
+      
+      if (!photoResult || !photoResult.uri) {
+        throw new Error('Failed to capture photo - no result returned');
+      }
+      
+      // Process the captured image
+      console.log('Processing captured image...');
+      const rotatedUri = await getDisplayAndVisionImage(photoResult.uri);
+      setPhoto(rotatedUri);
+      setRotatedPhoto(rotatedUri);
+      
+      // Start AI detection
+      console.log('Starting AI detection...');
+      await detectObjectsWithAI(rotatedUri);
+      
+      console.log('Photo capture and processing complete');
+      
+    } catch (error) {
+      console.error('Picture error:', error);
+      Alert.alert('Camera Error', 'Could not take picture. Please try again.');
+      
+      // Reset states on error
+      setPhoto(null);
+      setRotatedPhoto(null);
+      setDetections([]);
+      setSelectedWords(new Set<number>());
+    } finally {
+      // Clear safety timeout
+      if (safetyTimeout) {
+        clearTimeout(safetyTimeout);
+      }
+      
+      // Always reset processing state
+      setIsProcessing(false);
+      console.log('Camera processing state reset');
     }
   };
 
@@ -269,10 +379,8 @@ export default function DetectionScreen() {
   };
 
   const detectObjectsWithAI = async (imageUri: string) => {
-    if (isProcessing) return;
-    
     try {
-      setIsProcessing(true);
+      // Note: isProcessing should already be true when this is called from takePicture
       
       // Higher confidence threshold for better accuracy  
       const results = await ObjectDetectionService.detectObjects(imageUri, 0.7);
@@ -322,8 +430,7 @@ export default function DetectionScreen() {
     } catch (error) {
       console.error('❌ Detection error:', error);
       Alert.alert('Detection Failed', 'Unable to analyze the image. Please try again.');
-    } finally {
-      setIsProcessing(false);
+      throw error; // Re-throw so takePicture can handle it
     }
   };
 

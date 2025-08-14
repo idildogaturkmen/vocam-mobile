@@ -94,8 +94,30 @@ const LANGUAGE_NAMES: Record<string, string> = {
     la: 'Latin',
 };
 
+type UserWordResponse = {
+    word_id: string,
+    proficiency: number,
+    learned_at: string,
+    words: {
+        word_id: string,
+        original: string,
+        translations: Array<{
+            language_code: string;
+            translated_text: string;
+            example: string | null;
+        }>,
+    },
+};
+
 class VocabularyService {
     private cache: Map<string, { data: any; timestamp: number; expiresIn: number }> = new Map();
+
+    /**
+     * Get user's vocabulary for a specific language
+     */
+    // Type definitions for Supabase response
+
+    // Removed duplicate getUserVocabulary(userId: string, languageCode: string): Promise<SavedWord[]> method to resolve duplicate implementation error.
 
     // Cache helper methods
     private getFromCache<T>(key: string): T | null {
@@ -108,6 +130,13 @@ class VocabularyService {
             return null;
         }
         return entry.data;
+    }
+
+    /**
+     * Static method to access cache from global instance
+     */
+    static getFromGlobalCache<T>(key: string): T | null {
+        return vocabularyService.getFromCache<T>(key);
     }
 
     private setCache<T>(key: string, data: T, expiresIn: number): void {
@@ -151,6 +180,14 @@ class VocabularyService {
             const cacheKey = `userWord_${userId}_${wordId}`;
             this.setCache(cacheKey, wordData, CACHE_CONFIG.VOCABULARY);
             console.log(`Stored word data in cache: ${wordData.original}`);
+            
+            // Verify cache storage immediately
+            const verifyCache = this.getFromCache(cacheKey);
+            if (verifyCache) {
+                console.log(`✅ Cache verification successful for: ${wordData.original}`);
+            } else {
+                console.error(`❌ Cache verification failed for: ${wordData.original}`);
+            }
         } catch (error) {
             console.warn('Error storing user word data:', error);
         }
@@ -177,19 +214,23 @@ class VocabularyService {
         };
 
         try {
-            // Get all existing user vocabulary with word data to check for duplicates
+            // Get existing user vocabulary that has translations in the target language only
             const { data: existingUserWords } = await supabase
                 .from('user_words')
                 .select(`
                     id, 
                     word_id,
-                    words (
-                        original
+                    words!inner (
+                        original,
+                        translations!inner (
+                            language_code
+                        )
                     )
                 `)
-                .eq('user_id', userId);
+                .eq('user_id', userId)
+                .eq('words.translations.language_code', language);
 
-            // Create a comprehensive set of existing words to prevent duplicates
+            // Create a comprehensive set of existing words to prevent duplicates (language-specific)
             const existingWordTexts = new Set<string>();
             const existingWordIds = new Set<string>();
             
@@ -228,6 +269,14 @@ class VocabularyService {
 
             console.log(`Found ${existingWordTexts.size} existing words for user in language ${language}`);
 
+            // Get initial count for verification
+            const { count: initialCount } = await supabase
+                .from('user_words')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId);
+
+            console.log(`Initial user_words count: ${initialCount}`);
+
             for (const word of words) {
                 try {
                     const wordKey = `${word.original.toLowerCase()}_${language}`;
@@ -249,42 +298,207 @@ class VocabularyService {
                         continue;
                     }
 
-                    // Create a user-specific word entry in global table
-                    const globalWordOriginal = `user_${userId}_${word.original.toLowerCase()}_${language}_${Date.now()}`;
+                    // Use clean word name for storage
+                    const cleanWordOriginal = word.original.toLowerCase();
                     
-                    const { error: wordError } = await supabase
+                    console.log(`Checking if word exists: ${cleanWordOriginal}`);
+                    
+                    // Try upsert approach - this handles both new and existing words
+                    console.log(`🔄 Attempting upsert for word: ${cleanWordOriginal}`);
+                    
+                    let wordData;
+                    let finalWordId = wordId;
+                    let existingWord = null;
+                    
+                    // First attempt: try to get existing word
+                    const { data: foundExistingWord } = await supabase
                         .from('words')
-                        .insert({
-                            word_id: wordId,
-                            original: globalWordOriginal,
-                            created_at: new Date().toISOString(),
-                        });
+                        .select('word_id, original')
+                        .eq('original', cleanWordOriginal)
+                        .single();
+                    
+                    if (foundExistingWord) {
+                        console.log(`✅ Using existing word: ${foundExistingWord.original} with ID: ${foundExistingWord.word_id}`);
+                        wordData = [foundExistingWord];
+                        finalWordId = foundExistingWord.word_id;
+                        existingWord = foundExistingWord;
+                    } else {
+                        console.log(`Creating new word: ${cleanWordOriginal} with ID: ${wordId}`);
+                        const { data: newWordData, error: wordError } = await supabase
+                            .from('words')
+                            .insert({
+                                word_id: wordId,
+                                original: cleanWordOriginal,
+                                created_at: new Date().toISOString(),
+                            })
+                            .select();
+                            
+                        if (wordError) {
+                            console.error('❌ WORD INSERT ERROR:', {
+                                word: cleanWordOriginal,
+                                error: wordError,
+                                code: wordError.code,
+                                message: wordError.message,
+                                details: wordError.details
+                            });
+                            
+                            // If it's a constraint violation, try to get the existing word
+                            if (wordError.code === '23505') {
+                                console.log('🔄 Constraint violation - attempting to find existing word');
+                                const { data: retryExistingWord } = await supabase
+                                    .from('words')
+                                    .select('word_id, original')
+                                    .eq('original', cleanWordOriginal)
+                                    .single();
+                                    
+                                if (retryExistingWord) {
+                                    console.log(`✅ Found existing word after constraint error: ${retryExistingWord.word_id}`);
+                                    wordData = [retryExistingWord];
+                                    finalWordId = retryExistingWord.word_id;
+                                } else {
+                                    console.error('❌ Could not find existing word even after constraint error');
+                                    result.errors.push(word.original);
+                                    continue;
+                                }
+                            } else {
+                                result.errors.push(word.original);
+                                continue;
+                            }
+                        } else {
+                            wordData = newWordData;
+                        }
+                    }
 
-                    if (wordError) {
-                        console.error('Failed to create global word entry:', wordError);
+                    if (!wordData || wordData.length === 0) {
+                        console.error('Word data not available');
                         result.errors.push(word.original);
+                        continue;
+                    }
+
+                    console.log(`Word ready for user_words entry:`, wordData[0]);
+
+                    // Check if user already has this word in this language
+                    const { data: existingUserWord } = await supabase
+                        .from('user_words')
+                        .select(`
+                            id,
+                            words!inner (
+                                word_id,
+                                translations!inner (
+                                    language_code
+                                )
+                            )
+                        `)
+                        .eq('user_id', userId)
+                        .eq('word_id', finalWordId)
+                        .eq('words.translations.language_code', language)
+                        .single();
+
+                    if (existingUserWord) {
+                        console.log(`⚠️ User already has this word in ${language}:`, existingUserWord.id);
+                        result.existingWords.push(word.original);
                         continue;
                     }
 
                     // Create user_words entry
-                    const { error: userWordError } = await supabase
+                    console.log(`Attempting to insert user_word: userId=${userId}, wordId=${finalWordId}`);
+                    
+                    const { data: userWordData, error: userWordError } = await supabase
                         .from('user_words')
                         .insert({
                             id: userWordId,
                             user_id: userId,
-                            word_id: wordId,
+                            word_id: finalWordId,
                             proficiency: 0,
                             learned_at: new Date().toISOString(),
-                        });
+                        })
+                        .select();
 
                     if (userWordError) {
                         console.error('Failed to save user word:', userWordError);
+                        // Only cleanup if we created a new word (don't delete existing words)
+                        if (!existingWord) {
+                            await supabase.from('words').delete().eq('word_id', finalWordId);
+                        }
                         result.errors.push(word.original);
                         continue;
                     }
 
-                    // Store word data in cache with unique key
-                    await this.storeUserWordData(userId, wordId, {
+                    if (!userWordData || userWordData.length === 0) {
+                        console.error('User word insertion returned no data, may have been blocked by RLS');
+                        // Only cleanup if we created a new word (don't delete existing words)
+                        if (!existingWord) {
+                            await supabase.from('words').delete().eq('word_id', finalWordId);
+                        }
+                        result.errors.push(word.original);
+                        continue;
+                    }
+
+                    console.log(`Successfully inserted user_word:`, userWordData[0]);
+
+                    // Verify the data was actually persisted by reading it back
+                    const { data: verifyData, error: verifyError } = await supabase
+                        .from('user_words')
+                        .select('id, user_id, word_id')
+                        .eq('id', userWordId)
+                        .single();
+
+                    if (verifyError || !verifyData) {
+                        console.error('Verification failed - word was not actually saved:', verifyError);
+                        // Only cleanup if we created a new word (don't delete existing words)
+                        if (!existingWord) {
+                            await supabase.from('words').delete().eq('word_id', finalWordId);
+                        }
+                        result.errors.push(word.original);
+                        continue;
+                    }
+
+                    console.log(`✅ Verified persistence of user_word:`, verifyData);
+
+                    // Save translation to the translations table
+                    const translationExample = word.example && word.exampleEnglish 
+                        ? `${word.example}|${word.exampleEnglish}` 
+                        : '';
+
+                    console.log(`Attempting to insert translation for word_id: ${finalWordId}, language: ${language}`);
+                    
+                    // Check if translation already exists for this word and language
+                    const { data: existingTranslation } = await supabase
+                        .from('translations')
+                        .select('*')
+                        .eq('word_id', finalWordId)
+                        .eq('language_code', language)
+                        .single();
+                    
+                    if (existingTranslation) {
+                        console.log(`✅ Translation already exists for ${cleanWordOriginal} in ${language}`);
+                    } else {
+                        const { data: translationData, error: translationError } = await supabase
+                            .from('translations')
+                            .insert({
+                                word_id: finalWordId,
+                                language_code: language,
+                                translated_text: word.translation,
+                                example: translationExample
+                            })
+                            .select();
+
+                        if (translationError) {
+                            console.error('❌ TRANSLATION INSERT ERROR:', {
+                                word_id: finalWordId,
+                                language: language,
+                                error: translationError,
+                                code: translationError.code,
+                                message: translationError.message
+                            });
+                            console.warn(`Translation not saved for word: ${word.original}`);
+                        } else if (translationData && translationData.length > 0) {
+                            console.log(`✅ Successfully saved translation:`, translationData[0]);
+                        }
+                    }
+
+                    // Store word data in cache with unique key (as backup)
+                    await this.storeUserWordData(userId, finalWordId, {
                         original: word.original,
                         translation: word.translation,
                         example: word.example,
@@ -292,14 +506,21 @@ class VocabularyService {
                         language: language
                     });
 
+                    console.log(`Stored in cache with key: userWord_${userId}_${finalWordId}`);
+
                     // Add to tracking sets to prevent duplicates in this batch
                     existingWordTexts.add(wordKey);
-                    existingWordIds.add(wordId);
+                    existingWordIds.add(finalWordId);
 
                     result.savedWords.push(word.original);
                     
                     // Record learning activity
-                    await recordLearningActivity(userId, wordId, 1);
+                    try {
+                        await recordLearningActivity(userId, finalWordId, 1);
+                    } catch (activityError) {
+                        console.warn('Failed to record learning activity:', activityError);
+                        // Don't fail the whole operation for activity recording
+                    }
 
                 } catch (error) {
                     console.error('Error saving word:', word.original, error);
@@ -307,13 +528,46 @@ class VocabularyService {
                 }
             }
 
+            // Final verification - check if the count actually increased
+            const { count: finalCount } = await supabase
+                .from('user_words')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId);
+
+            console.log(`Final user_words count: ${finalCount}, Expected increase: ${result.savedWords.length}`);
+
+            const actualIncrease = (finalCount || 0) - (initialCount || 0);
+            if (actualIncrease !== result.savedWords.length) {
+                console.error(`⚠️ COUNT MISMATCH: Expected ${result.savedWords.length} new words, but count increased by ${actualIncrease}`);
+                
+                // If we have a severe mismatch, something went wrong
+                if (result.savedWords.length > 0 && actualIncrease === 0) {
+                    console.error('❌ CRITICAL: Words reported as saved but database count unchanged - possible RLS/permission issue');
+                    
+                    // Move "saved" words to errors since they didn't actually persist
+                    result.errors.push(...result.savedWords);
+                    result.savedWords = [];
+                }
+            }
+
             console.log(`RLS-Compatible: Successfully saved ${result.savedWords.length} new words, ${result.existingWords.length} already existed`);
-            this.invalidateUserCache(userId);
+            
+            // DON'T invalidate cache immediately after saving - this would remove the word data we just stored!
+            // We need to preserve the individual word cache entries for the newly saved words
+            console.log(`Preserving individual word cache entries for ${result.savedWords.length} newly saved words`);
+            
+            // Trigger vocabulary update callback if new words were saved
+            if (result.savedWords.length > 0 && vocabularyUpdateCallback) {
+                setTimeout(() => vocabularyUpdateCallback?.(), 100);
+            }
             
             return result;
 
         } catch (error) {
             console.error('RLS-compatible batch save error:', error);
+            console.log('🔄 Attempting fallback to standard method...');
+            
+            // Return error result for all words if main method fails
             return {
                 savedWords: [],
                 existingWords: [],
@@ -398,6 +652,63 @@ class VocabularyService {
             return 'error';
         }
     }
+
+    /**
+     * Backfill missing translations from cache data
+     */
+    private async backfillMissingTranslations(userId: string, userWords: any[]): Promise<void> {
+        console.log('🔧 Checking for words that need translation backfill...');
+        
+        let backfilledCount = 0;
+        for (const userWord of userWords) {
+            // Check if this word has any translations in the database
+            const { data: existingTranslations } = await supabase
+                .from('translations')
+                .select('word_id')
+                .eq('word_id', userWord.word_id);
+                
+            // If no translations exist, try to backfill from cache
+            if (!existingTranslations || existingTranslations.length === 0) {
+                const cacheKey = `userWord_${userId}_${userWord.word_id}`;
+                const cachedWordData = this.getFromCache<{
+                    original: string;
+                    translation: string;
+                    example: string;
+                    exampleEnglish: string;
+                    language: string;
+                }>(cacheKey);
+                
+                if (cachedWordData) {
+                    console.log(`🔄 Backfilling translation for: ${cachedWordData.original} (${cachedWordData.language})`);
+                    
+                    const translationExample = cachedWordData.example && cachedWordData.exampleEnglish 
+                        ? `${cachedWordData.example}|${cachedWordData.exampleEnglish}` 
+                        : '';
+
+                    const { error: backfillError } = await supabase
+                        .from('translations')
+                        .insert({
+                            word_id: userWord.word_id,
+                            language_code: cachedWordData.language,
+                            translated_text: cachedWordData.translation,
+                            example: translationExample
+                        });
+
+                    if (backfillError) {
+                        console.warn(`Failed to backfill translation for ${cachedWordData.original}:`, backfillError);
+                    } else {
+                        backfilledCount++;
+                        console.log(`✅ Backfilled translation for: ${cachedWordData.original}`);
+                    }
+                }
+            }
+        }
+        
+        if (backfilledCount > 0) {
+            console.log(`🎉 Successfully backfilled ${backfilledCount} missing translations`);
+        }
+    }
+
     /**
      * Get all vocabulary for a user (cached)
      */
@@ -416,38 +727,17 @@ class VocabularyService {
             }
         }
         try {
-            // Get user's vocabulary entries - simplified query
-            let userWordsQuery = supabase
+            // First, get all user_words entries (simplified query without joins)
+            const { data: userVocabData, error: vocabError } = await supabase
                 .from('user_words')
                 .select(`
                     id,
                     proficiency,
                     learned_at,
-                    word_id,
-                    words (
-                        word_id,
-                        original,
-                        translations (
-                            word_id,
-                            language_code,
-                            translated_text,
-                            example
-                        )
-                    )
+                    word_id
                 `)
                 .eq('user_id', userId)
                 .order('learned_at', { ascending: false });
-
-            // Apply language filter if specified
-            if (languageFilter) {
-                // We'll filter in-memory since RLS-bypassed words don't have translations
-                console.log(`Getting vocabulary for language: ${languageFilter}`);
-            } else {
-                // If no language filter, we'll return all and filter in-memory
-                console.log('Getting all vocabulary (will filter in-memory)');
-            }
-
-            const { data: userVocabData, error: vocabError } = await userWordsQuery;
 
             if (vocabError) {
                 console.error('Error fetching user vocabulary:', vocabError);
@@ -458,24 +748,37 @@ class VocabularyService {
                 return [];
             }
 
+            console.log(`Processing ${userVocabData.length} user_words for vocabulary display`);
+
+            // Try to backfill missing translations from cache (recovery mechanism)
+            if (!languageFilter) { // Only do this when loading all vocabulary to avoid repeated calls
+                try {
+                    await this.backfillMissingTranslations(userId, userVocabData);
+                } catch (backfillError) {
+                    console.warn('Backfill operation failed, continuing with regular processing:', backfillError);
+                }
+            }
+
             // Transform the data into our SavedWord format
             const vocabulary: SavedWord[] = [];
+            const wordsNeedingDbLookup: typeof userVocabData = [];
 
+            // First pass: Process cached words and collect words needing database lookup
             for (const userWord of userVocabData) {
-                // Check if we have cached word data for this word
+                // First priority: Check if we have cached word data for this word
+                const cacheKey = `userWord_${userId}_${userWord.word_id}`;
                 const cachedWordData = this.getFromCache<{
                     original: string;
                     translation: string;
                     example: string;
                     exampleEnglish: string;
                     language: string;
-                }>(`userWord_${userId}_${userWord.word_id}`);
+                }>(cacheKey);
 
-                if (cachedWordData && (!languageFilter || cachedWordData.language === languageFilter)) {
-                    // IMPORTANT: Only return cached words if they match the exact language filter
-                    // This prevents the same cached word from appearing in multiple language queries
+                if (cachedWordData) {
+                    // Apply language filter if specified
                     if (languageFilter && cachedWordData.language !== languageFilter) {
-                        continue; // Skip if language doesn't match
+                        continue; // Skip if language doesn't match filter
                     }
                     
                     // Use cached data for RLS-bypassed words
@@ -490,45 +793,144 @@ class VocabularyService {
                         learnedAt: userWord.learned_at || '',
                         category: this.categorizeWord(cachedWordData.original),
                     });
-                    continue;
+                } else {
+                    // Add to batch lookup list
+                    wordsNeedingDbLookup.push(userWord);
                 }
+            }
 
-                // Fallback to database query for words that have proper translations
-                const word = Array.isArray(userWord.words) ? userWord.words[0] : userWord.words;
-                if (!word) continue;
+            console.log(`Found ${vocabulary.length} cached words, ${wordsNeedingDbLookup.length} words need database lookup`);
 
-                const translation = Array.isArray(word.translations)
-                    ? word.translations[0]
-                    : word.translations;
-                if (!translation) continue;
+            // If we have words needing database lookup, batch query them
+            if (wordsNeedingDbLookup.length > 0) {
+                const wordIds = wordsNeedingDbLookup.map(uw => uw.word_id);
+                
+                // Batch query: Get all words data at once
+                const { data: wordsData, error: wordsError } = await supabase
+                    .from('words')
+                    .select('word_id, original')
+                    .in('word_id', wordIds);
 
-                // Parse example (format: "translated|english")
-                const [example = '', exampleEnglish = ''] = translation.example?.split('|') || [];
+                if (wordsError) {
+                    console.warn('Error batch fetching words:', wordsError);
+                } else if (wordsData) {
+                    // Batch query: Get all translations data at once
+                    const { data: translationsData, error: translationsError } = await supabase
+                        .from('translations')
+                        .select('word_id, language_code, translated_text, example')
+                        .in('word_id', wordIds);
 
-                // Create unique ID by combining user_word id and language code
-                const uniqueId = `${userWord.id}_${translation.language_code}`;
+                    if (translationsError) {
+                        console.warn('Error batch fetching translations:', translationsError);
+                    } else if (translationsData) {
+                        // Create lookup maps for efficient processing
+                        const wordsMap = new Map(wordsData.map(w => [w.word_id, w]));
+                        const translationsMap = new Map<string, typeof translationsData>();
+                        
+                        // Group translations by word_id
+                        for (const translation of translationsData) {
+                            if (!translationsMap.has(translation.word_id)) {
+                                translationsMap.set(translation.word_id, []);
+                            }
+                            translationsMap.get(translation.word_id)!.push(translation);
+                        }
 
-                // Handle language-specific word format (remove language suffix for display)
-                let displayOriginal = word.original || '';
-                if (displayOriginal.includes('_') && languageFilter) {
-                    const suffix = `_${languageFilter}`;
-                    if (displayOriginal.endsWith(suffix)) {
-                        displayOriginal = displayOriginal.slice(0, -suffix.length);
+                        // Process words with batch-fetched data
+                        for (const userWord of wordsNeedingDbLookup) {
+                            const wordData = wordsMap.get(userWord.word_id);
+                            if (!wordData) {
+                                console.warn(`No word data found for word_id: ${userWord.word_id}`);
+                                continue;
+                            }
+
+                            const translations = translationsMap.get(userWord.word_id) || [];
+                            if (translations.length === 0) {
+                                console.warn(`No translations found for word_id: ${userWord.word_id}`);
+                                
+                                // Try to recover from cache as a fallback
+                                const cacheKey = `userWord_${userId}_${userWord.word_id}`;
+                                const cachedWordData = this.getFromCache<{
+                                    original: string;
+                                    translation: string;
+                                    example: string;
+                                    exampleEnglish: string;
+                                    language: string;
+                                }>(cacheKey);
+                                
+                                if (cachedWordData) {
+                                    console.log(`🔧 Recovering word from cache: ${cachedWordData.original} (${cachedWordData.language})`);
+                                    
+                                    // Apply language filter if specified
+                                    if (languageFilter && cachedWordData.language !== languageFilter) {
+                                        continue;
+                                    }
+                                    
+                                    vocabulary.push({
+                                        id: `${userWord.id}_${cachedWordData.language}`,
+                                        original: cachedWordData.original,
+                                        translation: cachedWordData.translation,
+                                        example: cachedWordData.example,
+                                        exampleEnglish: cachedWordData.exampleEnglish,
+                                        language: cachedWordData.language,
+                                        proficiency: userWord.proficiency || 0,
+                                        learnedAt: userWord.learned_at || '',
+                                        category: this.categorizeWord(cachedWordData.original),
+                                    });
+                                }
+                                continue;
+                            }
+
+                            // Process each translation
+                            for (const translation of translations) {
+                                if (!translation) continue;
+                                
+                                // Apply language filter if specified
+                                if (languageFilter && translation.language_code !== languageFilter) {
+                                    continue;
+                                }
+
+                                // Parse example (format: "translated|english")
+                                const [example = '', exampleEnglish = ''] = translation.example?.split('|') || [];
+
+                                // Create unique ID by combining user_word id and language code
+                                const uniqueId = `${userWord.id}_${translation.language_code}`;
+
+                                // Handle user-specific word format (remove user prefix and language suffix)
+                                let displayOriginal = wordData.original || '';
+                                const userPrefix = `user_${userId}_`;
+                                if (displayOriginal.startsWith(userPrefix)) {
+                                    displayOriginal = displayOriginal.substring(userPrefix.length);
+                                    // Remove timestamp suffix if present
+                                    const parts = displayOriginal.split('_');
+                                    if (parts.length > 2 && !isNaN(Number(parts[parts.length - 1]))) {
+                                        parts.pop(); // Remove timestamp
+                                        displayOriginal = parts.join('_');
+                                    }
+                                    // Remove language suffix
+                                    const langSuffix = `_${translation.language_code}`;
+                                    if (displayOriginal.endsWith(langSuffix)) {
+                                        displayOriginal = displayOriginal.slice(0, -langSuffix.length);
+                                    }
+                                }
+
+                                vocabulary.push({
+                                    id: uniqueId,
+                                    original: displayOriginal,
+                                    translation: translation.translated_text || '',
+                                    example: example,
+                                    exampleEnglish: exampleEnglish,
+                                    language: translation.language_code || '',
+                                    proficiency: userWord.proficiency || 0,
+                                    learnedAt: userWord.learned_at || '',
+                                    category: this.categorizeWord(displayOriginal),
+                                });
+                            }
+                        }
                     }
                 }
-
-                vocabulary.push({
-                    id: uniqueId, // Make ID unique for each translation
-                    original: displayOriginal,
-                    translation: translation.translated_text || '',
-                    example: example,
-                    exampleEnglish: exampleEnglish,
-                    language: translation.language_code || '',
-                    proficiency: userWord.proficiency || 0,
-                    learnedAt: userWord.learned_at || '',
-                    category: this.categorizeWord(displayOriginal),
-                });
             }
+
+            // Successfully processed vocabulary entries
 
             // Cache the result
             this.setCache(cacheKey, vocabulary, CACHE_CONFIG.VOCABULARY);
@@ -896,6 +1298,94 @@ class VocabularyService {
     }
 
     /**
+     * Debug function to check user's vocabulary data in Supabase
+     */
+    async debugUserVocabulary(userId: string): Promise<void> {
+        try {
+            console.log('=== VOCABULARY DEBUG FOR USER:', userId, '===');
+            
+            // Check user_words table
+            const { data: userWords, error: userWordsError } = await supabase
+                .from('user_words')
+                .select('*')
+                .eq('user_id', userId);
+                
+            console.log('USER_WORDS DATA:', userWords?.length || 0, 'entries');
+            if (userWords && userWords.length > 0) {
+                console.log('First 3 user_words:', userWords.slice(0, 3));
+            }
+            
+            if (userWordsError) {
+                console.error('USER_WORDS ERROR:', userWordsError);
+            }
+            
+            // Check words table for user's word_ids
+            if (userWords && userWords.length > 0) {
+                const wordIds = userWords.map(uw => uw.word_id);
+                
+                const { data: wordsData, error: wordsError } = await supabase
+                    .from('words')
+                    .select('*')
+                    .in('word_id', wordIds);
+                    
+                console.log('WORDS DATA:', wordsData?.length || 0, 'entries');
+                if (wordsData && wordsData.length > 0) {
+                    console.log('First 3 words:', wordsData.slice(0, 3));
+                }
+                
+                if (wordsError) {
+                    console.error('WORDS ERROR:', wordsError);
+                }
+                
+                // Check translations for these words
+                const { data: translationsData, error: translationsError } = await supabase
+                    .from('translations')
+                    .select('*')
+                    .in('word_id', wordIds);
+                    
+                console.log('TRANSLATIONS DATA:', translationsData?.length || 0, 'entries');
+                if (translationsData && translationsData.length > 0) {
+                    console.log('First 3 translations:', translationsData.slice(0, 3));
+                }
+                
+                if (translationsError) {
+                    console.error('TRANSLATIONS ERROR:', translationsError);
+                }
+            }
+            
+            // Check cache
+            console.log('=== CACHE DEBUG ===');
+            console.log('Cache size:', this.cache.size);
+            const cacheKeys = Array.from(this.cache.keys()).filter(key => key.includes(userId));
+            console.log('User cache keys:', cacheKeys);
+            
+            // Try to get cached word data for first few words
+            if (userWords && userWords.length > 0) {
+                for (let i = 0; i < Math.min(3, userWords.length); i++) {
+                    const userWord = userWords[i];
+                    const cachedData = this.getFromCache(`userWord_${userId}_${userWord.word_id}`);
+                    console.log(`Cached data for word_id ${userWord.word_id}:`, cachedData);
+                }
+            }
+            
+            console.log('=== END VOCABULARY DEBUG ===');
+        } catch (error) {
+            console.error('DEBUG ERROR:', error);
+        }
+    }
+
+    /**
+     * Force refresh vocabulary by clearing cache
+     */
+    async forceRefreshUserVocabulary(userId: string): Promise<SavedWord[]> {
+        // Clear all cache entries for this user
+        this.invalidateUserCache(userId);
+        
+        // Force refresh all vocabulary
+        return await this.getUserVocabulary(userId, undefined, true);
+    }
+
+    /**
      * Simple word categorization
      */
     private categorizeWord(word: string): string {
@@ -1045,6 +1535,93 @@ const vocabularyService = new VocabularyService();
     }
 };
 
+// Export debug method globally for troubleshooting
+(global as any).debugVocabulary = async () => {
+    try {
+        const { supabase } = await import('../../database/config');
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+            console.error('❌ No user logged in');
+            return;
+        }
+        
+        await vocabularyService.debugUserVocabulary(user.id);
+        
+        // Also test language detection (like the vocabulary page does)
+        console.log('\n=== TESTING LANGUAGE DETECTION ===');
+        
+        // Test the same logic as the vocabulary page
+        const { data: userWords } = await supabase
+            .from('user_words')
+            .select('word_id')
+            .eq('user_id', user.id);
+            
+        if (userWords && userWords.length > 0) {
+            const wordIds = userWords.map(uw => uw.word_id);
+            
+            const { data: translations } = await supabase
+                .from('translations')
+                .select('language_code')
+                .in('word_id', wordIds);
+            
+            if (translations && translations.length > 0) {
+                const languageCodes = new Set();
+                translations.forEach(t => {
+                    if (t.language_code) {
+                        languageCodes.add(t.language_code);
+                    }
+                });
+                
+                console.log('✅ Languages detected:', Array.from(languageCodes));
+            } else {
+                console.log('❌ No translations found for user words');
+            }
+        } else {
+            console.log('❌ No user words found');
+        }
+        
+        console.log('=== END LANGUAGE DETECTION TEST ===\n');
+        
+    } catch (error) {
+        console.error('❌ Debug error:', error);
+    }
+};
+
+// Export force refresh method globally for emergency use
+(global as any).forceRefreshVocabulary = async () => {
+    try {
+        const { supabase } = await import('../../database/config');
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+            console.error('❌ No user logged in');
+            return;
+        }
+        
+        console.log('🔄 Force refreshing vocabulary...');
+        const result = await vocabularyService.forceRefreshUserVocabulary(user.id);
+        console.log('✅ Vocabulary refreshed!', result.length, 'words found');
+        
+        // Trigger callback to update UI
+        if (vocabularyUpdateCallback) {
+            vocabularyUpdateCallback();
+        }
+        
+        return result;
+        
+    } catch (error) {
+        console.error('❌ Force refresh error:', error);
+    }
+};
+
+// Callback for vocabulary updates - can be set by UI components
+export let vocabularyUpdateCallback: (() => void) | null = null;
+
+export const setVocabularyUpdateCallback = (callback: (() => void) | null) => {
+    vocabularyUpdateCallback = callback;
+};
+
 // Export cleanup method globally for emergency use
 (global as any).cleanupVocabulary = async () => {
     try {
@@ -1132,4 +1709,5 @@ const vocabularyService = new VocabularyService();
     }
 };
 
+export { VocabularyService };
 export default vocabularyService;

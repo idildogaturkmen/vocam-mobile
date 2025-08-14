@@ -178,6 +178,7 @@ export const CacheKeys = {
     achievements: (userId: string) => createCacheKey('achievements', userId),
     vocabulary: (userId: string, languageFilter?: string) => 
         createCacheKey('vocabulary', userId, languageFilter || 'all'),
+    userLanguages: (userId: string) => createCacheKey('userLanguages', userId),
     dailyGoal: (userId: string) => createCacheKey('dailyGoal', userId),
     levelInfo: (userId: string) => createCacheKey('levelInfo', userId),
     avatarConfig: (userId: string) => createCacheKey('avatarConfig', userId),

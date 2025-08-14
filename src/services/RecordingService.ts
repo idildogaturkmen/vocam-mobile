@@ -75,9 +75,8 @@ class RecordingService {
                 await new Promise(resolve => setTimeout(resolve, 200));
             }
 
-            // Create and start recording with platform-optimized settings
-            const recordingOptions = Platform.OS === 'android' ? {
-                // Android-optimized settings - using AMR format for Google Speech API
+            // Always provide all platform keys for Expo compatibility
+            const recordingOptions = {
                 android: {
                     extension: '.amr',
                     outputFormat: Audio.AndroidOutputFormat.AMR_NB,
@@ -87,8 +86,8 @@ class RecordingService {
                     bitRate: 12200,
                 },
                 ios: {
-                    extension: '.m4a',
-                    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+                    extension: '.wav',
+                    outputFormat: Audio.IOSOutputFormat.LINEARPCM,
                     audioQuality: Audio.IOSAudioQuality.HIGH,
                     sampleRate: 44100,
                     numberOfChannels: 1,
@@ -101,8 +100,7 @@ class RecordingService {
                     mimeType: 'audio/webm;codecs=opus',
                     bitsPerSecond: 128000,
                 },
-            } : Audio.RecordingOptionsPresets.HIGH_QUALITY;
-            
+            };
             const { recording } = await Audio.Recording.createAsync(recordingOptions);
 
             this.recording = recording;
@@ -277,8 +275,16 @@ class RecordingService {
                 throw new Error('No recording URI provided');
             }
 
-            // Read the audio file
-            const audioBytes = await FileSystem.readAsStringAsync(recordingUri, {
+
+            let audioUriToSend = recordingUri;
+            let audioBytes;
+            // On iOS, if not LINEARPCM/WAV, convert to FLAC (Google compatible)
+            if (Platform.OS === 'ios' && !recordingUri.endsWith('.wav')) {
+                // Conversion logic placeholder: in Expo, true conversion is not trivial, so warn user
+                console.warn('⚠️ iOS recording is not in WAV format. Please update Expo or use a compatible format.');
+                // Proceed with original file, but warn that results may be unreliable
+            }
+            audioBytes = await FileSystem.readAsStringAsync(audioUriToSend, {
                 encoding: FileSystem.EncodingType.Base64,
             });
 
@@ -380,11 +386,22 @@ class RecordingService {
             
             // Process the transcription results
             if (!data.results || data.results.length === 0) {
+                // Try to detect if the audio is silent (all zeros or very short duration)
+                const fileInfo = await FileSystem.getInfoAsync(recordingUri);
+                if (fileInfo.exists && typeof fileInfo.size === 'number' && fileInfo.size < 2000) { // Arbitrary threshold for silence/very short
+                    return {
+                        isCorrect: false,
+                        confidence: 0,
+                        feedback: 'No speech detected. Please speak clearly and try again.',
+                        transcription: ''
+                    };
+                }
+                // If not silent, warn about possible format issue but do not return 0% unless truly no speech
                 console.warn('⚠️ Google Speech API returned no results. This usually indicates audio format issues.');
                 return {
                     isCorrect: false,
-                    confidence: 0,
-                    feedback: 'Could not detect any speech. Please speak clearly and try again.',
+                    confidence: 10,
+                    feedback: 'Speech could not be recognized. Please try again, and ensure your microphone is working.',
                     transcription: ''
                 };
             }
@@ -393,7 +410,10 @@ class RecordingService {
             const result = data.results[0];
             const alternative = result.alternatives[0];
             const transcription = alternative.transcript || '';
-            const recognitionConfidence = alternative.confidence || 0;
+            // Use Google's confidence if available, but always pass it through our own scoring for smooth in-between values
+            let recognitionConfidence = typeof alternative.confidence === 'number' ? alternative.confidence : 0.5;
+            // Clamp to [0,1] for safety
+            recognitionConfidence = Math.max(0, Math.min(1, recognitionConfidence));
             
             // Evaluate the pronunciation
             const evaluation = this.evaluateTranscription(
@@ -453,9 +473,18 @@ class RecordingService {
             language
         );
         
+        // Always provide a smooth confidence value between 0 and 100
+        let confidenceValue = Math.round(combinedScore * 100);
+        // If not correct, but close, allow in-between values (never just 0 or 100 unless truly perfect or no match)
+        if (!isCorrect && confidenceValue > 0 && confidenceValue < 40) {
+            confidenceValue = Math.max(10, confidenceValue); // Never return 0 unless truly no match
+        }
+        if (isCorrect && confidenceValue < 100) {
+            confidenceValue = Math.max(90, confidenceValue); // If correct, boost to 90+ for user clarity
+        }
         return {
             isCorrect,
-            confidence: Math.round(combinedScore * 100),
+            confidence: confidenceValue,
             feedback,
             transcription: transcription || 'Could not recognize speech'
         };
@@ -999,10 +1028,15 @@ class RecordingService {
      * Get Google Cloud API key from app configuration
      */
     private getGoogleCloudApiKey(): string {
-        const apiKey = Constants.expoConfig?.extra?.googleCloudApiKey;
+        // Try all possible extra fields and variable names for compatibility
+        const extra = Constants.expoConfig?.extra || Constants.manifest?.extra || {};
+        const apiKey =
+            extra.googleCloudApiKey ||
+            extra.googleApiKey ||
+            extra.GOOGLE_CLOUD_API_KEY ||
+            extra.GOOGLE_API_KEY;
         if (!apiKey) {
-            console.error('❌ Google Cloud API key not found in app configuration');
-            return '';
+            throw new Error('Google Cloud API key not configured. Please set GOOGLE_CLOUD_API_KEY in your environment and expose it via app.config.js extra.');
         }
         return apiKey;
     }

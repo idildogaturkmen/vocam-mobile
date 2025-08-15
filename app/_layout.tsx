@@ -5,7 +5,7 @@ import { supabase } from '../database/config';
 import { UserProgressService } from '../src/services/UserProgressService';
 import { View } from 'react-native';
 import Auth from '../components/Auth/Auth';
-import SplashScreen from '../components/SplashScreen';
+
 
 export default function RootLayout() {
     const [session, setSession] = useState<Session | null>(null);
@@ -152,16 +152,10 @@ export default function RootLayout() {
     }, []);
 
     // Show splash screen for 2 seconds
-    if (showSplash) {
-        console.log('Showing splash screen (timer not expired)');
-        return <SplashScreen />;
-    }
+
 
     // Wait for auth to initialize
-    if (!authInitialized) {
-        console.log('Showing splash screen (auth not initialized)');
-        return <SplashScreen />;
-    }
+
 
     // Show login or main app based on session
     if (!session) {

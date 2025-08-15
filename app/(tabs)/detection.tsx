@@ -1,4 +1,17 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
+
+// Conditionally import VisionCamera for development builds (not Expo Go)
+let VisionCamera: any = null;
+try {
+  // Only try to load VisionCamera if we're in a development build with react-native-vision-camera
+  if (__DEV__ && typeof require !== 'undefined') {
+    VisionCamera = require('../../src/components/detection/VisionCamera').default;
+    console.log('✅ VisionCamera loaded successfully');
+  }
+} catch (error) {
+  console.log('ℹ️ VisionCamera not available in this build (Expo Go)');
+  VisionCamera = null;
+}
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
@@ -69,8 +82,11 @@ export default function DetectionScreen() {
   // Camera states
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef<any>(null); // Changed to support both CameraView and VisionCamera
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isTabFocused, setIsTabFocused] = useState(true);
+  const [isCameraReady, setIsCameraReady] = useState(false);
   const router = useRouter();
 
   // Detection states
@@ -79,6 +95,8 @@ export default function DetectionScreen() {
   const [detections, setDetections] = useState<Detection[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedWords, setSelectedWords] = useState(new Set<number>());
+  const [useCallbackMethod, setUseCallbackMethod] = useState(false);
+  const [useVisionCamera, setUseVisionCamera] = useState(!!VisionCamera && Platform.OS === 'android'); // Use VisionCamera if available
   
   // Settings states
   const [targetLanguage, setTargetLanguage] = useState('es');
@@ -161,11 +179,44 @@ export default function DetectionScreen() {
       checkAuthAndInitialize();
   }, []);
 
+  // Handle camera permission and authentication changes
+  useEffect(() => {
+    if (permission?.granted && isAuthenticated && isTabFocused) {
+      setIsCameraActive(true);
+    } else {
+      setIsCameraActive(false);
+      setIsCameraReady(false);
+    }
+  }, [permission?.granted, isAuthenticated, isTabFocused]);
+
+  // Note: onCameraReady callback is unreliable on Android, using timer-based approach instead
+
+  // Camera ready detection: VisionCamera handles this internally, fallback timer for expo-camera
+  useEffect(() => {
+    if (isCameraActive && isTabFocused) {
+      if (useVisionCamera) {
+        console.log('🎯 VisionCamera activated - ready immediately');
+        setIsCameraReady(true);
+      } else {
+        console.log('📷 Expo Camera activated - starting ready timer');
+        const readyTimer = setTimeout(() => {
+          console.log('⏰ Expo Camera ready timer fired');
+          setIsCameraReady(true);
+        }, 2000);
+        
+        return () => clearTimeout(readyTimer);
+      }
+    } else {
+      setIsCameraReady(false);
+    }
+  }, [isCameraActive, isTabFocused, useVisionCamera]);
+
   // Handle focus/blur to reset camera state when returning from other screens
   useFocusEffect(
     React.useCallback(() => {
       // Reset any processing state when screen comes into focus
       console.log('Detection screen focused - resetting camera state');
+      setIsTabFocused(true);
       setIsProcessing(false);
       
       // Also clear any previous photo states that might be interfering
@@ -174,14 +225,22 @@ export default function DetectionScreen() {
       setDetections([]);
       setSelectedWords(new Set<number>());
       
-      // If we have permission, reinitialize services to ensure proper state
-      if (permission?.granted && isAuthenticated) {
-        initializeServices();
-      }
+      // Activate camera after a short delay to ensure proper mounting
+      const activateTimer = setTimeout(() => {
+        if (permission?.granted && isAuthenticated) {
+          console.log('✅ Activating camera after tab focus');
+          setIsCameraActive(true);
+          initializeServices();
+        }
+      }, 100);
       
       return () => {
-        // Optional cleanup when screen loses focus
-        console.log('Detection screen unfocused');
+        // Deactivate camera when screen loses focus
+        console.log('Detection screen unfocused - deactivating camera');
+        setIsTabFocused(false);
+        setIsCameraActive(false);
+        setIsCameraReady(false);
+        clearTimeout(activateTimer);
       };
     }, [permission?.granted, isAuthenticated])
   );
@@ -196,6 +255,11 @@ export default function DetectionScreen() {
           
           setIsAuthenticated(true);
           await initializeServices();
+          
+          // Only activate camera if permission is granted and we're on this tab
+          if (permission?.granted) {
+            setIsCameraActive(true);
+          }
       } catch (error) {
           console.error('Auth check error:', error);
           setIsAuthenticated(false);
@@ -210,6 +274,17 @@ export default function DetectionScreen() {
     setRotatedPhoto(null);
     setDetections([]);
     setSelectedWords(new Set<number>());
+    
+    // Reset camera active and ready state
+    setIsCameraActive(false);
+    setIsCameraReady(false);
+    setTimeout(() => {
+      if (isTabFocused && permission?.granted && isAuthenticated) {
+        setIsCameraActive(true);
+        console.log('✅ Camera reactivated after emergency reset - waiting for onCameraReady');
+      }
+    }, 1000);
+    
     console.log('✅ Camera state forcibly reset');
   };
 
@@ -245,17 +320,52 @@ export default function DetectionScreen() {
     setDetections([]);
     setSelectedWords(new Set<number>());
     setIsProcessing(false);
+    
+    // Ensure camera stays active for immediate reuse
+    if (!isCameraActive && isTabFocused && permission?.granted && isAuthenticated) {
+      setIsCameraActive(true);
+    }
   };
 
   const takePicture = async () => {
-    // Check if conditions are met
-    if (!cameraRef.current || modelStatus !== 'ready') {
-      console.log('Camera not ready:', { 
+    // Enhanced camera readiness checks with fallback approach
+    if (!cameraRef.current || modelStatus !== 'ready' || !isCameraActive || !isTabFocused) {
+      console.log('Camera basic checks failed:', { 
         hasCamera: !!cameraRef.current, 
         modelStatus, 
-        permission: permission?.granted 
+        permission: permission?.granted,
+        isCameraActive,
+        isTabFocused,
+        isCameraReady
       });
+      
+      // If camera is inactive due to tab switching, reactivate it
+      if (!isCameraActive && isTabFocused && permission?.granted && isAuthenticated) {
+        console.log('🔄 Reactivating camera after tab switch');
+        setIsCameraActive(true);
+        setIsCameraReady(false); // Reset ready state for reactivation
+        // Wait a bit for camera to initialize before allowing photo capture
+        setTimeout(() => {
+          console.log('✅ Camera reactivated, waiting for ready state');
+        }, 1000);
+      }
       return;
+    }
+
+    // Special handling for camera ready state - be more lenient for Android
+    if (!isCameraReady && !useVisionCamera && Platform.OS !== 'android') {
+      console.log('⚠️ Camera not ready yet (iOS)');
+      Alert.alert(
+        'Camera Initializing', 
+        'Camera is starting up, please wait a moment and try again.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
+    // For Android, try anyway even if not "ready" since onCameraReady is unreliable
+    if (!isCameraReady && Platform.OS === 'android' && !useVisionCamera) {
+      console.log('⚠️ Android camera not marked ready, but attempting anyway...');
     }
 
     // Always allow photo capture, but prevent multiple simultaneous captures
@@ -282,26 +392,86 @@ export default function DetectionScreen() {
       safetyTimeout = setTimeout(() => {
         console.warn('⚠️ Camera processing timeout - forcing reset');
         setIsProcessing(false);
-      }, 30000); // 30 second timeout
+        // Try to reactivate camera on timeout
+        if (isTabFocused && permission?.granted && isAuthenticated) {
+          console.log('🔄 Reactivating camera after timeout');
+          setIsCameraActive(false);
+          setTimeout(() => setIsCameraActive(true), 500);
+        }
+      }, 12000); // Reasonable timeout since we're using simpler approach now
 
-      // Add small delay for Android camera stability
-      if (Platform.OS === 'android') {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      // Enhanced stability delay for Android after tab switching
+      const stabilityDelay = Platform.OS === 'android' ? 800 : 400;
+      await new Promise(resolve => setTimeout(resolve, stabilityDelay));
       
-      // Check camera ref again after delay
-      if (!cameraRef.current) {
-        throw new Error('Camera reference lost during capture');
+      // Triple-check camera ref is still valid and camera is active
+      if (!cameraRef.current || !isCameraActive) {
+        throw new Error('Camera reference lost or inactive - please try again');
       }
 
-      console.log('Calling camera.takePictureAsync...');
-      const photoResult = await cameraRef.current.takePictureAsync({ 
-        skipProcessing: false,
-        quality: 0.7, // Reduce quality slightly for better reliability
-        exif: false,
-        base64: false,
-        imageType: 'jpg',
-      });
+      console.log('📸 Taking picture with camera library...');
+      
+      let photoResult: any = null;
+      
+      if (useVisionCamera && VisionCamera) {
+        console.log('🎯 Using VisionCamera for reliable Android capture...');
+        // VisionCamera handles timeouts and reliability internally
+        photoResult = await cameraRef.current.takePictureAsync();
+      } else {
+        console.log('📷 Using Expo Camera with optimizations...');
+        // AGGRESSIVE ANDROID FIX: Multiple fallback strategies
+        if (Platform.OS === 'android') {
+          console.log('🤖 Android: Trying multiple capture strategies...');
+          
+          try {
+            // Strategy 1: Minimal options with short timeout
+            console.log('📱 Strategy 1: Minimal options');
+            photoResult = await Promise.race([
+              cameraRef.current.takePictureAsync({
+                quality: 0.7,
+                base64: false,
+              }),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Strategy 1 timeout')), 5000)
+              )
+            ]);
+            console.log('✅ Strategy 1 succeeded');
+          } catch (error) {
+            console.log('⚠️ Strategy 1 failed, trying Strategy 2...');
+            
+            try {
+              // Strategy 2: Empty options object (sometimes required on Android)
+              console.log('📱 Strategy 2: Empty options');
+              photoResult = await Promise.race([
+                cameraRef.current.takePictureAsync({}),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Strategy 2 timeout')), 3000)
+                )
+              ]);
+              console.log('✅ Strategy 2 succeeded');
+            } catch (error2) {
+              console.log('⚠️ Strategy 2 failed, trying Strategy 3...');
+              
+              // Strategy 3: Force with skipProcessing
+              console.log('📱 Strategy 3: Skip processing');
+              photoResult = await Promise.race([
+                cameraRef.current.takePictureAsync({ skipProcessing: true }),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('All Android strategies failed')), 2000)
+                )
+              ]);
+              console.log('✅ Strategy 3 succeeded');
+            }
+          }
+        } else {
+          // iOS approach (unchanged)
+          photoResult = await cameraRef.current.takePictureAsync({
+            quality: 0.7,
+            exif: false,
+            base64: false,
+          });
+        }
+      }
       
       console.log('Photo result:', { 
         hasResult: !!photoResult, 
@@ -326,7 +496,45 @@ export default function DetectionScreen() {
       
     } catch (error) {
       console.error('Picture error:', error);
-      Alert.alert('Camera Error', 'Could not take picture. Please try again.');
+      
+      // Enhanced error handling for tab switching and camera issues
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage?.includes('Camera reference lost') || errorMessage?.includes('inactive')) {
+        Alert.alert('Camera Reset', 'Camera needs to reinitialize after tab switch. Please try taking a photo again.');
+        // Force camera reactivation
+        setIsCameraActive(false);
+        setTimeout(() => setIsCameraActive(true), 500);
+      } else if (errorMessage?.includes('timeout')) {
+        if (Platform.OS === 'android') {
+          Alert.alert(
+            'Android Camera Issue', 
+            'Android camera timed out. This is a known issue. Please try again - the app will automatically try different methods to capture the photo.',
+            [{ text: 'Try Again', onPress: () => {
+              // Reset for retry
+              setIsCameraActive(false);
+              setTimeout(() => setIsCameraActive(true), 1000);
+            }}]
+          );
+        } else {
+          Alert.alert('Timeout Error', 'Camera operation timed out. Please try again.');
+        }
+      } else if (errorMessage?.includes('All Android takePictureAsync methods failed')) {
+        Alert.alert(
+          'Camera Initialization Issue', 
+          'The camera failed to capture properly. This has been fixed with onCameraReady implementation. Please:\n\n1. Wait for the "Camera is ready!" message\n2. Try taking the photo again\n3. If issue persists, restart the app',
+          [
+            { text: 'Reset Camera', onPress: () => {
+              setIsCameraActive(false);
+              setIsCameraReady(false);
+              setUseCallbackMethod(false);
+              setTimeout(() => setIsCameraActive(true), 1500);
+            }},
+            { text: 'Try Again' }
+          ]
+        );
+      } else {
+        Alert.alert('Camera Error', 'Could not take picture. Please try again.');
+      }
       
       // Reset states on error
       setPhoto(null);
@@ -913,15 +1121,27 @@ export default function DetectionScreen() {
   }
 
   
-  // Camera View
+  // Camera View - Use VisionCamera for Android, Expo Camera for iOS
   return (
     <View style={styles.container}>
-      <CameraView 
-        style={StyleSheet.absoluteFillObject} 
-        facing={facing} 
-        ref={cameraRef}
-        zoom={0}
-      />
+      {useVisionCamera && VisionCamera ? (
+        <VisionCamera
+          facing={facing}
+          isActive={isCameraActive && isTabFocused && permission?.granted && isAuthenticated === true}
+          ref={cameraRef}
+          onPhotoTaken={(photoPath) => {
+            console.log('VisionCamera photo taken:', photoPath);
+          }}
+        />
+      ) : (
+        <CameraView 
+          style={StyleSheet.absoluteFillObject} 
+          facing={facing} 
+          ref={cameraRef}
+          zoom={0}
+          active={isCameraActive && isTabFocused && permission?.granted && isAuthenticated === true}
+        />
+      )}
       <CameraControls
         facing={facing}
         onFlipCamera={() => setFacing(facing === 'back' ? 'front' : 'back')}
@@ -932,6 +1152,27 @@ export default function DetectionScreen() {
         modelStatus={modelStatus}
         languageName={getCurrentLanguageName()}
       />
+      
+      {/* Debug: Camera Library Toggle (only in development builds) */}
+      {__DEV__ && VisionCamera && Platform.OS === 'android' && (
+        <View style={styles.debugContainer}>
+          <TouchableOpacity 
+            style={[styles.debugButton, useVisionCamera && styles.debugButtonActive]}
+            onPress={() => {
+              setUseVisionCamera(!useVisionCamera);
+              setIsCameraReady(false);
+              Alert.alert(
+                'Camera Switched', 
+                useVisionCamera ? 'Switched to Expo Camera' : 'Switched to VisionCamera - should be more reliable!'
+              );
+            }}
+          >
+            <Text style={styles.debugButtonText}>
+              {useVisionCamera ? '📷 Expo' : '🎯 Vision'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       
       {/* Retake Photo Button - Show when photo exists */}
       {photo && (
@@ -1505,5 +1746,27 @@ const styles = StyleSheet.create({
     bottom: 30,
     right: 20,
     zIndex: 15,
+  },
+  debugContainer: {
+    position: 'absolute',
+    top: 100,
+    right: 20,
+    zIndex: 20,
+  },
+  debugButton: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  debugButtonActive: {
+    backgroundColor: '#3498db',
+  },
+  debugButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

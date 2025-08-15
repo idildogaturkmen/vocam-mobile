@@ -21,11 +21,24 @@ export const readUserData = async ({ TableName, Filters }: ReadInputCommandType)
 
 export const writeUserData = async ({ TableName, Items }: WriteInputCommandType) => {
     try {
-        const { data, error } = await supabase.from(TableName).insert(Items);
+        // Use upsert for profiles table to handle duplicates gracefully
+        if (TableName === 'profiles') {
+            const { data, error } = await supabase
+                .from(TableName)
+                .upsert(Items, { 
+                    onConflict: 'user_id',
+                    ignoreDuplicates: false 
+                });
 
-        if (error) throw error;
+            if (error) throw error;
+            return data;
+        } else {
+            // Use regular insert for other tables
+            const { data, error } = await supabase.from(TableName).insert(Items);
 
-        return data;
+            if (error) throw error;
+            return data;
+        }
     } catch (error) {
         console.error('Error writing user data:', error);
         throw error;

@@ -7,7 +7,15 @@
       "Bash(npm run build:*)",
       "WebSearch",
       "Bash(npm run:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(npm install:*)",
+      "Bash(npx expo prebuild:*)",
+      "Bash(npx eas-cli:*)",
+      "Bash(echo $ANDROID_HOME)",
+      "Bash(adb:*)",
+      "Bash(npx eas build:*)",
+      "Bash(npx expo start:*)",
+      "Bash(cp:*)"
     ],
     "deny": [],
     "ask": []

@@ -33,21 +33,36 @@ export default function AuthConfirmScreen() {
                     if (!existingProfile) {
                         // Create user profile for new users
                         const { username = '' } = session.user.user_metadata || {};
-                        await writeUserData({
-                            TableName: 'profiles',
-                            Items: [{ 
-                                user_id: session.user.id, 
-                                email: session.user.email, 
-                                username, 
-                                streak: 0 
-                            }],
-                        });
-
-                        // Initialize user progress
                         try {
-                            await UserProgressService.updateStreak(session.user.id);
-                        } catch (error) {
-                            console.error('Error initializing user progress:', error);
+                            await writeUserData({
+                                TableName: 'profiles',
+                                Items: [{ 
+                                    user_id: session.user.id, 
+                                    email: session.user.email, 
+                                    username: username || session.user.email?.split('@')[0] || '',
+                                    streak: 0,
+                                    level: 1,
+                                    exp: 0,
+                                    total_xp: 0,
+                                }],
+                            });
+
+                            console.log('Profile created successfully for user:', session.user.email);
+
+                            // Initialize user progress
+                            try {
+                                await UserProgressService.updateStreak(session.user.id);
+                            } catch (error) {
+                                console.error('Error initializing user progress:', error);
+                            }
+                        } catch (profileError: any) {
+                            // Handle duplicate key constraint gracefully
+                            if (profileError.code === '23505') {
+                                console.log('Profile already exists for user:', session.user.email);
+                            } else {
+                                console.error('Error creating profile:', profileError);
+                                throw profileError;
+                            }
                         }
                     }
 

@@ -31,52 +31,509 @@ class SpeechService {
   private silentModeOverrideAttempted: boolean = false;
   
   private languageMapping: Record<string, string> = {
-    'ar': 'ar-SA',      // Arabic
-    'bn': 'bn-BD',      // Bengali
-    'bg': 'bg-BG',      // Bulgarian
+    // Enhanced mappings with primary and fallback variants
+    'ar': 'ar-SA',      // Arabic (Saudi Arabia - most supported)
+    'ko': 'ko-KR',      // Korean
+    'fa': 'fa-IR',      // Persian (Iran)
+    
+    // East Asian languages with improved mappings
     'zh-CN': 'zh-CN',   // Chinese (Simplified)
     'zh-TW': 'zh-TW',   // Chinese (Traditional)
+    'ja': 'ja-JP',      // Japanese
+    'th': 'th-TH',      // Thai
+    
+    // South Asian languages
+    'hi': 'hi-IN',      // Hindi
+    'bn': 'bn-IN',      // Bengali (try India first, then Bangladesh)
+    'gu': 'gu-IN',      // Gujarati
+    'pa': 'pa-IN',      // Punjabi
+    'ur': 'ur-PK',      // Urdu
+    'ta': 'ta-IN',      // Tamil
+    'te': 'te-IN',      // Telugu
+    
+    // Semitic languages
+    'he': 'he-IL',      // Hebrew
+    
+    // African languages
+    'sw': 'sw-TZ',      // Swahili (Tanzania - more native)
+    
+    // European languages
+    'bg': 'bg-BG',      // Bulgarian
     'hr': 'hr-HR',      // Croatian
     'cs': 'cs-CZ',      // Czech
     'da': 'da-DK',      // Danish
     'nl': 'nl-NL',      // Dutch
-    'tl': 'fil-PH',     // Filipino (Tagalog)
     'fi': 'fi-FI',      // Finnish
     'fr': 'fr-FR',      // French
     'de': 'de-DE',      // German
     'el': 'el-GR',      // Greek
-    'gu': 'gu-IN',      // Gujarati
-    'he': 'he-IL',      // Hebrew
-    'hi': 'hi-IN',      // Hindi
     'hu': 'hu-HU',      // Hungarian
     'is': 'is-IS',      // Icelandic
-    'id': 'id-ID',      // Indonesian
     'it': 'it-IT',      // Italian
-    'ja': 'ja-JP',      // Japanese
-    'ko': 'ko-KR',      // Korean
-    'la': 'la',         // Latin
-    'ms': 'ms-MY',      // Malay
     'no': 'nb-NO',      // Norwegian
-    'fa': 'fa-IR',      // Persian (Farsi)
     'pl': 'pl-PL',      // Polish
     'pt': 'pt-PT',      // Portuguese
-    'pa': 'pa-IN',      // Punjabi
     'ro': 'ro-RO',      // Romanian
     'ru': 'ru-RU',      // Russian
     'sr': 'sr-RS',      // Serbian
     'sk': 'sk-SK',      // Slovak
     'es': 'es-ES',      // Spanish
-    'sw': 'sw-KE',      // Swahili
     'sv': 'sv-SE',      // Swedish
-    'ta': 'ta-IN',      // Tamil
-    'te': 'te-IN',      // Telugu
-    'th': 'th-TH',      // Thai
     'tr': 'tr-TR',      // Turkish
     'uk': 'uk-UA',      // Ukrainian
-    'ur': 'ur-PK',      // Urdu
+    
+    // Southeast Asian
+    'id': 'id-ID',      // Indonesian
+    'ms': 'ms-MY',      // Malay
+    'tl': 'fil-PH',     // Filipino (Tagalog)
     'vi': 'vi-VN',      // Vietnamese
+    
+    // Classical/Other
+    'la': 'la',         // Latin
     'en': 'en-US'       // English (default)
   };
+
+  // Alternative language variants to try if primary fails
+  private languageVariants: Record<string, string[]> = {
+    'zh-CN': ['zh-CN', 'zh-Hans', 'zh', 'cmn'],
+    'zh-TW': ['zh-TW', 'zh-Hant', 'zh', 'cmn'],
+    'ja': ['ja-JP', 'ja'],
+    'th': ['th-TH', 'th'],
+    'hi': ['hi-IN', 'hi'],
+    'bn': ['bn-IN', 'bn-BD', 'bn'],
+    'gu': ['gu-IN', 'gu'],
+    'he': ['he-IL', 'he', 'iw'],
+    'ar': ['ar-SA', 'ar-EG', 'ar-AE', 'ar'],
+    'sw': ['sw-TZ', 'sw-KE', 'sw'],
+    'ko': ['ko-KR', 'ko'],
+    'pa': ['pa-IN', 'pa-PK', 'pa'],
+    'ur': ['ur-PK', 'ur-IN', 'ur'],
+    'fa': ['fa-IR', 'fa-AF', 'fa'],
+    'ta': ['ta-IN', 'ta-LK', 'ta'],
+    'te': ['te-IN', 'te']
+  };
+
+  // Language families for intelligent fallbacks
+  private languageFamilies: Record<string, string[]> = {
+    'germanic': ['en', 'de', 'nl', 'sv', 'da', 'no', 'is'],
+    'romance': ['es', 'fr', 'it', 'pt', 'ro'],
+    'slavic': ['ru', 'pl', 'cs', 'sk', 'hr', 'sr', 'bg', 'uk'],
+    'indo_iranian': ['hi', 'ur', 'fa', 'pa', 'gu'],
+    'sino_tibetan': ['zh-CN', 'zh-TW'],
+    'arabic_semitic': ['ar', 'he'],
+    'turkic': ['tr'],
+    'finno_ugric': ['fi', 'hu'],
+    'mon_khmer': ['vi'],
+    'japanese': ['ja'],
+    'korean': ['ko'],
+    'thai': ['th'],
+    'malayo_polynesian': ['id', 'ms', 'tl'],
+    'dravidian': ['ta', 'te'],
+    'niger_congo': ['sw'],
+    'indo_european': ['bn'],
+    'greek': ['el'],
+    'latin': ['la']
+  };
+
+  // Fallback languages for when primary language isn't available
+  private getFallbackLanguage(language: string): string {
+    // First try to find language family
+    for (const [family, languages] of Object.entries(this.languageFamilies)) {
+      if (languages.includes(language)) {
+        // Find the first available language in the same family
+        for (const fallbackLang of languages) {
+          if (fallbackLang !== language && this.isLanguageSupported(fallbackLang)) {
+            console.log(`🔄 Using ${fallbackLang} as fallback for ${language} (same ${family} family)`);
+            return fallbackLang;
+          }
+        }
+      }
+    }
+
+    // If no family fallback, use geographic/cultural proximity with better non-Latin support
+    const geographicFallbacks: Record<string, string> = {
+      // Nordic/Germanic
+      'is': 'da',        // Icelandic -> Danish (historical connection)
+      
+      // Classical/Romance  
+      'la': 'it',        // Latin -> Italian (historical connection)
+      
+      // Southeast Asian
+      'ms': 'id',        // Malay -> Indonesian (very similar)
+      'tl': 'es',        // Filipino -> Spanish (historical influence)
+      
+      // Middle Eastern/Arabic script languages
+      'fa': 'ar',        // Persian -> Arabic (similar script, may work better)
+      
+      // Non-Latin alphabet fallbacks to English for clear pronunciation
+      'ar': 'en',        // Arabic -> English (clear pronunciation for vocabulary learning)
+      'ko': 'en',        // Korean -> English (Korean TTS often poor quality on mobile)
+      'zh-CN': 'en',     // Chinese -> English (Mandarin TTS not widely available)
+      'zh-TW': 'en',     // Chinese Traditional -> English 
+      'ja': 'en',        // Japanese -> English (hiragana/katakana pronunciation complex)
+      'th': 'en',        // Thai -> English (Thai script TTS unreliable)
+      'he': 'en',        // Hebrew -> English (Hebrew TTS availability issues)
+      'ru': 'en',        // Russian -> English (Cyrillic script issues)
+      'hi': 'en',        // Hindi -> English (if Hindi TTS unavailable)
+      'sw': 'en',        // Swahili -> English (East African English common)
+      
+      // South Asian languages - use Hindi as intermediate fallback, then English
+      'bn': 'hi',        // Bengali -> Hindi -> English
+      'gu': 'hi',        // Gujarati -> Hindi -> English  
+      'pa': 'hi',        // Punjabi -> Hindi -> English
+      'te': 'hi',        // Telugu -> Hindi -> English
+      'ta': 'hi',        // Tamil -> Hindi -> English
+      'ur': 'hi',        // Urdu -> Hindi (similar phonetics)
+    };
+
+    const fallback = geographicFallbacks[language];
+    if (fallback && this.isLanguageSupported(fallback)) {
+      console.log(`🔄 Using ${fallback} as geographic fallback for ${language}`);
+      return fallback;
+    }
+
+    // Ultimate fallback to English
+    console.log(`🔄 Using English as ultimate fallback for ${language}`);
+    return 'en';
+  }
+
+  private isLanguageSupported(language: string): boolean {
+    const targetLang = this.languageMapping[language] || language;
+    const langPrefix = targetLang.split('-')[0];
+    
+    return this.availableVoices.some(voice => {
+      const voiceLangPrefix = voice.language.split('-')[0];
+      return voiceLangPrefix.toLowerCase() === langPrefix.toLowerCase();
+    });
+  }
+
+  private getBestVoice(language: string): VoiceInfo | null {
+    try {
+      // First try all variants of the requested language
+      const variants = this.languageVariants[language] || [this.languageMapping[language] || language];
+      
+      for (const variant of variants) {
+        const langPrefix = variant.split('-')[0];
+        
+        // Try exact match first
+        const exactMatches = this.availableVoices.filter(voice => 
+          voice.language.toLowerCase() === variant.toLowerCase()
+        );
+        
+        if (exactMatches.length > 0) {
+          console.log(`✅ Found exact voice match for ${language}: ${variant}`);
+          return this.selectBestVoiceFromList(exactMatches);
+        }
+        
+        // Try prefix match
+        const prefixMatches = this.availableVoices.filter(voice => {
+          const voiceLangPrefix = voice.language.split('-')[0];
+          return voiceLangPrefix.toLowerCase() === langPrefix.toLowerCase();
+        });
+        
+        if (prefixMatches.length > 0) {
+          console.log(`✅ Found prefix voice match for ${language}: ${langPrefix}`);
+          return this.selectBestVoiceFromList(prefixMatches);
+        }
+      }
+
+      console.warn(`⚠️ No voices found for language variants: ${variants.join(', ')}`);
+      
+      // Try fallback language
+      const fallbackLang = this.getFallbackLanguage(language);
+      if (fallbackLang !== language) {
+        console.log(`🔄 Trying fallback language: ${fallbackLang} for ${language}`);
+        const fallbackVoice = this.getBestVoice(fallbackLang);
+        
+        if (fallbackVoice) {
+          console.log(`✅ Found fallback voice for ${language} using ${fallbackLang}`);
+          return fallbackVoice;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error selecting voice:', error);
+      return null;
+    }
+  }
+
+  private selectBestVoiceFromList(voices: VoiceInfo[]): VoiceInfo {
+    // Special handling for better quality non-Latin alphabet languages
+    const languageCode = voices[0]?.language?.split('-')[0]?.toLowerCase();
+    
+    if (['ko', 'ar', 'ja', 'zh', 'th', 'he', 'ru'].includes(languageCode)) {
+      // For non-Latin alphabets, prioritize Enhanced quality voices
+      const enhancedVoices = voices.filter(v => 
+        v.quality === Speech.VoiceQuality.Enhanced
+      );
+      
+      if (enhancedVoices.length > 0) {
+        // For Korean, prefer specific voices if available
+        if (languageCode === 'ko') {
+          const koreanFemale = enhancedVoices.find(v => 
+            v.name.toLowerCase().includes('female') || 
+            v.name.toLowerCase().includes('yuna') ||
+            v.name.toLowerCase().includes('sora')
+          );
+          if (koreanFemale) return koreanFemale;
+        }
+        
+        // For Arabic, prefer specific regional voices
+        if (languageCode === 'ar') {
+          const arabicGood = enhancedVoices.find(v =>
+            v.name.toLowerCase().includes('female') ||
+            v.language.includes('SA') || // Saudi Arabic often better supported
+            v.name.toLowerCase().includes('noor')
+          );
+          if (arabicGood) return arabicGood;
+        }
+        
+        // For South Asian languages, prefer specific voices
+        if (['hi', 'bn', 'gu', 'pa', 'ta', 'te', 'ur'].includes(languageCode)) {
+          const indianVoice = enhancedVoices.find(v =>
+            v.name.toLowerCase().includes('female') ||
+            v.name.toLowerCase().includes('india') ||
+            v.language.includes('IN') ||
+            v.name.toLowerCase().includes('priya') ||
+            v.name.toLowerCase().includes('lekha')
+          );
+          if (indianVoice) return indianVoice;
+        }
+        
+        // For Hebrew, prefer specific voices
+        if (languageCode === 'he') {
+          const hebrewVoice = enhancedVoices.find(v =>
+            v.name.toLowerCase().includes('female') ||
+            v.language.includes('IL') ||
+            v.name.toLowerCase().includes('carmit')
+          );
+          if (hebrewVoice) return hebrewVoice;
+        }
+        
+        return enhancedVoices[0];
+      }
+    }
+    
+    // For iOS silent mode, prioritize non-eloquence voices as they work better
+    if (Platform.OS === 'ios') {
+      const nonEloquenceVoices = voices.filter(v => 
+        !v.identifier.includes('eloquence')
+      );
+      
+      if (nonEloquenceVoices.length > 0) {
+        const enhanced = nonEloquenceVoices.filter(v => 
+          v.quality === Speech.VoiceQuality.Enhanced
+        );
+        
+        if (enhanced.length > 0) {
+          return enhanced[0];
+        }
+        return nonEloquenceVoices[0];
+      }
+      
+      // Fallback to any enhanced voice
+      const enhanced = voices.filter(v => 
+        v.quality === Speech.VoiceQuality.Enhanced
+      );
+      if (enhanced.length > 0) {
+        return enhanced[0];
+      }
+    }
+
+    // Return the first available voice
+    return voices[0];
+  }
+
+  async speak(text: string, language: string = 'en'): Promise<void> {
+    try {
+      if (this.isSpeaking) {
+        console.log('Already speaking, stopping current speech...');
+        await this.stop();
+      }
+
+      const cleanText = this.cleanTextForSpeech(text);
+      if (!cleanText) {
+        console.warn('No valid text to speak');
+        return;
+      }
+
+      console.log(`🔊 Speaking: "${cleanText}" in ${language}`);
+
+      await this.prepareForPlayback();
+
+      let actualLanguage = language;
+      let selectedVoice = this.getBestVoice(language);
+
+      // If no voice found, try fallback
+      if (!selectedVoice) {
+        const fallbackLang = this.getFallbackLanguage(language);
+        if (fallbackLang !== language) {
+          actualLanguage = fallbackLang;
+          selectedVoice = this.getBestVoice(fallbackLang);
+          
+          if (selectedVoice) {
+            console.log(`🔄 Speaking in ${fallbackLang} instead of ${language}`);
+          } else {
+            console.warn(`⚠️ No voice available for ${language} or fallback ${fallbackLang}`);
+            // Try emergency speak with further fallbacks
+            await this.emergencySpeak(cleanText, language);
+            return;
+          }
+        } else {
+          console.warn(`⚠️ No voice available for ${language} and no suitable fallback found`);
+          await this.emergencySpeak(cleanText, language);
+          return;
+        }
+      }
+
+      const targetLang = this.languageMapping[actualLanguage] || actualLanguage;
+      const rate = this.getOptimalRate(actualLanguage);
+
+      const options: Speech.SpeechOptions = {
+        language: targetLang,
+        pitch: 1.0,
+        rate: rate,
+        volume: 1.0,
+        ...(selectedVoice && { voice: selectedVoice.identifier }),
+        onStart: () => {
+          this.isSpeaking = true;
+          console.log(`🎵 Speech started with voice: ${selectedVoice?.name || 'default'}`);
+        },
+        onDone: () => {
+          this.isSpeaking = false;
+          console.log('✅ Speech completed');
+        },
+        onError: (error: any) => {
+          this.isSpeaking = false;
+          console.error('❌ Speech error:', error);
+          // Try emergency fallback
+          this.emergencySpeak(cleanText, 'en');
+        }
+      };
+
+      await Speech.speak(cleanText, options);
+
+    } catch (error) {
+      this.isSpeaking = false;
+      console.error('❌ Speech service error:', error);
+      
+      // Emergency fallback with most basic settings
+      await this.emergencySpeak(text, language);
+    }
+  }
+
+  private async emergencySpeak(text: string, originalLanguage: string): Promise<void> {
+    try {
+      const cleanText = this.cleanTextForSpeech(text);
+      
+      // For languages with no TTS support, immediately fallback to English with explanation
+      const noTTSLanguages = ['zh-CN', 'zh-TW', 'ja', 'th', 'ar', 'he', 'hi', 'bn', 'gu', 'pa', 'ta', 'te', 'ur'];
+      
+      if (noTTSLanguages.includes(originalLanguage)) {
+        console.log(`🔄 Language ${originalLanguage} has limited TTS support, using English pronunciation`);
+        await this.tryEnglishFallback(cleanText);
+        return;
+      }
+      
+      // Try fallback language first if original isn't available
+      let tryLanguage = originalLanguage;
+      if (!this.isLanguageSupported(originalLanguage)) {
+        tryLanguage = this.getFallbackLanguage(originalLanguage);
+        console.log(`🔄 Emergency speech: Using ${tryLanguage} fallback for ${originalLanguage}`);
+      }
+      
+      // Try language with minimal options
+      const basicOptions: Speech.SpeechOptions = {
+        language: this.languageMapping[tryLanguage] || tryLanguage,
+        volume: 1.0,
+        rate: 0.6,
+        pitch: 1.0,
+        onStart: () => console.log('🔄 Emergency speech started'),
+        onDone: () => console.log('✅ Emergency speech completed'),
+        onError: (e: any) => {
+          console.error('❌ Emergency speech failed:', e);
+          // Try English as last resort
+          this.tryEnglishFallback(cleanText);
+        }
+      };
+
+      await Speech.speak(cleanText, basicOptions);
+    } catch (emergencyError) {
+      console.error('❌ Complete speech system failure:', emergencyError);
+      await this.tryEnglishFallback(text);
+    }
+  }
+
+  private async tryEnglishFallback(text: string): Promise<void> {
+    try {
+      console.log('🔄 Trying English fallback...');
+      await Speech.speak(text, {
+        language: 'en-US',
+        volume: 1.0,
+        rate: 0.6,
+        pitch: 1.0,
+        onError: () => {},
+        onDone: () => console.log('✅ English fallback completed')
+      });
+    } catch (e) {
+      console.error('❌ Even English fallback failed');
+      // Show user-friendly message without blocking the app
+      setTimeout(() => {
+        Alert.alert(
+          'Speech Not Available', 
+          'Text-to-speech is not available for this language on your device. You can still learn the word visually!',
+          [{ text: 'OK', style: 'default' }]
+        );
+      }, 100);
+    }
+  }
+
+  // Add method to check language support
+  public isLanguageAvailable(language: string): boolean {
+    const directSupport = this.isLanguageSupported(language);
+    if (directSupport) return true;
+    
+    // Check if fallback is available
+    const fallback = this.getFallbackLanguage(language);
+    return fallback !== language && this.isLanguageSupported(fallback);
+  }
+
+  // Add method to get language info for UI
+  public getLanguageInfo(language: string): { 
+    available: boolean; 
+    fallback?: string; 
+    message?: string 
+  } {
+    if (this.isLanguageSupported(language)) {
+      return { available: true };
+    }
+    
+    const fallback = this.getFallbackLanguage(language);
+    if (fallback !== language && this.isLanguageSupported(fallback)) {
+      const fallbackName = this.getLanguageName(fallback);
+      return { 
+        available: true, 
+        fallback: fallback,
+        message: `Using ${fallbackName} pronunciation as fallback`
+      };
+    }
+    
+    return { 
+      available: false, 
+      message: 'Speech not available for this language on your device'
+    };
+  }
+
+  private getLanguageName(code: string): string {
+    const names: Record<string, string> = {
+      'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
+      'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'ja': 'Japanese',
+      'ko': 'Korean', 'zh-CN': 'Chinese', 'ar': 'Arabic', 'hi': 'Hindi',
+      'da': 'Danish', 'sv': 'Swedish', 'no': 'Norwegian', 'is': 'Icelandic'
+    };
+    return names[code] || code.toUpperCase();
+  }
 
   async initialize(): Promise<boolean> {
     try {
@@ -89,11 +546,41 @@ class SpeechService {
       this.availableVoices = await Speech.getAvailableVoicesAsync();
       this.isInitialized = true;
 
+      // Debug: Log available voices for troubleshooting
+      this.debugAvailableVoices();
+
       return true;
     } catch (error) {
       console.error('❌ Speech Service initialization failed:', error);
       return false;
     }
+  }
+
+  private debugAvailableVoices(): void {
+    console.log(`🔊 Found ${this.availableVoices.length} available voices:`);
+    
+    // Group voices by language for easier debugging
+    const voicesByLang: Record<string, VoiceInfo[]> = {};
+    this.availableVoices.forEach(voice => {
+      const langCode = voice.language.split('-')[0];
+      if (!voicesByLang[langCode]) {
+        voicesByLang[langCode] = [];
+      }
+      voicesByLang[langCode].push(voice);
+    });
+
+    // Log problematic languages specifically
+    const problematicLangs = ['zh', 'ja', 'th', 'ar', 'ko', 'hi', 'bn', 'gu', 'he', 'sw'];
+    problematicLangs.forEach(lang => {
+      if (voicesByLang[lang]) {
+        console.log(`✅ ${lang}: ${voicesByLang[lang].length} voices available`);
+        voicesByLang[lang].forEach(voice => {
+          console.log(`   - ${voice.name} (${voice.language}, ${voice.quality})`);
+        });
+      } else {
+        console.log(`❌ ${lang}: No voices available`);
+      }
+    });
   }
 
   private async prepareForPlayback(): Promise<void> {
@@ -124,6 +611,8 @@ class SpeechService {
 
   private async tryExpoAV(): Promise<boolean> {
     try {
+      // Note: expo-av is deprecated and will be removed in SDK 54
+      // This is temporary until we migrate to expo-audio/expo-video
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         allowsRecordingIOS: false,
@@ -133,7 +622,7 @@ class SpeechService {
       });
       return true;
     } catch (error: any) {
-      console.log('⚠️ expo-av configuration failed:', error.message);
+      console.log('⚠️ expo-av configuration failed (deprecated library):', error.message);
       return false;
     }
   }
@@ -152,39 +641,6 @@ class SpeechService {
 
     } catch (error: any) {
       console.log('⚠️ iOS speech priming failed:', error.message);
-    }
-  }
-
-  async speak(text: string, language: string = 'en'): Promise<void> {
-    try {
-      if (!text || typeof text !== 'string' || text.trim() === '') {
-        console.warn('❌ No valid text to speak:', text);
-        return;
-      }
-
-      if (!this.isInitialized) {
-        await this.initialize();
-      }
-
-      // IMPORTANT: Always prepare audio for playback before speaking
-      await this.prepareForPlayback();
-      
-      // Add extra delay to ensure audio system is ready
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const cleanText = this.cleanTextForSpeech(text);
-      
-      if (!cleanText || cleanText.trim() === '') {
-        console.error('❌ Text became empty after cleaning. Using original text.');
-        const finalText = text.trim();
-        if (!finalText) return;
-        return await this.performSpeechWithForce(finalText, language);
-      }
-      return await this.performSpeechWithForce(cleanText, language);
-      
-    } catch (error) {
-      console.error('❌ Speech error:', error);
-      await this.emergencyFallback(text, language);
     }
   }
 
@@ -286,55 +742,6 @@ class SpeechService {
       .replace(/[…]/g, '...')
       
       .trim();
-  }
-
-  private getBestVoice(language: string): VoiceInfo | null {
-    try {
-      const targetLang = this.languageMapping[language] || language;
-      const langPrefix = targetLang.split('-')[0];
-      
-      const matchingVoices = this.availableVoices.filter(voice => {
-        const voiceLangPrefix = voice.language.split('-')[0];
-        return voiceLangPrefix.toLowerCase() === langPrefix.toLowerCase();
-      });
-
-      if (matchingVoices.length === 0) {
-        console.warn(`⚠️ No voices found for language: ${language}`);
-        return null;
-      }
-
-      // For silent mode, prioritize non-eloquence voices as they work better
-      if (Platform.OS === 'ios') {
-        const nonEloquenceVoices = matchingVoices.filter(v => 
-          !v.identifier.includes('eloquence')
-        );
-        
-        if (nonEloquenceVoices.length > 0) {
-          const enhanced = nonEloquenceVoices.filter(v => 
-            v.quality === Speech.VoiceQuality.Enhanced
-          );
-          
-          if (enhanced.length > 0) {
-            return enhanced[0];
-          }
-          return nonEloquenceVoices[0];
-        }
-        
-        // Fallback to any enhanced voice
-        const enhanced = matchingVoices.filter(v => 
-          v.quality === Speech.VoiceQuality.Enhanced
-        );
-        if (enhanced.length > 0) {
-          return enhanced[0];
-        }
-      }
-
-      // If no non-eloquence voices, return the first matching voice
-      return matchingVoices[0];
-    } catch (error) {
-      console.error('Error selecting voice:', error);
-      return null;
-    }
   }
 
   private getOptimalRate(language: string): number {

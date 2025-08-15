@@ -2,7 +2,7 @@
 
 class OperationTracker {
     private operations: Map<string, { count: number; lastCall: number }> = new Map();
-    private readonly DUPLICATE_THRESHOLD = 1000; // 1 second
+    private readonly DUPLICATE_THRESHOLD = 10000; // 10 seconds
 
     /**
      * Track an operation and warn if it's called too frequently

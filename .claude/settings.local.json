@@ -15,7 +15,8 @@
       "Bash(adb:*)",
       "Bash(npx eas build:*)",
       "Bash(npx expo start:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []

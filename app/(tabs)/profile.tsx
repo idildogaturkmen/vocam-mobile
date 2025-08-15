@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import type { EmitterSubscription } from 'react-native';
+import EventService from '../../src/services/EventService';
 import {
     View,
     Text,
@@ -117,15 +118,27 @@ function ProfileScreen() {
             return baseStats;
         }
     };
+    // Comprehensive loading states
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [profileLoaded, setProfileLoaded] = useState(false);
+    const [avatarLoaded, setAvatarLoaded] = useState(false);
+    const [statsLoaded, setStatsLoaded] = useState(false);
+    const [achievementsLoaded, setAchievementsLoaded] = useState(false);
+    const [dailyGoalLoaded, setDailyGoalLoaded] = useState(false);
+    const [languageProgressLoaded, setLanguageProgressLoaded] = useState(false);
+    
     const [level, setLevel] = useState<number>(0);
     const [exp, setExp] = useState<number>(0);
     const [achievements, setAchievements] = useState<Achievement[]>([]);
-    const [achievementsLoaded, setAchievementsLoaded] = useState(false);
     const [dailyGoal, setDailyGoal] = useState<DailyGoal>({ current: 0, target: 5, percentage: 0 });
     const [profileData, setProfileData] = useState<any>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+    
+    // Computed loading state - only show profile when all critical components are ready
+    const allCriticalDataLoaded = useMemo(() => {
+        return profileLoaded && avatarLoaded && statsLoaded && achievementsLoaded && dailyGoalLoaded && languageProgressLoaded;
+    }, [profileLoaded, avatarLoaded, statsLoaded, achievementsLoaded, dailyGoalLoaded, languageProgressLoaded]);
 const router = useRouter();
     
     // FIXED: Updated default avatar configuration with REAL DiceBear parameter values
@@ -195,10 +208,8 @@ const router = useRouter();
         // Listen for vocabulary changes to update profile counts immediately
         let vocabularyChangeSubscription: EmitterSubscription | null = null;
         
-        const setupVocabularyListener = async () => {
+        const setupVocabularyListener = () => {
             try {
-                const EventService = (await import('../../src/services/EventService')).default;
-                
                 vocabularyChangeSubscription = EventService.onVocabularyChange((event) => {
                     const { userId, action, languages, countChange } = event;
                     
@@ -331,7 +342,8 @@ const router = useRouter();
                         const { data: avatarData, error: avatarError } = avatarResult as any;
                         if (avatarData?.avatar_config && !avatarError) {
                             const config = avatarData.avatar_config;
-                            const cleanConfig = { ...avatarConfig, ...config, style: 'personas' as AvatarStyle };
+                            // Don't merge with default avatar config to prevent glitch
+                            const cleanConfig = { ...config, style: 'personas' as AvatarStyle };
                             setAvatarConfig(cleanConfig);
                         }
                     } catch (error) {
@@ -377,14 +389,42 @@ const router = useRouter();
                 setAchievements(achievementsList);
                 setAchievementsLoaded(true);
                 
-                // Load other data in parallel
-                const [
-                    userStats,
-                    avatarResult,
-                    vocabulary,
-                    profile,
-                    goalData
-                ] = await Promise.all([
+                // Load only the most critical data immediately 
+                const profile = await fetchCached(
+                    `profile_${currentUser.id}`,
+                    () => getProfile(forceRefresh),
+                    'PROFILE',
+                    forceRefresh
+                );
+
+                // Set critical data immediately for faster UI
+                setProfileData(profile);
+                setLevel(profile?.level || 0);
+                setExp(profile?.totalXP || 0);
+                setProfileLoaded(true);
+
+                // Load all remaining data in background after UI update
+                setTimeout(async () => {
+                    try {
+                        const [
+                            avatarResult,
+                            userStats,
+                            vocabulary,
+                            goalData
+                        ] = await Promise.all([
+                            fetchCached(
+                                `avatarConfig_${currentUser.id}`,
+                                async () => {
+                                    const { data, error } = await supabase
+                                        .from('avatars')
+                                        .select('avatar_config')
+                                        .eq('user_id', currentUser.id)
+                                        .single();
+                                    return { data, error };
+                                },
+                                'AVATAR_CONFIG',
+                                forceRefresh
+                            ),
                     fetchCached(
                         `userStats_${currentUser.id}`,
                         async () => {
@@ -405,19 +445,7 @@ const router = useRouter();
                                 .single();
                             return { data, error };
                         },
-                        'AVATAR_CONFIG',
-                        forceRefresh
-                    ),
-                    fetchCached(
-                        `vocabulary_${currentUser.id}`,
-                        () => VocabularyService.getUserVocabulary(currentUser.id, undefined, forceRefresh),
                         'VOCABULARY',
-                        forceRefresh
-                    ),
-                    fetchCached(
-                        `profile_${currentUser.id}`,
-                        () => getProfile(forceRefresh),
-                        'PROFILE',
                         forceRefresh
                     ),
                     fetchCached(
@@ -428,23 +456,9 @@ const router = useRouter();
                     )
                 ]);
 
-                // Set basic data immediately (stats will be set after vocabulary loading)
-                setProfileData(profile);
-                setLevel(profile?.level || 0);
-                setExp(profile?.totalXP || 0);
+                // Set remaining data with loading states
                 setDailyGoal(goalData);
-
-                // Handle avatar config
-                const { data: avatarData, error: avatarError } = avatarResult as any;
-                if (avatarData?.avatar_config && !avatarError) {
-                    const config = avatarData.avatar_config;
-                    const cleanConfig = { ...avatarConfig, ...config, style: 'personas' as AvatarStyle };
-                    setAvatarConfig(cleanConfig);
-                } else {
-                    if (avatarError && avatarError.code !== 'PGRST116') {
-                        console.error('Error loading avatar:', avatarError);
-                    }
-                }
+                setDailyGoalLoaded(true);
 
                 // Use helper function to get corrected stats
                 const correctedStats = await getCorrectedStats(currentUser.id, userStats, true);
@@ -453,29 +467,48 @@ const router = useRouter();
                 const langProgress = await VocabularyService.getUserVocabularyCounts(currentUser.id, true);
                 
                 setStats(correctedStats);
+                setStatsLoaded(true);
                 setLanguageProgress(langProgress);
+                setLanguageProgressLoaded(true);
+                
+                // Handle avatar config
+                const { data: avatarData, error: avatarError } = avatarResult as any;
+                if (avatarData?.avatar_config && !avatarError) {
+                    const config = avatarData.avatar_config;
+                    const cleanConfig = { ...config, style: 'personas' as AvatarStyle };
+                    setAvatarConfig(cleanConfig);
+                }
+                setAvatarLoaded(true);
                 
 
-                // Handle level sync in background (achievements already loaded above)
-                LevelingService.syncUserLevel(currentUser.id).then(async (syncResult) => {
-                    // Handle level sync if needed
-                    if (syncResult && syncResult.oldLevel !== syncResult.newLevel) {
-                        const updatedProfile = await getProfile(true);
-                        setProfileData(updatedProfile);
-                        setLevel(updatedProfile?.level || 0);
+                    } catch (error) {
+                        console.error('Error loading background data:', error);
                     }
-                }).catch(error => console.error('Error syncing user level:', error));
-                
-                // Check for new achievements (this is less critical, can be slower)
-                AchievementService.checkAndAwardAchievements(currentUser.id).then(newAchievements => {
-                    if (newAchievements.length > 0) {
-                        // Invalidate achievements cache and reload
-                        invalidateCache(`achievements_${currentUser.id}`);
-                        AchievementService.getAllAchievementsWithProgress(currentUser.id, true).then(updatedAchievements => {
-                            setAchievements(updatedAchievements);
-                        });
-                    }
-                }).catch(error => console.error('Error checking new achievements:', error));
+                }, 100);
+
+                // Defer non-critical operations to improve initial load time
+                setTimeout(() => {
+                    // Handle level sync in background (achievements already loaded above)
+                    LevelingService.syncUserLevel(currentUser.id).then(async (syncResult) => {
+                        // Handle level sync if needed
+                        if (syncResult && syncResult.oldLevel !== syncResult.newLevel) {
+                            const updatedProfile = await getProfile(true);
+                            setProfileData(updatedProfile);
+                            setLevel(updatedProfile?.level || 0);
+                        }
+                    }).catch(error => console.error('Error syncing user level:', error));
+                    
+                    // Check for new achievements (this is less critical, can be slower)
+                    AchievementService.checkAndAwardAchievements(currentUser.id).then(newAchievements => {
+                        if (newAchievements.length > 0) {
+                            // Invalidate achievements cache and reload
+                            invalidateCache(`achievements_${currentUser.id}`);
+                            AchievementService.getAllAchievementsWithProgress(currentUser.id, true).then(updatedAchievements => {
+                                setAchievements(updatedAchievements);
+                            });
+                        }
+                    }).catch(error => console.error('Error checking new achievements:', error));
+                }, 1000); // Defer by 1 second to improve initial loading
             }
         } catch (error) {
             console.error('Error loading user data:', error);
@@ -498,12 +531,20 @@ const router = useRouter();
 
     const onRefresh = () => {
         setRefreshing(true);
+        // Reset all loading states for fresh load
+        setProfileLoaded(false);
+        setAvatarLoaded(false);
+        setStatsLoaded(false);
+        setAchievementsLoaded(false);
+        setDailyGoalLoaded(false);
+        setLanguageProgressLoaded(false);
         // Force refresh to bypass cache
         checkAuthAndLoadUserData(true);
     };
 
 
-    if (loading) {
+    // Show loading screen until all critical data is ready
+    if (loading || !allCriticalDataLoaded) {
         return (
             <View style={styles.loadingContainer}>
                 <Ionicons name="person-circle" size={60} color="#c7c7c7" />

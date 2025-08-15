@@ -37,7 +37,21 @@ export default function RootLayout() {
                 console.log('Starting auth initialization...');
                 const {
                     data: { session },
+                    error
                 } = await supabase.auth.getSession();
+
+                // Handle refresh token errors silently for users who weren't signed in
+                if (error && error.message.includes('Invalid Refresh Token')) {
+                    console.log('Invalid refresh token detected, clearing session...');
+                    // Clear any stored invalid session data
+                    await supabase.auth.signOut();
+                    if (isMounted) {
+                        setSession(null);
+                        setAuthInitialized(true);
+                        clearTimeout(authFallbackTimer);
+                    }
+                    return;
+                }
 
                 console.log('Auth session obtained:', session?.user?.email || 'No session');
 
@@ -54,6 +68,7 @@ export default function RootLayout() {
             } catch (error) {
                 console.error('Auth initialization error:', error);
                 if (isMounted) {
+                    setSession(null);
                     setAuthInitialized(true);
                     clearTimeout(authFallbackTimer);
                 }

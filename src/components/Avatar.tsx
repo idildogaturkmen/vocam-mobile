@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Image, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { supabase } from '../../database/config';
 
 export type AvatarStyle = 'personas';
 
@@ -135,7 +134,7 @@ export const CLOTHING_COLORS = [
   { id: 'f55d81', name: 'Pink', hex: '#f55d81' },
 ];
 
-const HumanAvatar: React.FC<HumanAvatarProps> = ({ 
+const HumanAvatar: React.FC<HumanAvatarProps> = React.memo(({ 
   config, 
   size = 100, 
   seed,
@@ -144,284 +143,187 @@ const HumanAvatar: React.FC<HumanAvatarProps> = ({
   onError 
 }) => {
   const [error, setError] = React.useState(false);
-  const [retryCount, setRetryCount] = React.useState(0);
-  const [imageLoaded, setImageLoaded] = React.useState(false);
   const [svgData, setSvgData] = React.useState<string | null>(null);
-  const [isLoadingSvg, setIsLoadingSvg] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const fetchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
 
-  // OPTIMIZED: Use SVG format for much faster loading
-  const buildAvatarUrl = (simplified = false) => {
+  // Optimized URL building with proper memoization
+  const avatarUrl = React.useMemo(() => {
     const baseUrl = `https://api.dicebear.com/9.x/personas/svg`;
     const params = new URLSearchParams();
 
     // Clean seed 
     const cleanSeed = seed ? seed.replace(/[^a-zA-Z0-9]/g, '') : 'user';
     params.append('seed', cleanSeed);
+    params.append('scale', '100');
+
+    // Add configuration parameters
+    if (config.backgroundColor) params.append('backgroundColor', config.backgroundColor);
+    if (config.skinColor) params.append('skinColor', config.skinColor);
+    if (config.hairColor) params.append('hairColor', config.hairColor);
+    if (config.clothingColor) params.append('clothingColor', config.clothingColor);
+    if (config.hair && config.hair !== 'none') params.append('hair', config.hair);
+    if (config.eyes && config.eyes !== 'none') params.append('eyes', config.eyes);
+    if (config.mouth && config.mouth !== 'none') params.append('mouth', config.mouth);
+    if (config.nose && config.nose !== 'none') params.append('nose', config.nose);
+    if (config.body && config.body !== 'none') params.append('body', config.body);
     
-    // SVG format - no size limit and much faster loading
-    if (size > 0) {
-      params.append('scale', '100'); // Always use 100% scale for crisp rendering
+    if (config.facialHair && config.facialHair !== 'none') {
+      params.append('facialHair', config.facialHair);
+      params.append('facialHairProbability', '100');
     }
 
-    if (!simplified) {
-      // Colors (these work)
-      if (config.backgroundColor) {
-        params.append('backgroundColor', config.backgroundColor);
-      }
-      
-      if (config.skinColor) {
-        params.append('skinColor', config.skinColor);
-      }
-      
-      if (config.hairColor) {
-        params.append('hairColor', config.hairColor);
-      }
+    return `${baseUrl}?${params.toString()}`;
+  }, [config, seed]);
 
-      if (config.clothingColor) {
-        params.append('clothingColor', config.clothingColor);
-      }
-
-      // FIXED: Real feature parameters from DiceBear docs
-      if (config.hair && config.hair !== 'none') {
-        params.append('hair', config.hair);
-      }
-      
-      if (config.eyes && config.eyes !== 'none') {
-        params.append('eyes', config.eyes);
-      }
-      
-      if (config.mouth && config.mouth !== 'none') {
-        params.append('mouth', config.mouth);
-      }
-
-      if (config.nose && config.nose !== 'none') {
-        params.append('nose', config.nose);
-      }
-
-      if (config.facialHair && config.facialHair !== 'none') {
-        params.append('facialHair', config.facialHair);
-        // FIXED: Add facialHairProbability to ensure facial hair actually shows
-        params.append('facialHairProbability', '100');
-      }
-
-      if (config.body && config.body !== 'none') {
-        params.append('body', config.body);
-      }
-    }
-
-    const queryString = params.toString();
-    const finalUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
-
-    return finalUrl;
-  };
-
-  // Load avatar URL from database or generate new one
-  const loadAvatarUrl = async () => {
+  // Optimized fetch function with proper cleanup
+  const fetchSvgData = React.useCallback(async (url: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return buildAvatarUrl();
-
-      // Try to get existing avatar URL from database
-      const { data: avatarData } = await supabase
-        .from('avatars')
-        .select('avatar_url')
-        .eq('user_id', user.id)
-        .single();
-
-      if (avatarData?.avatar_url) {
-        return avatarData.avatar_url;
-      } else {
-        // Generate new URL and store it
-        const newUrl = buildAvatarUrl();
-        
-        await supabase
-          .from('avatars')
-          .upsert({
-            user_id: user.id,
-            avatar_url: newUrl,
-            avatar_config: config,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id'
-          });
-        
-        return newUrl;
+      setError(false);
+      setIsLoading(true);
+      
+      // Cancel previous requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-    } catch (error) {
-      console.error('Error loading avatar URL:', error);
-      return buildAvatarUrl();
-    }
-  };
-
-  const [avatarUrl, setAvatarUrl] = React.useState<string>('');
-
-  // Fetch SVG data directly for faster rendering
-  const fetchSvgData = async (url: string) => {
-    try {
-      setIsLoadingSvg(true);
-      const response = await fetch(url);
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+      
+      // Create new controller for this request
+      abortControllerRef.current = new AbortController();
+      
+      // Set timeout
+      const timeoutId = setTimeout(() => {
+        abortControllerRef.current?.abort();
+      }, 5000);
+      fetchTimeoutRef.current = timeoutId;
+      
+      const response = await fetch(url, {
+        signal: abortControllerRef.current.signal,
+        cache: 'force-cache',
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
       const svgText = await response.text();
-      setSvgData(svgText);
-      setError(false);
-      setImageLoaded(true);
-      onLoad?.();
-    } catch (fetchError) {
-      console.error('Error fetching SVG:', fetchError);
-      setError(true);
-      onError?.();
-    } finally {
-      setIsLoadingSvg(false);
-    }
-  };
-
-  const handleImageLoad = () => {
-    setError(false);
-    setImageLoaded(true);
-    setRetryCount(0);
-    onLoad?.();
-  };
-
-
-  const handleImageError = (errorEvent: any) => {
-    console.error('❌ Avatar failed to load:', errorEvent.nativeEvent?.error || 'Unknown error');
-    console.error('❌ Avatar URL was:', avatarUrl);
-    
-    // Try a simpler URL on error
-    if (retryCount < 1) {
-      setRetryCount(prev => prev + 1);
-      const cleanSeed = seed ? seed.replace(/[^a-zA-Z0-9]/g, '') : 'user';
-      const simpleUrl = `https://api.dicebear.com/9.x/personas/png?seed=${cleanSeed}&size=${Math.min(size, 256)}`;
-      setAvatarUrl(simpleUrl);
-      setImageLoaded(false);
-    } else {
-      setError(true);
-      setImageLoaded(false);
-    }
-    
-    onError?.();
-  };
-
-  // Update avatar URL in database when config changes
-  const updateAvatarUrl = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const newUrl = buildAvatarUrl();
       
-      await supabase
-        .from('avatars')
-        .upsert({
-          user_id: user.id,
-          avatar_url: newUrl,
-          avatar_config: config,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
-        });
-      
-      setAvatarUrl(newUrl);
-      setImageLoaded(false);
-      setError(false);
-    } catch (error) {
-      console.error('Error updating avatar URL:', error);
-    }
-  };
-
-  // Load initial avatar URL only once on mount
-  React.useEffect(() => {
-    const initializeAvatar = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          // For authenticated users, try to load from database
-          const { data: avatarData } = await supabase
-            .from('avatars')
-            .select('avatar_config')
-            .eq('user_id', user.id)
-            .single();
-          
-          // If we have saved config, use it; otherwise use current config
-          const configToUse = avatarData?.avatar_config || config;
-          const url = buildAvatarUrl();
-          setAvatarUrl(url);
-          fetchSvgData(url);
-        } else {
-          // For non-authenticated users, just generate URL from config
-          const url = buildAvatarUrl();
-          setAvatarUrl(url);
-          fetchSvgData(url);
-        }
-      } catch (error) {
-        // Fallback to building URL from config
-        const url = buildAvatarUrl();
-        setAvatarUrl(url);
-        fetchSvgData(url);
-      }
-      setImageLoaded(false);
-      setError(false);
-    };
-
-    if (!avatarUrl) {
-      initializeAvatar();
-    }
-  }, []);
-
-
-  // Update avatar URL when config changes and fetch SVG data
-  React.useEffect(() => {
-    if (config && Object.keys(config).length > 0) {
-      const newUrl = buildAvatarUrl();
-      // Only update if URL actually changed
-      if (newUrl !== avatarUrl) {
-        setAvatarUrl(newUrl);
-        setImageLoaded(false);
+      // Use setTimeout to prevent blocking UI
+      setTimeout(() => {
+        setSvgData(svgText);
         setError(false);
-        setRetryCount(0);
-        setSvgData(null);
-        // Fetch SVG data immediately for faster rendering
-        fetchSvgData(newUrl);
+        onLoad?.();
+      }, 0);
+      
+    } catch (fetchError: any) {
+      if (fetchError.name !== 'AbortError') {
+        setTimeout(() => {
+          setError(true);
+          onError?.();
+        }, 0);
       }
+    } finally {
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 0);
     }
-  }, [config, size, seed, avatarUrl]);
+  }, [onLoad, onError]);
+
+  // Single effect to handle URL changes
+  React.useEffect(() => {
+    if (avatarUrl) {
+      setSvgData(null);
+      fetchSvgData(avatarUrl);
+    }
+    
+    // Cleanup function
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
+  }, [avatarUrl, fetchSvgData]);
+
+  // Render with minimal DOM manipulation
+  const containerStyle = React.useMemo(() => [
+    styles.container, 
+    { width: size, height: size }, 
+    style
+  ], [size, style]);
+
+  const avatarContainerStyle = React.useMemo(() => [
+    styles.avatarContainer, 
+    { borderRadius: size / 2, overflow: 'hidden' }
+  ], [size]);
+
+  const loadingContainerStyle = React.useMemo(() => [
+    styles.loadingContainer, 
+    { width: size, height: size, borderRadius: size / 2 }
+  ], [size]);
 
   return (
-    <View style={[styles.container, { width: size, height: size }, style]}>
-      {/* Show SVG if available, otherwise loading indicator */}
+    <View style={containerStyle}>
       {svgData ? (
-        <View style={[styles.avatarContainer, { borderRadius: size / 2, overflow: 'hidden' }]}>
+        <View style={avatarContainerStyle}>
           <SvgXml
             xml={svgData}
             width={size}
             height={size}
           />
         </View>
-      ) : isLoadingSvg ? (
-        <View style={[styles.loadingContainer, { width: size, height: size, borderRadius: size / 2 }]}>
+      ) : isLoading ? (
+        <View style={loadingContainerStyle}>
           <ActivityIndicator size="small" color="#3498db" />
         </View>
       ) : error ? (
-        <View style={[styles.errorContainer, { width: size, height: size, borderRadius: size / 2 }]}>
-          {/* Fallback to Image component if SVG fails */}
+        <View style={loadingContainerStyle}>
           <Image
-            source={{ uri: avatarUrl }}
-            style={[
-              styles.avatar,
-              { 
-                width: size, 
-                height: size, 
-                borderRadius: size / 2,
-              }
-            ]}
-            onLoad={handleImageLoad}
-            onError={handleImageError}
-            key={`${avatarUrl}-${retryCount}`}
+            source={{ uri: `https://api.dicebear.com/9.x/personas/png?seed=${seed?.replace(/[^a-zA-Z0-9]/g, '') || 'user'}&size=${Math.min(size, 256)}` }}
+            style={{ width: size, height: size, borderRadius: size / 2 }}
+            onLoad={() => {
+              setError(false);
+              onLoad?.();
+            }}
+            onError={() => {
+              setError(true);
+              onError?.();
+            }}
           />
         </View>
       ) : null}
     </View>
   );
-};
+}, (prevProps, nextProps) => {
+  // Optimized comparison function - no logging
+  if (prevProps.size !== nextProps.size || prevProps.seed !== nextProps.seed) {
+    return false;
+  }
+  
+  const prevConfig = prevProps.config;
+  const nextConfig = nextProps.config;
+  
+  return (
+    prevConfig.style === nextConfig.style &&
+    prevConfig.backgroundColor === nextConfig.backgroundColor &&
+    prevConfig.skinColor === nextConfig.skinColor &&
+    prevConfig.hairColor === nextConfig.hairColor &&
+    prevConfig.clothingColor === nextConfig.clothingColor &&
+    prevConfig.hair === nextConfig.hair &&
+    prevConfig.eyes === nextConfig.eyes &&
+    prevConfig.mouth === nextConfig.mouth &&
+    prevConfig.nose === nextConfig.nose &&
+    prevConfig.facialHair === nextConfig.facialHair &&
+    prevConfig.body === nextConfig.body
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -437,12 +339,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  errorContainer: {
-    backgroundColor: '#f0f0f0',
-  },
-  avatar: {
-    backgroundColor: '#f0f0f0',
   },
 });
 

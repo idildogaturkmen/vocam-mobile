@@ -25,6 +25,8 @@ module.exports = {
       targetSdkVersion: 34,
       buildToolsVersion: "34.0.0",
       backgroundColor:  "#ffffff",
+      // Disable Hermes to match gradle.properties setting for Android performance fixes
+      hermes: false,
       
       // Enhanced splash configuration for Android
       splash: {

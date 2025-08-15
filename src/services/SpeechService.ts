@@ -557,7 +557,7 @@ class SpeechService {
   }
 
   private debugAvailableVoices(): void {
-    console.log(`🔊 Found ${this.availableVoices.length} available voices:`);
+    // Found available voices (logging disabled for performance)
     
     // Group voices by language for easier debugging
     const voicesByLang: Record<string, VoiceInfo[]> = {};
@@ -573,12 +573,9 @@ class SpeechService {
     const problematicLangs = ['zh', 'ja', 'th', 'ar', 'ko', 'hi', 'bn', 'gu', 'he', 'sw'];
     problematicLangs.forEach(lang => {
       if (voicesByLang[lang]) {
-        console.log(`✅ ${lang}: ${voicesByLang[lang].length} voices available`);
-        voicesByLang[lang].forEach(voice => {
-          console.log(`   - ${voice.name} (${voice.language}, ${voice.quality})`);
-        });
+        // Language voice details logging disabled for performance
       } else {
-        console.log(`❌ ${lang}: No voices available`);
+        // No voices logging disabled for performance
       }
     });
   }

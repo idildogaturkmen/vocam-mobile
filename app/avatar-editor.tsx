@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
     View,
     Text,
@@ -10,6 +10,8 @@ import {
     SafeAreaView,
     Dimensions,
     Platform,
+    InteractionManager,
+    Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
@@ -24,28 +26,161 @@ import HumanAvatar, {
     CLOTHING_COLORS
 } from '../src/components/Avatar';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const isTablet = width > 768;
 
+// Memoized color option component to prevent re-renders
+const ColorOption = React.memo(({ 
+    color, 
+    isSelected, 
+    onPress, 
+    checkColor = '#fff' 
+}: { 
+    color: any; 
+    isSelected: boolean; 
+    onPress: () => void; 
+    checkColor?: string;
+}) => {
+    const handlePress = useCallback(() => {
+        onPress();
+    }, [onPress]);
+
+    // Use View with onTouchStart for Android emergency fix
+    if (Platform.OS === 'android') {
+        return (
+            <View
+                style={[
+                    styles.colorOption,
+                    isTablet && styles.colorOptionTablet,
+                    { backgroundColor: color.hex },
+                    isSelected && styles.selectedColorOption
+                ]}
+                onTouchStart={handlePress}
+                onStartShouldSetResponder={() => true}
+                onResponderGrant={handlePress}
+            >
+                {isSelected && (
+                    <Ionicons name="checkmark" size={20} color={checkColor} />
+                )}
+            </View>
+        );
+    }
+
+    return (
+        <TouchableOpacity
+            style={[
+                styles.colorOption,
+                isTablet && styles.colorOptionTablet,
+                { backgroundColor: color.hex },
+                isSelected && styles.selectedColorOption
+            ]}
+            onPress={handlePress}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            activeOpacity={0.8}
+        >
+            {isSelected && (
+                <Ionicons name="checkmark" size={20} color={checkColor} />
+            )}
+        </TouchableOpacity>
+    );
+});
+
+// Memoized feature option component to prevent re-renders
+const FeatureOption = React.memo(({ 
+    feature, 
+    isSelected, 
+    onPress 
+}: { 
+    feature: any; 
+    isSelected: boolean; 
+    onPress: () => void; 
+}) => {
+    const handlePress = useCallback(() => {
+        onPress();
+    }, [onPress]);
+
+    // Use View with onTouchStart for Android emergency fix
+    if (Platform.OS === 'android') {
+        return (
+            <View
+                style={[
+                    styles.featureButton,
+                    isTablet && styles.featureButtonTablet,
+                    isSelected && styles.selectedFeature
+                ]}
+                onTouchStart={handlePress}
+                onStartShouldSetResponder={() => true}
+                onResponderGrant={handlePress}
+            >
+                <Text style={[
+                    styles.featureText,
+                    isTablet && styles.featureTextTablet,
+                    isSelected && styles.selectedFeatureText
+                ]}>
+                    {feature.name}
+                </Text>
+            </View>
+        );
+    }
+
+    return (
+        <TouchableOpacity
+            style={[
+                styles.featureButton,
+                isTablet && styles.featureButtonTablet,
+                isSelected && styles.selectedFeature
+            ]}
+            onPress={handlePress}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.8}
+        >
+            <Text style={[
+                styles.featureText,
+                isTablet && styles.featureTextTablet,
+                isSelected && styles.selectedFeatureText
+            ]}>
+                {feature.name}
+            </Text>
+        </TouchableOpacity>
+    );
+});
+
 export default function AvatarEditorScreen() {
+    
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
     const [savingAvatar, setSavingAvatar] = useState(false);
+    const [isInitializing, setIsInitializing] = useState(true);
+    const [renderingAvatar, setRenderingAvatar] = useState(false);
+    const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    
     
     // Load user on mount
     React.useEffect(() => {
         const loadUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            setUser(user);
-            if (user) {
-                loadAvatarConfig(user.id);
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                setUser(user);
+                if (user) {
+                    // Load config first, then set initialization to false
+                    await loadAvatarConfig(user.id);
+                    // Add small delay to ensure avatar is fully loaded
+                    setTimeout(() => {
+                        setIsInitializing(false);
+                    }, 100);
+                } else {
+                    setIsInitializing(false);
+                }
+            } catch (error) {
+                console.error('Error during initialization:', error);
+                setIsInitializing(false);
             }
         };
         loadUser();
     }, []);
 
-    // Default avatar configuration
-    const [avatarConfig, setAvatarConfig] = useState<HumanAvatarConfig>({
+    // Default avatar configuration - will be overridden once user data loads
+    const defaultConfig: HumanAvatarConfig = {
         style: 'personas',
         backgroundColor: 'b6e3f4',
         skinColor: 'e5a07e',
@@ -57,23 +192,67 @@ export default function AvatarEditorScreen() {
         facialHair: 'none',
         body: 'rounded',
         clothingColor: '456dff',
-    });
+    };
     
-    const [tempAvatarConfig, setTempAvatarConfig] = useState<HumanAvatarConfig>(avatarConfig);
-    const [previewConfig, setPreviewConfig] = useState<HumanAvatarConfig>(avatarConfig);
+    const [, setAvatarConfig] = useState<HumanAvatarConfig>(defaultConfig);
+    const [tempAvatarConfig, setTempAvatarConfig] = useState<HumanAvatarConfig>(defaultConfig);
+    const [previewConfig, setPreviewConfig] = useState<HumanAvatarConfig>(defaultConfig);
     
     // Only 2 tabs: Colors and Features
-    const tabs = ['colors', 'features'] as const;
+    const tabs = useMemo(() => ['colors', 'features'] as const, []);
     const [activeTab, setActiveTab] = useState<'colors' | 'features'>('colors');
+    const [isChangingTab, setIsChangingTab] = useState(false);
+    
+    
+    // Debounced handlers to prevent excessive updates
+    const handleColorChange = useCallback((type: string, value: string) => {
+        setTempAvatarConfig(prev => ({ ...prev, [type]: value }));
+    }, []);
+    
+    const handleFeatureChange = useCallback((type: string, value: string) => {
+        setTempAvatarConfig(prev => ({ ...prev, [type]: value }));
+    }, []);
+    
+    const handleTabChange = useCallback((tab: 'colors' | 'features') => {
+        if (activeTab !== tab) {
+            setIsChangingTab(true);
+            setActiveTab(tab);
+            // Quick tab transition
+            setTimeout(() => {
+                setIsChangingTab(false);
+            }, 100);
+        }
+    }, [activeTab]);
 
-    // Much faster debounce for better UX
+    // Optimized preview updates using InteractionManager for better Android performance
+    const updatePreview = useCallback((config: HumanAvatarConfig) => {
+        // Clear any pending updates
+        if (updateTimeoutRef.current) {
+            clearTimeout(updateTimeoutRef.current);
+        }
+        
+        // Use a minimal timeout to batch updates without blocking UI
+        updateTimeoutRef.current = setTimeout(() => {
+            setPreviewConfig(config);
+            setRenderingAvatar(false);
+        }, 50) as any; // Minimal delay to batch rapid updates
+    }, []);
+
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setPreviewConfig(tempAvatarConfig);
-        }, 100); // Reduced to 100ms for faster response
+        if (!isInitializing) {
+            setRenderingAvatar(true);
+            updatePreview(tempAvatarConfig);
+        }
+    }, [tempAvatarConfig, isInitializing, updatePreview]);
 
-        return () => clearTimeout(timer);
-    }, [tempAvatarConfig]);
+    // Cleanup timeouts
+    useEffect(() => {
+        return () => {
+            if (updateTimeoutRef.current) {
+                clearTimeout(updateTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const loadAvatarConfig = async (userId: string) => {
         try {
@@ -85,21 +264,42 @@ export default function AvatarEditorScreen() {
 
             if (data?.avatar_config && !error) {
                 const config = data.avatar_config;
-                const cleanConfig = { ...avatarConfig, ...config, style: 'personas' as AvatarStyle };
-                setAvatarConfig(cleanConfig);
-                setTempAvatarConfig(cleanConfig);
-                setPreviewConfig(cleanConfig);
+                // Don't merge with default to prevent glitch
+                const cleanConfig = { ...config, style: 'personas' as AvatarStyle };
+                
+                // Update all configs simultaneously in a single batch to prevent flash
+                React.startTransition(() => {
+                    setAvatarConfig(cleanConfig);
+                    setTempAvatarConfig(cleanConfig);
+                    setPreviewConfig(cleanConfig);
+                });
+            } else {
+                // If no saved config, use default but ensure all states are consistent
+                React.startTransition(() => {
+                    setAvatarConfig(defaultConfig);
+                    setTempAvatarConfig(defaultConfig);
+                    setPreviewConfig(defaultConfig);
+                });
             }
         } catch (error) {
             console.error('Error loading avatar config:', error);
+            // Fallback to default config on error
+            React.startTransition(() => {
+                setAvatarConfig(defaultConfig);
+                setTempAvatarConfig(defaultConfig);
+                setPreviewConfig(defaultConfig);
+            });
         }
     };
 
     const saveAvatarConfig = async () => {
-        if (!user) return;
+        if (!user) {
+            return;
+        }
         
         setSavingAvatar(true);
         try {
+            // Single optimized database operation
             const { error } = await supabase
                 .from('avatars')
                 .upsert({
@@ -111,23 +311,25 @@ export default function AvatarEditorScreen() {
                 });
 
             if (error) {
-                console.error('Error saving avatar:', error);
                 Alert.alert('Error', `Failed to save avatar: ${error.message}`);
             } else {
                 setAvatarConfig(tempAvatarConfig);
-                Alert.alert('Success', 'Avatar saved successfully!', [
-                    { text: 'OK', onPress: () => router.back() }
-                ]);
+                // Navigate to profile page after saving
+                try {
+                    router.push('/(tabs)/profile');
+                } catch (navError) {
+                    console.error('Profile navigation error:', navError);
+                }
             }
         } catch (error) {
-            console.error('Error saving avatar:', error);
+            console.error('Save error:', error);
             Alert.alert('Error', 'Failed to save avatar');
         } finally {
             setSavingAvatar(false);
         }
     };
 
-    const generateRandomAvatar = () => {
+    const generateRandomAvatar = useCallback(() => {
         const randomConfig: HumanAvatarConfig = {
             style: 'personas',
             backgroundColor: BACKGROUND_COLORS[Math.floor(Math.random() * BACKGROUND_COLORS.length)].id,
@@ -143,7 +345,7 @@ export default function AvatarEditorScreen() {
         };
         
         setTempAvatarConfig({...randomConfig});
-    };
+    }, []);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -151,27 +353,64 @@ export default function AvatarEditorScreen() {
                 title: "Customize Avatar",
                 headerShown: true,
                 headerLeft: () => (
-                    <TouchableOpacity 
-                        onPress={() => router.back()}
-                        style={styles.headerButton}
-                    >
-                        <Ionicons name="arrow-back" size={24} color="#2c3e50" />
-                    </TouchableOpacity>
+                    Platform.OS === 'android' ? (
+                        <View
+                            onTouchStart={() => {
+                                try {
+                                    router.push('/(tabs)/profile');
+                                } catch (error) {
+                                    console.error('Profile navigation error:', error);
+                                }
+                            }}
+                            onStartShouldSetResponder={() => true}
+                            onResponderGrant={() => {
+                                try {
+                                    router.push('/(tabs)/profile');
+                                } catch (error) {
+                                    console.error('Profile navigation error:', error);
+                                }
+                            }}
+                            style={styles.headerButton}
+                        >
+                            <Ionicons name="arrow-back" size={24} color="#2c3e50" />
+                        </View>
+                    ) : (
+                        <TouchableOpacity 
+                            onPress={() => {
+                                try {
+                                    router.push('/(tabs)/profile');
+                                } catch (error) {
+                                    console.error('Profile navigation error:', error);
+                                }
+                            }}
+                            style={styles.headerButton}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                        >
+                            <Ionicons name="arrow-back" size={24} color="#2c3e50" />
+                        </TouchableOpacity>
+                    )
                 ),
             }} />
 
             {/* Avatar Preview */}
             <View style={styles.previewSection}>
-                <HumanAvatar
-                    config={previewConfig}
-                    size={140}
-                    seed={`${user?.email || 'default'}-${JSON.stringify(previewConfig)}`}
-                />
-                {/* Show loading indicator when preview is updating */}
-                {JSON.stringify(tempAvatarConfig) !== JSON.stringify(previewConfig) && (
-                    <View style={styles.loadingOverlay}>
-                        <ActivityIndicator size="small" color="#3498db" />
-                        <Text style={styles.loadingText}>Updating preview...</Text>
+                {isInitializing ? (
+                    <View style={[styles.loadingContainer, { width: 140, height: 140, borderRadius: 70 }]}>
+                        <ActivityIndicator size="large" color="#3498db" />
+                    </View>
+                ) : (
+                    <View style={{ position: 'relative' }}>
+                        <HumanAvatar
+                            config={previewConfig}
+                            size={140}
+                            seed={`${user?.email || 'default'}`}
+                        />
+                        {renderingAvatar && (
+                            <View style={[styles.avatarOverlay, { width: 140, height: 140, borderRadius: 70 }]}>
+                                <ActivityIndicator size="small" color="#3498db" />
+                            </View>
+                        )}
                     </View>
                 )}
             </View>
@@ -179,332 +418,277 @@ export default function AvatarEditorScreen() {
             {/* Tab Navigation */}
             <View style={styles.tabContainer}>
                 {tabs.map((tab) => (
-                    <TouchableOpacity
-                        key={tab}
-                        style={[styles.tab, activeTab === tab && styles.activeTab]}
-                        onPress={() => setActiveTab(tab)}
-                    >
-                        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        </Text>
-                    </TouchableOpacity>
+                    Platform.OS === 'android' ? (
+                        <View
+                            key={tab}
+                            style={[styles.tab, activeTab === tab && styles.activeTab]}
+                            onTouchStart={() => handleTabChange(tab)}
+                            onStartShouldSetResponder={() => true}
+                            onResponderGrant={() => handleTabChange(tab)}
+                        >
+                            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            </Text>
+                        </View>
+                    ) : (
+                        <TouchableOpacity
+                            key={tab}
+                            style={[styles.tab, activeTab === tab && styles.activeTab]}
+                            onPress={() => handleTabChange(tab)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                            </Text>
+                        </TouchableOpacity>
+                    )
                 ))}
             </View>
 
-            <ScrollView style={styles.optionsContainer} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                style={styles.optionsContainer} 
+                showsVerticalScrollIndicator={false}
+                scrollEnabled={!isChangingTab}
+                keyboardShouldPersistTaps="handled"
+                removeClippedSubviews={true}
+                nestedScrollEnabled={true}
+                scrollEventThrottle={16}
+                decelerationRate="fast"
+                bounces={false}
+                overScrollMode="never"
+                {...(Platform.OS === 'android' && {
+                    pagingEnabled: false,
+                    directionalLockEnabled: true,
+                    scrollsToTop: false,
+                    automaticallyAdjustContentInsets: false,
+                    contentInsetAdjustmentBehavior: 'never'
+                })}
+                onScrollBeginDrag={() => {
+                    // Emergency fix: prevent gesture conflicts
+                    if (Platform.OS === 'android') {
+                        setIsChangingTab(false);
+                    }
+                }}
+            >
                 {/* Colors Tab */}
-                {activeTab === 'colors' && (
-                    <View style={styles.optionSection}>
-                        <Text style={styles.optionLabel}>Background</Text>
-                        <View style={styles.colorGrid}>
-                            {BACKGROUND_COLORS.map((color) => (
-                                <TouchableOpacity
-                                    key={color.id}
-                                    style={[
-                                        styles.colorOption,
-                                        isTablet && styles.colorOptionTablet,
-                                        { backgroundColor: color.hex },
-                                        tempAvatarConfig.backgroundColor === color.id && styles.selectedColorOption
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Background color pressed:', color.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, backgroundColor: color.id }));
-                                    }}
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    activeOpacity={0.7}
-                                >
-                                    {tempAvatarConfig.backgroundColor === color.id && (
-                                        <Ionicons name="checkmark" size={20} color="#fff" />
-                                    )}
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                {(() => {
+                    if (activeTab === 'colors' && !isChangingTab && !isInitializing) {
+                        return (
+                            <View style={styles.optionSection}>
+                                <Text style={styles.optionLabel}>Background</Text>
+                                <View style={styles.colorGrid}>
+                                    {BACKGROUND_COLORS.map((color) => (
+                                        <ColorOption
+                                            key={color.id}
+                                            color={color}
+                                            isSelected={tempAvatarConfig.backgroundColor === color.id}
+                                            onPress={() => handleColorChange('backgroundColor', color.id)}
+                                            checkColor="#fff"
+                                        />
+                                    ))}
+                                </View>
 
-                        <Text style={styles.optionLabel}>Skin Tone</Text>
-                        <View style={styles.colorGrid}>
-                            {SKIN_COLORS.map((color) => (
-                                <TouchableOpacity
-                                    key={color.id}
-                                    style={[
-                                        styles.colorOption,
-                                        isTablet && styles.colorOptionTablet,
-                                        { backgroundColor: color.hex },
-                                        tempAvatarConfig.skinColor === color.id && styles.selectedColorOption
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Skin color pressed:', color.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, skinColor: color.id }));
-                                    }}
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    activeOpacity={0.7}
-                                >
-                                    {tempAvatarConfig.skinColor === color.id && (
-                                        <Ionicons name="checkmark" size={20} color="#333" />
-                                    )}
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                                <Text style={styles.optionLabel}>Skin Tone</Text>
+                                <View style={styles.colorGrid}>
+                                    {SKIN_COLORS.map((color) => (
+                                        <ColorOption
+                                            key={color.id}
+                                            color={color}
+                                            isSelected={tempAvatarConfig.skinColor === color.id}
+                                            onPress={() => handleColorChange('skinColor', color.id)}
+                                            checkColor="#333"
+                                        />
+                                    ))}
+                                </View>
 
-                        <Text style={styles.optionLabel}>Hair Color</Text>
-                        <View style={styles.colorGrid}>
-                            {HAIR_COLORS.map((color) => (
-                                <TouchableOpacity
-                                    key={color.id}
-                                    style={[
-                                        styles.colorOption,
-                                        isTablet && styles.colorOptionTablet,
-                                        { backgroundColor: color.hex },
-                                        tempAvatarConfig.hairColor === color.id && styles.selectedColorOption
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Hair color pressed:', color.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, hairColor: color.id }));
-                                    }}
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    activeOpacity={0.7}
-                                >
-                                    {tempAvatarConfig.hairColor === color.id && (
-                                        <Ionicons name="checkmark" size={20} color="#fff" />
-                                    )}
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                                <Text style={styles.optionLabel}>Hair Color</Text>
+                                <View style={styles.colorGrid}>
+                                    {HAIR_COLORS.map((color) => (
+                                        <ColorOption
+                                            key={color.id}
+                                            color={color}
+                                            isSelected={tempAvatarConfig.hairColor === color.id}
+                                            onPress={() => handleColorChange('hairColor', color.id)}
+                                            checkColor="#fff"
+                                        />
+                                    ))}
+                                </View>
 
-                        <Text style={styles.optionLabel}>Clothing Color</Text>
-                        <View style={styles.colorGrid}>
-                            {CLOTHING_COLORS.map((color) => (
-                                <TouchableOpacity
-                                    key={color.id}
-                                    style={[
-                                        styles.colorOption,
-                                        isTablet && styles.colorOptionTablet,
-                                        { backgroundColor: color.hex },
-                                        tempAvatarConfig.clothingColor === color.id && styles.selectedColorOption
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Clothing color pressed:', color.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, clothingColor: color.id }));
-                                    }}
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    activeOpacity={0.7}
-                                >
-                                    {tempAvatarConfig.clothingColor === color.id && (
-                                        <Ionicons name="checkmark" size={20} color="#fff" />
-                                    )}
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
-                )}
+                                <Text style={styles.optionLabel}>Clothing Color</Text>
+                                <View style={styles.colorGrid}>
+                                    {CLOTHING_COLORS.map((color) => (
+                                        <ColorOption
+                                            key={color.id}
+                                            color={color}
+                                            isSelected={tempAvatarConfig.clothingColor === color.id}
+                                            onPress={() => handleColorChange('clothingColor', color.id)}
+                                            checkColor="#fff"
+                                        />
+                                    ))}
+                                </View>
+                            </View>
+                        );
+                    } else {
+                        return null;
+                    }
+                })()}
 
                 {/* Features Tab */}
-                {activeTab === 'features' && (
-                    <View style={styles.optionSection}>
-                        <Text style={styles.optionSectionTitle}>Customize Features</Text>
-                        
-                        <Text style={styles.optionLabel}>Hair Style</Text>
-                        <View style={styles.featureGrid}>
-                            {AVATAR_OPTIONS.hair.map((hair) => (
-                                <TouchableOpacity
-                                    key={hair.id}
-                                    style={[
-                                        styles.featureButton,
-                                        isTablet && styles.featureButtonTablet,
-                                        tempAvatarConfig.hair === hair.id && styles.selectedFeature
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Hair feature pressed:', hair.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, hair: hair.id }));
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={[
-                                        styles.featureText,
-                                        isTablet && styles.featureTextTablet,
-                                        tempAvatarConfig.hair === hair.id && styles.selectedFeatureText
-                                    ]}>
-                                        {hair.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                {(() => {
+                    if (activeTab === 'features' && !isChangingTab && !isInitializing) {
+                        return (
+                            <View style={styles.optionSection}>
+                                <Text style={styles.optionSectionTitle}>Customize Features</Text>
+                                
+                                <Text style={styles.optionLabel}>Hair Style</Text>
+                                <View style={styles.featureGrid}>
+                                    {AVATAR_OPTIONS.hair.map((hair) => (
+                                        <FeatureOption
+                                            key={hair.id}
+                                            feature={hair}
+                                            isSelected={tempAvatarConfig.hair === hair.id}
+                                            onPress={() => handleFeatureChange('hair', hair.id)}
+                                        />
+                                    ))}
+                                </View>
 
-                        <Text style={styles.optionLabel}>Eyes</Text>
-                        <View style={styles.featureGrid}>
-                            {AVATAR_OPTIONS.eyes.map((eye) => (
-                                <TouchableOpacity
-                                    key={eye.id}
-                                    style={[
-                                        styles.featureButton,
-                                        isTablet && styles.featureButtonTablet,
-                                        tempAvatarConfig.eyes === eye.id && styles.selectedFeature
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Eyes feature pressed:', eye.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, eyes: eye.id }));
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={[
-                                        styles.featureText,
-                                        isTablet && styles.featureTextTablet,
-                                        tempAvatarConfig.eyes === eye.id && styles.selectedFeatureText
-                                    ]}>
-                                        {eye.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                                <Text style={styles.optionLabel}>Eyes</Text>
+                                <View style={styles.featureGrid}>
+                                    {AVATAR_OPTIONS.eyes.map((eye) => (
+                                        <FeatureOption
+                                            key={eye.id}
+                                            feature={eye}
+                                            isSelected={tempAvatarConfig.eyes === eye.id}
+                                            onPress={() => handleFeatureChange('eyes', eye.id)}
+                                        />
+                                    ))}
+                                </View>
 
-                        <Text style={styles.optionLabel}>Mouth</Text>
-                        <View style={styles.featureGrid}>
-                            {AVATAR_OPTIONS.mouth.map((mouth) => (
-                                <TouchableOpacity
-                                    key={mouth.id}
-                                    style={[
-                                        styles.featureButton,
-                                        isTablet && styles.featureButtonTablet,
-                                        tempAvatarConfig.mouth === mouth.id && styles.selectedFeature
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Mouth feature pressed:', mouth.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, mouth: mouth.id }));
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={[
-                                        styles.featureText,
-                                        isTablet && styles.featureTextTablet,
-                                        tempAvatarConfig.mouth === mouth.id && styles.selectedFeatureText
-                                    ]}>
-                                        {mouth.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                                <Text style={styles.optionLabel}>Mouth</Text>
+                                <View style={styles.featureGrid}>
+                                    {AVATAR_OPTIONS.mouth.map((mouth) => (
+                                        <FeatureOption
+                                            key={mouth.id}
+                                            feature={mouth}
+                                            isSelected={tempAvatarConfig.mouth === mouth.id}
+                                            onPress={() => handleFeatureChange('mouth', mouth.id)}
+                                        />
+                                    ))}
+                                </View>
 
-                        <Text style={styles.optionLabel}>Nose</Text>
-                        <View style={styles.featureGrid}>
-                            {AVATAR_OPTIONS.nose.map((nose) => (
-                                <TouchableOpacity
-                                    key={nose.id}
-                                    style={[
-                                        styles.featureButton,
-                                        isTablet && styles.featureButtonTablet,
-                                        tempAvatarConfig.nose === nose.id && styles.selectedFeature
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Nose feature pressed:', nose.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, nose: nose.id }));
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={[
-                                        styles.featureText,
-                                        isTablet && styles.featureTextTablet,
-                                        tempAvatarConfig.nose === nose.id && styles.selectedFeatureText
-                                    ]}>
-                                        {nose.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                                <Text style={styles.optionLabel}>Nose</Text>
+                                <View style={styles.featureGrid}>
+                                    {AVATAR_OPTIONS.nose.map((nose) => (
+                                        <FeatureOption
+                                            key={nose.id}
+                                            feature={nose}
+                                            isSelected={tempAvatarConfig.nose === nose.id}
+                                            onPress={() => handleFeatureChange('nose', nose.id)}
+                                        />
+                                    ))}
+                                </View>
 
-                        <Text style={styles.optionLabel}>Facial Hair</Text>
-                        <View style={styles.featureGrid}>
-                            {AVATAR_OPTIONS.facialHair.map((facialHair) => (
-                                <TouchableOpacity
-                                    key={facialHair.id}
-                                    style={[
-                                        styles.featureButton,
-                                        isTablet && styles.featureButtonTablet,
-                                        tempAvatarConfig.facialHair === facialHair.id && styles.selectedFeature
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Facial hair feature pressed:', facialHair.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, facialHair: facialHair.id }));
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={[
-                                        styles.featureText,
-                                        isTablet && styles.featureTextTablet,
-                                        tempAvatarConfig.facialHair === facialHair.id && styles.selectedFeatureText
-                                    ]}>
-                                        {facialHair.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                                <Text style={styles.optionLabel}>Facial Hair</Text>
+                                <View style={styles.featureGrid}>
+                                    {AVATAR_OPTIONS.facialHair.map((facialHair) => (
+                                        <FeatureOption
+                                            key={facialHair.id}
+                                            feature={facialHair}
+                                            isSelected={tempAvatarConfig.facialHair === facialHair.id}
+                                            onPress={() => handleFeatureChange('facialHair', facialHair.id)}
+                                        />
+                                    ))}
+                                </View>
 
-                        <Text style={styles.optionLabel}>Clothing Style</Text>
-                        <View style={styles.featureGrid}>
-                            {AVATAR_OPTIONS.body.map((body) => (
-                                <TouchableOpacity
-                                    key={body.id}
-                                    style={[
-                                        styles.featureButton,
-                                        isTablet && styles.featureButtonTablet,
-                                        tempAvatarConfig.body === body.id && styles.selectedFeature
-                                    ]}
-                                    onPress={() => {
-                                        console.log('Body feature pressed:', body.id);
-                                        setTempAvatarConfig(prev => ({ ...prev, body: body.id }));
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={[
-                                        styles.featureText,
-                                        isTablet && styles.featureTextTablet,
-                                        tempAvatarConfig.body === body.id && styles.selectedFeatureText
-                                    ]}>
-                                        {body.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
-                )}
+                                <Text style={styles.optionLabel}>Clothing Style</Text>
+                                <View style={styles.featureGrid}>
+                                    {AVATAR_OPTIONS.body.map((body) => (
+                                        <FeatureOption
+                                            key={body.id}
+                                            feature={body}
+                                            isSelected={tempAvatarConfig.body === body.id}
+                                            onPress={() => handleFeatureChange('body', body.id)}
+                                        />
+                                    ))}
+                                </View>
+                            </View>
+                        );
+                    } else {
+                        return null;
+                    }
+                })()}
             </ScrollView>
 
             {/* Action Buttons */}
             <View style={styles.actionButtons}>
-                <TouchableOpacity
-                    style={[styles.randomButton, isTablet && styles.randomButtonTablet]}
-                    onPress={() => {
-                        console.log('Random button pressed');
-                        generateRandomAvatar();
-                    }}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    activeOpacity={0.8}
-                >
-                    <Ionicons name="shuffle" size={20} color="#fff" />
-                    <Text style={styles.randomButtonText}>Random</Text>
-                </TouchableOpacity>
+                {Platform.OS === 'android' ? (
+                    <View
+                        style={[
+                            styles.randomButton, 
+                            isTablet && styles.randomButtonTablet
+                        ]}
+                        onTouchStart={generateRandomAvatar}
+                        onStartShouldSetResponder={() => true}
+                        onResponderGrant={generateRandomAvatar}
+                    >
+                        <Ionicons name="shuffle" size={20} color="#fff" />
+                        <Text style={styles.randomButtonText}>Random</Text>
+                    </View>
+                ) : (
+                    <TouchableOpacity
+                        style={[styles.randomButton, isTablet && styles.randomButtonTablet]}
+                        onPress={generateRandomAvatar}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="shuffle" size={20} color="#fff" />
+                        <Text style={styles.randomButtonText}>Random</Text>
+                    </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                    style={[styles.saveButton, savingAvatar && styles.disabledButton]}
-                    onPress={saveAvatarConfig}
-                    disabled={savingAvatar}
-                >
-                    {savingAvatar ? (
-                        <>
-                            <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
-                            <Text style={styles.saveButtonText}>Saving...</Text>
-                        </>
-                    ) : (
-                        <>
-                            <Ionicons name="checkmark" size={20} color="#fff" />
-                            <Text style={styles.saveButtonText}>Save Avatar</Text>
-                        </>
-                    )}
-                </TouchableOpacity>
+                {Platform.OS === 'android' ? (
+                    <View
+                        style={[
+                            styles.saveButton, 
+                            savingAvatar && styles.disabledButton
+                        ]}
+                        onTouchStart={savingAvatar ? undefined : saveAvatarConfig}
+                        onStartShouldSetResponder={() => !savingAvatar}
+                        onResponderGrant={savingAvatar ? undefined : saveAvatarConfig}
+                    >
+                        {savingAvatar ? (
+                            <>
+                                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+                                <Text style={styles.saveButtonText}>Saving...</Text>
+                            </>
+                        ) : (
+                            <>
+                                <Ionicons name="checkmark" size={20} color="#fff" />
+                                <Text style={styles.saveButtonText}>Save Avatar</Text>
+                            </>
+                        )}
+                    </View>
+                ) : (
+                    <TouchableOpacity
+                        style={[styles.saveButton, savingAvatar && styles.disabledButton]}
+                        onPress={saveAvatarConfig}
+                        disabled={savingAvatar}
+                        activeOpacity={0.8}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        {savingAvatar ? (
+                            <>
+                                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+                                <Text style={styles.saveButtonText}>Saving...</Text>
+                            </>
+                        ) : (
+                            <>
+                                <Ionicons name="checkmark" size={20} color="#fff" />
+                                <Text style={styles.saveButtonText}>Save Avatar</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                )}
             </View>
         </SafeAreaView>
     );
@@ -545,6 +729,20 @@ const styles = StyleSheet.create({
         color: '#3498db',
         marginTop: 5,
         fontWeight: '500',
+    },
+    loadingContainer: {
+        backgroundColor: '#f8f9fa',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        backgroundColor: 'rgba(248, 249, 250, 0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
     },
     tabContainer: {
         flexDirection: 'row',
@@ -609,6 +807,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 3,
         borderColor: 'transparent',
+        // Android performance optimizations
+        ...(Platform.OS === 'android' && {
+            elevation: 0,
+            shadowColor: 'transparent',
+            renderToHardwareTextureAndroid: true,
+            shouldRasterizeIOS: false,
+            needsOffscreenAlphaCompositing: false,
+        }),
     },
     colorOptionTablet: {
         width: 60,
@@ -635,6 +841,14 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: 'transparent',
         minWidth: isTablet ? 120 : 80,
+        // Android performance optimizations
+        ...(Platform.OS === 'android' && {
+            elevation: 0,
+            shadowColor: 'transparent',
+            renderToHardwareTextureAndroid: true,
+            shouldRasterizeIOS: false,
+            needsOffscreenAlphaCompositing: false,
+        }),
     },
     featureButtonTablet: {
         borderRadius: 16,

@@ -36,6 +36,7 @@ export class AchievementService {
     private static cache: Map<string, { data: any; timestamp: number; expiresIn: number }> =
         new Map();
     private static processingUsers: Set<string> = new Set(); // Track users currently being processed
+    private static lastCheckTime: Map<string, number> = new Map(); // Track last check time per user
 
     // Cache helper methods
     private static getFromCache<T>(key: string): T | null {
@@ -280,6 +281,14 @@ export class AchievementService {
             if (this.processingUsers.has(userId)) {
                 return [];
             }
+
+            // Prevent frequent checks for the same user (max once per 30 seconds)
+            const lastCheck = this.lastCheckTime.get(userId) || 0;
+            const now = Date.now();
+            if (now - lastCheck < 30000) { // 30 seconds
+                return [];
+            }
+            this.lastCheckTime.set(userId, now);
 
             // Track this operation for debugging
             if (!debugUtils.trackAchievementCheck(userId)) {

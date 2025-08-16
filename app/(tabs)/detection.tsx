@@ -27,6 +27,7 @@ import {
   Pressable,
   Platform
 } from 'react-native';
+import { normalizeFont, scale } from '../../utils/normalize';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Entypo from '@expo/vector-icons/Entypo';
 import { Ionicons } from '@expo/vector-icons';
@@ -1153,27 +1154,6 @@ export default function DetectionScreen() {
         languageName={getCurrentLanguageName()}
       />
       
-      {/* Debug: Camera Library Toggle (only in development builds) */}
-      {__DEV__ && VisionCamera && Platform.OS === 'android' && (
-        <View style={styles.debugContainer}>
-          <TouchableOpacity 
-            style={[styles.debugButton, useVisionCamera && styles.debugButtonActive]}
-            onPress={() => {
-              setUseVisionCamera(!useVisionCamera);
-              setIsCameraReady(false);
-              Alert.alert(
-                'Camera Switched', 
-                useVisionCamera ? 'Switched to Expo Camera' : 'Switched to VisionCamera - should be more reliable!'
-              );
-            }}
-          >
-            <Text style={styles.debugButtonText}>
-              {useVisionCamera ? '📷 Expo' : '🎯 Vision'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      
       {/* Retake Photo Button - Show when photo exists */}
       {photo && (
         <View style={styles.retakeButtonContainer}>
@@ -1395,32 +1375,32 @@ const styles = StyleSheet.create({
   },
   permissionCard: {
     backgroundColor: 'white',
-    padding: 30,
-    borderRadius: 20,
+    padding: scale(30),
+    borderRadius: scale(20),
     alignItems: 'center',
-    margin: 20,
+    margin: scale(20),
   },
   permissionTitle: {
-    fontSize: 20,
+    fontSize: normalizeFont(20),
     fontWeight: 'bold',
     color: '#074173',
-    marginBottom: 15,
+    marginBottom: scale(15),
   },
   permissionText: {
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     color: '#666',
     textAlign: 'center',
-    marginBottom: 25,
+    marginBottom: scale(25),
   },
   grantButton: {
     backgroundColor: '#1679AB',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
+    paddingHorizontal: scale(30),
+    paddingVertical: scale(15),
+    borderRadius: scale(25),
   },
   grantButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     fontWeight: '600',
   },
   resultsContainer: {
@@ -1428,28 +1408,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa'
   },
   resultsHeader: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    paddingHorizontal: scale(20),
+    marginBottom: scale(20),
   },
   resultsTitle: {
-    paddingVertical: 10,
-    fontSize: 20,
+    paddingVertical: scale(10),
+    fontSize: normalizeFont(20),
     fontWeight: 'bold',
     color: 'black',
     textAlign: 'center',
   },
   resultsSubtitle: {
-    fontSize: 12,
+    fontSize: normalizeFont(12),
     color: '#7f8c8d',
     textAlign: 'center',
-    marginTop: -5,
+    marginTop: scale(-5),
   },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 10,
-    marginHorizontal: 20,
-    gap: 10,
+    marginTop: scale(10),
+    marginHorizontal: scale(20),
+    gap: scale(10),
   },
   saveButton: {
     flex: 1.3,
@@ -1457,18 +1437,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 15,
-    borderRadius: 25,
+    paddingVertical: scale(15),
+    borderRadius: scale(25),
     elevation: 3,
   },
   saveButtonIcon: {
-    fontSize: 20,
-    marginRight: 8,
+    fontSize: normalizeFont(20),
+    marginRight: scale(8),
   },
   saveButtonText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: normalizeFont(16),
   },
   retakeButton: {
     flex: 1.05,
@@ -1476,54 +1456,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 15,
-    borderRadius: 25,
+    paddingVertical: scale(15),
+    borderRadius: scale(25),
     elevation: 3,
   },
   retakeButtonIcon: {
-    fontSize: 20,
-    marginRight: 8,
+    fontSize: normalizeFont(20),
+    marginRight: scale(8),
   },
   retakeButtonText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: normalizeFont(16),
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: scale(20),
   },
   modalContent: {
     backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: scale(20),
+    padding: scale(20),
     width: '100%',
-    maxWidth: 400,
+    maxWidth: scale(400),
     maxHeight: '70%',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: normalizeFont(20),
     fontWeight: 'bold',
     color: '#2c3e50',
-    marginBottom: 20,
+    marginBottom: scale(20),
     textAlign: 'center',
   },
   modalSearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginBottom: 15,
+    paddingHorizontal: scale(15),
+    paddingVertical: scale(10),
+    borderRadius: scale(10),
+    marginBottom: scale(15),
   },
   modalSearchInput: {
     flex: 1,
-    marginLeft: 10,
-    fontSize: 16,
+    marginLeft: scale(10),
+    fontSize: normalizeFont(16),
     color: '#2c3e50',
   },
   languageList: {
@@ -1533,8 +1513,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 10,
+    paddingVertical: scale(15),
+    paddingHorizontal: scale(10),
     borderBottomWidth: 1,
     borderBottomColor: '#ecf0f1',
   },
@@ -1542,7 +1522,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8f4f8',
   },
   languageOptionText: {
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     color: '#2c3e50',
   },
   languageOptionTextActive: {
@@ -1550,59 +1530,59 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   languageOptionCheck: {
-    fontSize: 18,
+    fontSize: normalizeFont(18),
     color: '#3498db',
     fontWeight: 'bold',
   },
   noResultsContainer: {
-    padding: 40,
+    padding: scale(40),
     alignItems: 'center',
   },
   noResultsTitle: {
-    fontSize: 20,
+    fontSize: normalizeFont(20),
     fontWeight: 'bold',
     color: '#2c3e50',
-    marginBottom: 10,
+    marginBottom: scale(10),
   },
   noResultsSubtitle: {
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     color: '#95a5a6',
-    marginBottom: 20,
+    marginBottom: scale(20),
   },
   noResultsText: {
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     color: '#95a5a6',
-    marginBottom: 20,
+    marginBottom: scale(20),
   },
   retryButton: {
     backgroundColor: '#3498db',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
+    paddingHorizontal: scale(30),
+    paddingVertical: scale(15),
+    borderRadius: scale(25),
   },
   retryButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     fontWeight: '600',
   },
   manualInput: {
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    marginBottom: 20,
+    borderRadius: scale(10),
+    padding: scale(15),
+    fontSize: normalizeFont(16),
+    marginBottom: scale(20),
   },
   manualButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: scale(10),
   },
   manualCancelButton: {
     flex: 1,
     backgroundColor: '#95a5a6',
-    padding: 15,
-    borderRadius: 10,
+    padding: scale(15),
+    borderRadius: scale(10),
     alignItems: 'center',
   },
   manualCancelText: {
@@ -1612,8 +1592,8 @@ const styles = StyleSheet.create({
   manualAddButton: {
     flex: 1,
     backgroundColor: '#3498db',
-    padding: 15,
-    borderRadius: 10,
+    padding: scale(15),
+    borderRadius: scale(10),
     alignItems: 'center',
   },
   manualAddText: {
@@ -1670,41 +1650,41 @@ const styles = StyleSheet.create({
   },
 
   tipsContainer: {
-    padding: 20,
+    padding: scale(20),
     backgroundColor: '#f8f9fa',
-    borderRadius: 10,
-    marginBottom: 20,
+    borderRadius: scale(10),
+    marginBottom: scale(20),
   },
   tipItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: scale(10),
     borderBottomWidth: 1,
     borderBottomColor: '#ecf0f1',
   },
   tipText: {
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     color: '#2c3e50',
-    marginLeft: 10,
+    marginLeft: scale(10),
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
+    paddingHorizontal: scale(20),
+    paddingTop: scale(50),
+    paddingBottom: scale(20),
     backgroundColor: 'white',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderBottomLeftRadius: scale(20),
+    borderBottomRightRadius: scale(20),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: scale(2) },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowRadius: scale(3),
     elevation: 5,
   },
   title: {
-    fontSize: 32,
+    fontSize: normalizeFont(32),
     fontWeight: 'bold',
     color: '#2c3e50',
   },
@@ -1712,61 +1692,39 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    padding: scale(40),
   },
   authRequiredTitle: {
-    fontSize: 24,
+    fontSize: normalizeFont(24),
     fontWeight: 'bold',
     color: '#2c3e50',
-    marginTop: 20,
-    marginBottom: 10,
+    marginTop: scale(20),
+    marginBottom: scale(10),
   },
   authRequiredText: {
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     color: '#7f8c8d',
     textAlign: 'center',
-    marginBottom: 30,
-    lineHeight: 22,
+    marginBottom: scale(30),
+    lineHeight: normalizeFont(22),
   },
   authRequiredSubtext: {
-    fontSize: 14,
+    fontSize: normalizeFont(14),
     color: '#95a5a6',
     textAlign: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 20,
-    lineHeight: 20,
+    marginBottom: scale(20),
+    paddingHorizontal: scale(20),
+    lineHeight: normalizeFont(20),
   },
   continueButton: {
-    marginTop: 15,
-    paddingHorizontal: 30,
-    paddingVertical: 12,
+    marginTop: scale(15),
+    paddingHorizontal: scale(30),
+    paddingVertical: scale(12),
   },
   retakeButtonContainer: {
     position: 'absolute',
     bottom: 30,
     right: 20,
     zIndex: 15,
-  },
-  debugContainer: {
-    position: 'absolute',
-    top: 100,
-    right: 20,
-    zIndex: 20,
-  },
-  debugButton: {
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#fff',
-  },
-  debugButtonActive: {
-    backgroundColor: '#3498db',
-  },
-  debugButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  }
 });

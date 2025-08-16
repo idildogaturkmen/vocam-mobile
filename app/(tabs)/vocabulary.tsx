@@ -17,6 +17,7 @@ import {
     Pressable
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { scale, normalizeFont } from '../../utils/normalize';
 import { supabase } from '../../database/config';
 import VocabularyService, { VocabularyService as VocabularyServiceClass, SavedWord, setVocabularyUpdateCallback } from '../../src/services/VocabularyService';
 import { useCache, CacheKeys } from '../../src/services/CacheService';
@@ -570,7 +571,7 @@ export default function VocabularyScreen() {
                                 handleSpeech(word.translation, word.language);
                             }}
                         >
-                            <Ionicons name="volume-high" size={24} color="#3498db" />
+                            <Ionicons name="volume-high" size={scale(24)} color="#3498db" />
                         </TouchableOpacity>
                         
                         <View style={[styles.proficiencyContainer, { borderColor: proficiencyInfo.color }]}>
@@ -589,7 +590,7 @@ export default function VocabularyScreen() {
                                 <View style={styles.proficiencyIconRow}>
                                     <Ionicons 
                                         name={proficiencyInfo.icon as any} 
-                                        size={16} 
+                                        size={scale(16)} 
                                         color={proficiencyInfo.color} 
                                         style={{ zIndex: 2 }}
                                     />
@@ -606,7 +607,7 @@ export default function VocabularyScreen() {
                         <View style={styles.expandIndicator}>
                             <Ionicons 
                                 name={isExpanded ? "chevron-up" : "chevron-down"} 
-                                size={20} 
+                                size={scale(20)} 
                                 color="#7f8c8d" 
                             />
                         </View>
@@ -616,7 +617,7 @@ export default function VocabularyScreen() {
                 {/* Tap to expand hint */}
                 {!isExpanded && (
                     <View style={styles.tapHint}>
-                        <Text style={styles.tapHintText}><AntDesign name="upcircle" size={15} color="white" /> Tap to see example & more</Text>
+                        <Text style={styles.tapHintText}><AntDesign name="upcircle" size={scale(15)} color="white" /> Tap to see example & more</Text>
                     </View>
                 )}
 
@@ -626,7 +627,7 @@ export default function VocabularyScreen() {
                         {word.example && (
                             <View style={styles.exampleSection}>
                                 <View style={styles.exampleHeader}>
-                                    <Ionicons name="chatbubble-outline" size={18} color="#3498db" />
+                                    <Ionicons name="chatbubble-outline" size={scale(18)} color="#3498db" />
                                     <Text style={styles.exampleLabel}>Example Sentence</Text>
                                 </View>
                                 
@@ -638,7 +639,7 @@ export default function VocabularyScreen() {
                                         style={styles.playExampleButton}
                                         onPress={() => handleSpeech(word.example, word.language)}
                                     >
-                                        <Ionicons name="play-circle" size={20} color="#27ae60" />
+                                        <Ionicons name="play-circle" size={scale(20)} color="#27ae60" />
                                         <Text style={styles.playExampleText}>Play Example</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -657,7 +658,7 @@ export default function VocabularyScreen() {
                                     setViewMode('flashcard');
                                 }}
                             >
-                                <Ionicons name="school" size={18} color="white" />
+                                <Ionicons name="school" size={scale(18)} color="white" />
                                 <Text style={styles.practiceButtonText}>Learn</Text>
                             </TouchableOpacity>
                             
@@ -665,7 +666,7 @@ export default function VocabularyScreen() {
                                 style={styles.deleteButton}
                                 onPress={() => handleDelete(word)}
                             >
-                                <Ionicons name="trash-outline" size={18} color="#e74c3c" />
+                                <Ionicons name="trash-outline" size={scale(18)} color="#e74c3c" />
                                 <Text style={styles.deleteText}>Remove</Text>
                             </TouchableOpacity>
                         </View>
@@ -718,7 +719,7 @@ export default function VocabularyScreen() {
                                             handleSpeech(word.translation, word.language);
                                         }}
                                     >
-                                        <Ionicons name="volume-high" size={24} color="#3498db" />
+                                        <Ionicons name="volume-high" size={scale(24)} color="#3498db" />
                                     </TouchableOpacity>
                                 </View>
                                 <Text style={styles.flashcardLanguage}>{getLanguageName(word.language)}</Text>
@@ -749,7 +750,7 @@ export default function VocabularyScreen() {
                                                     handleSpeech(word.example || word.translation, word.language);
                                                 }}
                                             >
-                                                <Ionicons name="volume-high" size={20} color="#3498db" />
+                                                <Ionicons name="volume-high" size={scale(20)} color="#3498db" />
                                             </TouchableOpacity>
                                         </View>
                                     </View>
@@ -764,7 +765,7 @@ export default function VocabularyScreen() {
                         style={styles.flashcardButton}
                         onPress={previousFlashcard}
                     >
-                        <Ionicons name="arrow-back" size={24} color="white" />
+                        <Ionicons name="arrow-back" size={scale(24)} color="white" />
                         <Text style={styles.flashcardButtonText}>Previous</Text>
                     </TouchableOpacity>
                     
@@ -773,7 +774,7 @@ export default function VocabularyScreen() {
                         onPress={nextFlashcard}
                     >
                         <Text style={styles.flashcardButtonText}>Next</Text>
-                        <Ionicons name="arrow-forward" size={24} color="white" />
+                        <Ionicons name="arrow-forward" size={scale(24)} color="white" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -800,7 +801,7 @@ export default function VocabularyScreen() {
                 </View>
                 
                 <View style={styles.authRequiredContainer}>
-                    <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
+                    <Ionicons name="information-circle-outline" size={scale(64)} color="#f39c12" />
                     <Text style={styles.authRequiredTitle}>Login Required</Text>
                     <Text style={styles.authRequiredText}>
                         You're browsing without logging in. Your vocabulary won't be saved.
@@ -847,7 +848,7 @@ export default function VocabularyScreen() {
                     >
                         <MaterialCommunityIcons 
                             name="card-text" 
-                            size={20} 
+                            size={scale(20)*1.3} 
                             color={viewMode === 'cards' ? 'white' : '#3498db'} 
                         />
                     </TouchableOpacity>
@@ -857,7 +858,7 @@ export default function VocabularyScreen() {
                     >
                         <FontAwesome5 
                             name="layer-group" 
-                            size={16} 
+                            size={scale(16)*1.3} 
                             color={viewMode === 'flashcard' ? 'white' : '#3498db'} 
                         />
                     </TouchableOpacity>
@@ -867,7 +868,7 @@ export default function VocabularyScreen() {
             {/* Smart Search Bar */}
             <View style={styles.searchSection}>
                 <View style={styles.searchContainer}>
-                    <Ionicons name="search" size={20} color="#7f8c8d" />
+                    <Ionicons name="search" size={scale(20)} color="#7f8c8d" />
                     <TextInput
                         style={styles.searchInput}
                         placeholder="Search words, languages, or categories..."
@@ -885,7 +886,7 @@ export default function VocabularyScreen() {
                             setSearchQuery('');
                             setShowSearchSuggestions(false);
                         }}>
-                            <Ionicons name="close-circle" size={20} color="#7f8c8d" />
+                            <Ionicons name="close-circle" size={scale(20)} color="#7f8c8d" />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -912,20 +913,20 @@ export default function VocabularyScreen() {
                     style={[styles.filterChip, filterLanguage !== 'All' && styles.filterChipActive]}
                     onPress={() => setShowLanguageFilter(true)}
                 >
-                    <Ionicons name="language" size={18} color={filterLanguage !== 'All' ? "white" : "#3498db"} />
+                    <Ionicons name="language" size={scale(18)} color={filterLanguage !== 'All' ? "white" : "#3498db"} />
                     <Text style={[styles.filterChipText, filterLanguage !== 'All' && styles.filterChipTextActive]}>
                         {filterLanguage}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={filterLanguage !== 'All' ? "white" : "#3498db"} />
+                    <Ionicons name="chevron-down" size={scale(16)} color={filterLanguage !== 'All' ? "white" : "#3498db"} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
                     style={styles.filterChip}
                     onPress={() => setShowSortFilter(true)}
                 >
-                    <Ionicons name="funnel" size={18} color="#3498db" />
+                    <Ionicons name="funnel" size={scale(18)} color="#3498db" />
                     <Text style={styles.filterChipText}>Sort</Text>
-                    <Ionicons name="chevron-down" size={16} color="#3498db" />
+                    <Ionicons name="chevron-down" size={scale(16)} color="#3498db" />
                 </TouchableOpacity>
                 
                 {(searchQuery || filterLanguage !== 'All') && (
@@ -937,7 +938,7 @@ export default function VocabularyScreen() {
                             setShowSearchSuggestions(false);
                         }}
                     >
-                        <Ionicons name="close" size={18} color="#e74c3c" />
+                        <Ionicons name="close" size={scale(18)} color="#e74c3c" />
                         <Text style={styles.clearFiltersText}>Clear</Text>
                     </TouchableOpacity>
                 )}
@@ -1017,7 +1018,7 @@ export default function VocabularyScreen() {
                                 
                                 {/* Language Search Bar */}
                                 <View style={styles.modalSearchContainer}>
-                                    <Ionicons name="search" size={20} color="#7f8c8d" />
+                                    <Ionicons name="search" size={scale(20)} color="#7f8c8d" />
                                     <TextInput
                                         style={styles.modalSearchInput}
                                         placeholder="Search languages..."
@@ -1027,7 +1028,7 @@ export default function VocabularyScreen() {
                                     />
                                     {languageSearchQuery.length > 0 && (
                                         <TouchableOpacity onPress={() => setLanguageSearchQuery('')}>
-                                            <Ionicons name="close-circle" size={20} color="#7f8c8d" />
+                                            <Ionicons name="close-circle" size={scale(20)} color="#7f8c8d" />
                                         </TouchableOpacity>
                                     )}
                                 </View>
@@ -1054,7 +1055,7 @@ export default function VocabularyScreen() {
                                             filterLanguage === 'All' && styles.optionTextActive
                                         ]}>All Languages</Text>
                                         {filterLanguage === 'All' && (
-                                            <Ionicons name="checkmark" size={20} color="#3498db" />
+                                            <Ionicons name="checkmark" size={scale(20)} color="#3498db" />
                                         )}
                                     </TouchableOpacity>
                                     
@@ -1077,7 +1078,7 @@ export default function VocabularyScreen() {
                                                 filterLanguage === lang && styles.optionTextActive
                                             ]}>{lang}</Text>
                                             {filterLanguage === lang && (
-                                                <Ionicons name="checkmark" size={20} color="#3498db" />
+                                                <Ionicons name="checkmark" size={scale(20)} color="#3498db" />
                                             )}
                                         </TouchableOpacity>
                                     ))}
@@ -1136,14 +1137,14 @@ export default function VocabularyScreen() {
                                             }}
                                         >
                                             <View style={styles.optionLeft}>
-                                                <Ionicons name={option.icon as keyof typeof Ionicons.glyphMap} size={20} color={sortBy === option.value ? "#3498db" : "#7f8c8d"} />
+                                                <Ionicons name={option.icon as keyof typeof Ionicons.glyphMap} size={scale(20)} color={sortBy === option.value ? "#3498db" : "#7f8c8d"} />
                                                 <Text style={[
                                                     styles.optionText,
                                                     sortBy === option.value && styles.optionTextActive
                                                 ]}>{option.label}</Text>
                                             </View>
                                             {sortBy === option.value && (
-                                                <Ionicons name="checkmark" size={20} color="#3498db" />
+                                                <Ionicons name="checkmark" size={scale(20)} color="#3498db" />
                                             )}
                                         </TouchableOpacity>
                                     ))}
@@ -1169,121 +1170,121 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
     },
     loadingText: {
-        marginTop: 10,
-        fontSize: 16,
+        marginTop: scale(10),
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 50,
-        paddingBottom: 20,
+        paddingHorizontal: scale(20),
+        paddingTop: scale(50),
+        paddingBottom: scale(20),
         backgroundColor: 'white',
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
+        borderBottomLeftRadius: scale(20),
+        borderBottomRightRadius: scale(20),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 3,
+        shadowRadius: scale(3),
         elevation: 5,
     },
     title: {
-        fontSize: 32,
+        fontSize: normalizeFont(32),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginBottom: 5,
+        marginBottom: scale(5),
     },
     subtitle: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
     },
     viewModeToggle: {
         flexDirection: 'row',
         backgroundColor: '#f0f0f0',
-        borderRadius: 20,
-        padding: 4,
+        borderRadius: scale(20)*1.3,
+        padding: scale(4)*1.3,
     },
     viewModeButton: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 16,
+        paddingHorizontal: scale(12)*1.3,
+        paddingVertical: scale(8)*1.3,
+        borderRadius: scale(16)*1.3,
     },
     viewModeActive: {
         backgroundColor: '#3498db',
     },
     searchSection: {
-        paddingHorizontal: 20,
-        paddingTop: 15,
+        paddingHorizontal: scale(20),
+        paddingTop: scale(15),
         zIndex: 10,
     },
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'white',
-        paddingHorizontal: 15,
-        paddingVertical: 12,
-        borderRadius: 25,
+        paddingHorizontal: scale(15),
+        paddingVertical: scale(6),
+        borderRadius: scale(25),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 2,
+        shadowRadius: scale(3),
+        elevation: scale(2),
     },
     searchInput: {
         flex: 1,
-        marginLeft: 10,
-        fontSize: 16,
+        marginLeft: scale(10),
+        fontSize: normalizeFont(16),
         color: '#2c3e50',
     },
     suggestionsContainer: {
         position: 'absolute',
-        top: 60,
+        top: scale(60),
         left: 0,
         right: 0,
         backgroundColor: 'white',
-        borderRadius: 15,
-        marginHorizontal: 20,
+        borderRadius: scale(15),
+        marginHorizontal: scale(20),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: scale(4) },
         shadowOpacity: 0.1,
-        shadowRadius: 5,
+        shadowRadius: scale(5),
         elevation: 5,
     },
     suggestionItem: {
-        paddingHorizontal: 20,
-        paddingVertical: 15,
+        paddingHorizontal: scale(20),
+        paddingVertical: scale(15),
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
     },
     suggestionText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#2c3e50',
     },
     filterRow: {
         flexDirection: 'row',
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-        gap: 10,
+        paddingHorizontal: scale(20),
+        paddingVertical: scale(15),
+        gap: scale(10),
     },
     filterChip: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'white',
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        borderRadius: 25,
+        paddingHorizontal: scale(15),
+        paddingVertical: scale(10),
+        borderRadius: scale(25),
         borderWidth: 1,
         borderColor: '#ecf0f1',
-        gap: 8,
+        gap: scale(8),
     },
     filterChipActive: {
         backgroundColor: '#3498db',
         borderColor: '#3498db',
     },
     filterChipText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#3498db',
         fontWeight: '500',
     },
@@ -1294,13 +1295,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#fee',
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        borderRadius: 25,
-        gap: 6,
+        paddingHorizontal: scale(15),
+        paddingVertical: scale(10),
+        borderRadius: scale(25),
+        gap: scale(6),
     },
     clearFiltersText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#e74c3c',
         fontWeight: '500',
     },
@@ -1308,61 +1309,61 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     scrollContent: {
-        padding: 20,
-        paddingTop: 10,
+        padding: scale(20),
+        paddingTop: scale(10),
     },
     wordCard: {
         backgroundColor: 'white',
-        borderRadius: 16,
-        marginBottom: 16,
+        borderRadius: scale(16),
+        marginBottom: scale(16),
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowRadius: scale(8),
+        elevation: scale(4),
         overflow: 'hidden',
     },
     wordCardExpanded: {
-        borderWidth: 2,
+        borderWidth: scale(2),
         borderColor: '#3498db',
     },
     cardHeader: {
-        padding: 20,
+        padding: scale(20),
         flexDirection: 'row',
         justifyContent: 'space-between',
     },
     wordSection: {
         flex: 1,
-        marginRight: 15,
+        marginRight: scale(15),
     },
     wordRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 8,
+        marginBottom: scale(8),
     },
     originalWord: {
-        fontSize: 22,
+        fontSize: normalizeFont(22),
         fontWeight: 'bold',
         color: '#2c3e50',
         flex: 1,
     },
     categoryBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingHorizontal: scale(8),
+        paddingVertical: scale(4),
+        borderRadius: scale(12),
     },
     categoryText: {
         color: 'white',
-        fontSize: 10,
+        fontSize: normalizeFont(10),
         fontWeight: '600',
         textTransform: 'uppercase',
     },
     translatedWord: {
-        fontSize: 18,
+        fontSize: normalizeFont(18),
         color: '#3498db',
         fontWeight: '500',
-        marginBottom: 10,
+        marginBottom: scale(10),
     },
     metaRow: {
         flexDirection: 'row',
@@ -1371,67 +1372,67 @@ const styles = StyleSheet.create({
     },
     languageBadge: {
         backgroundColor: '#ecf0f1',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingHorizontal: scale(10),
+        paddingVertical: scale(4),
+        borderRadius: scale(12),
     },
     languageText: {
         color: '#7f8c8d',
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         fontWeight: '500',
     },
     dateText: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#95a5a6',
     },
     actionsSection: {
         alignItems: 'center',
-        gap: 12,
+        gap: scale(12),
     },
     speakerButton: {
         backgroundColor: '#ecf0f1',
-        padding: 12,
-        borderRadius: 50,
+        padding: scale(12),
+        borderRadius: scale(50),
     },
     proficiencyContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 12,
-        borderRadius: 12,
-        borderWidth: 2,
+        padding: scale(12),
+        borderRadius: scale(12),
+        borderWidth: scale(2),
         backgroundColor: '#f8f9fa',
-        width: 104,
-        height: 60,
+        width: scale(104),
+        height: scale(60),
         position: 'relative',
         overflow: 'hidden',
     },
     proficiencyFill: {
         position: 'absolute',
-        left: 0,
-        top: 0,
-        bottom: 0,
-        borderTopLeftRadius: 10,
-        borderBottomLeftRadius: 10,
+        left: scale(0),
+        top: scale(0),
+        bottom: scale(0),
+        borderTopLeftRadius: scale(10),
+        borderBottomLeftRadius: scale(10),
         opacity: 0.16,
         zIndex: 1,
     },
     proficiencyLabel: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: 'bold',
-        marginBottom: 2,
+        marginBottom: scale(2),
         zIndex: 2,
         textShadowColor: 'rgba(255, 255, 255, 0.8)',
         textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 2,
+        textShadowRadius: scale(2),
     },
     proficiencyLevel: {
-        fontSize: 10,
+        fontSize: normalizeFont(10),
         fontWeight: '600',
         textTransform: 'uppercase',
         zIndex: 2,
         textShadowColor: 'rgba(255, 255, 255, 0.8)',
         textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 2,
+        textShadowRadius: scale(2),
     },
     proficiencyContent: {
         alignItems: 'center',
@@ -1442,77 +1443,77 @@ const styles = StyleSheet.create({
     proficiencyIconRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        marginBottom: 2,
+        gap: scale(4),
+        marginBottom: scale(2),
     },
     expandIndicator: {
         backgroundColor: '#ecf0f1',
-        padding: 8,
-        borderRadius: 50,
+        padding: scale(8),
+        borderRadius: scale(50),
     },
     tapHint: {
         backgroundColor: '#27ae60',
-        paddingVertical: 8,
-        paddingHorizontal: 20,
+        paddingVertical: scale(8),
+        paddingHorizontal: scale(20),
         alignItems: 'center',
     },
     tapHintText: {
         color: 'white',
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '600',
     },
     expandedContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 20,
+        paddingHorizontal: scale(20),
+        paddingBottom: scale(20),
         borderTopWidth: 1,
         borderTopColor: '#ecf0f1',
     },
     exampleSection: {
-        marginBottom: 20,
+        marginBottom: scale(20),
     },
     exampleHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
-        gap: 8,
+        marginBottom: scale(10),
+        gap: scale(8),
     },
     exampleLabel: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
         color: '#3498db',
     },
     exampleContainer: {
         backgroundColor: '#f8f9fa',
-        padding: 15,
-        borderRadius: 12,
-        borderLeftWidth: 4,
+        padding: scale(15),
+        borderRadius: scale(12),
+        borderLeftWidth: scale(4),
         borderLeftColor: '#3498db',
     },
     exampleText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#2c3e50',
-        marginBottom: 5,
-        lineHeight: 22,
+        marginBottom: scale(5),
+        lineHeight: scale(22),
     },
     exampleTranslation: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#7f8c8d',
         fontStyle: 'italic',
-        marginBottom: 10,
+        marginBottom: scale(10),
     },
     playExampleButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: scale(8),
     },
     playExampleText: {
         color: '#27ae60',
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '500',
     },
     actionButtons: {
         flexDirection: 'row',
-        gap: 10,
+        gap: scale(10),
     },
     practiceButton: {
         flex: 1,
@@ -1520,13 +1521,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#27ae60',
-        paddingVertical: 12,
-        borderRadius: 10,
-        gap: 8,
+        paddingVertical: scale(12),
+        borderRadius: scale(10),
+        gap: scale(8),
     },
     practiceButtonText: {
         color: 'white',
         fontWeight: '600',
+        fontSize: normalizeFont(18),
     },
     deleteButton: {
         flex: 1,
@@ -1534,49 +1536,50 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#ecf0f1',
-        paddingVertical: 12,
-        borderRadius: 10,
-        gap: 8,
+        paddingVertical: scale(12),
+        borderRadius: scale(10),
+        gap: scale(8),
     },
     deleteText: {
         color: '#e74c3c',
         fontWeight: '600',
+        fontSize: normalizeFont(18)
     },
     // Flashcard Styles
     flashcardContainer: {
         flex: 1,
-        padding: 20,
+        padding: scale(20),
     },
     flashcardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: scale(20),
     },
     flashcardCounter: {
-        fontSize: 18,
+        fontSize: normalizeFont(18),
         color: '#7f8c8d',
         fontWeight: '600',
     },
     flashcardProficiency: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
+        paddingHorizontal: scale(12),
+        paddingVertical: scale(6),
+        borderRadius: scale(16),
     },
     flashcardProficiencyText: {
         color: 'white',
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '600',
     },
     flashcard: {
         flex: 1,
         backgroundColor: 'white',
-        borderRadius: 20,
-        marginBottom: 20,
+        borderRadius: scale(20),
+        marginBottom: scale(20),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: scale(4) },
         shadowOpacity: 0.15,
-        shadowRadius: 10,
+        shadowRadius: scale(10),
         elevation: 5,
         overflow: 'hidden',
     },
@@ -1587,45 +1590,45 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 30,
+        padding: scale(30),
     },
     flashcardMainContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         width: '100%',
-        marginBottom: 15,
+        marginBottom: scale(15),
     },
     flashcardWord: {
-        fontSize: 28,
+        fontSize: normalizeFont(28),
         fontWeight: 'bold',
         color: '#2c3e50',
         textAlign: 'center',
-        marginBottom: 20,
-        paddingHorizontal: 10,
+        marginBottom: scale(20),
+        paddingHorizontal: scale(10),
         width: '100%',
     },
     flashcardHint: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#95a5a6',
         fontStyle: 'italic',
     },
     flashcardTranslation: {
-        fontSize: 32,
+        fontSize: normalizeFont(32),
         fontWeight: 'bold',
         color: '#27ae60',
         textAlign: 'center',
     },
     flashcardLanguage: {
-        fontSize: 18,
+        fontSize: normalizeFont(18),
         color: '#7f8c8d',
-        marginBottom: 20,
+        marginBottom: scale(20),
     },
     flashcardExample: {
         backgroundColor: '#f8f9fa',
-        padding: 15,
-        borderRadius: 15,
-        marginTop: 20,
+        padding: scale(15),
+        borderRadius: scale(15),
+        marginTop: scale(20),
         width: '100%',
     },
     exampleContent: {
@@ -1634,39 +1637,39 @@ const styles = StyleSheet.create({
     },
     exampleTextContainer: {
         flex: 1,
-        marginRight: 10,
+        marginRight: scale(10),
     },
     flashcardExampleScroll: {
-        maxHeight: 170,
+        maxHeight: scale(170),
     },
     flashcardExampleText: {
-        fontSize: 15,
+        fontSize: normalizeFont(15),
         color: '#34495e',
-        marginBottom: 8,
-        lineHeight: 22,
+        marginBottom: scale(8),
+        lineHeight: scale(22),
     },
     flashcardExampleEn: {
-        fontSize: 13,
+        fontSize: normalizeFont(13),
         color: '#7f8c8d',
         fontStyle: 'italic',
-        lineHeight: 20,
+        lineHeight: scale(20),
     },
     exampleSpeaker: {
         backgroundColor: 'rgba(52, 152, 219, 0.1)',
-        padding: 8,
-        borderRadius: 50,
-        marginTop: 5,
+        padding: scale(8),
+        borderRadius: scale(50),
+        marginTop: scale(5),
     },
     flashcardSpeaker: {
-        marginTop: 20,
+        marginTop: scale(20),
         backgroundColor: 'rgba(52, 152, 219, 0.2)',
-        padding: 10,
-        borderRadius: 50,
+        padding: scale(10),
+        borderRadius: scale(50),
         flex: 1
     },
     flashcardControls: {
         flexDirection: 'row',
-        gap: 15
+        gap: scale(15)
     },
     flashcardButton: {
         flex: 1,
@@ -1674,39 +1677,39 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#7f8c8d',
-        paddingVertical: 15,
-        borderRadius: 25,
-        gap: 10,
+        paddingVertical: scale(15),
+        borderRadius: scale(25),
+        gap: scale(10),
     },
     flashcardButtonPrimary: {
         backgroundColor: '#3498db',
     },
     flashcardButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
     },
     emptyState: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 100,
+        paddingVertical: scale(100),
     },
     emptyIcon: {
-        fontSize: 64,
-        marginBottom: 20,
+        fontSize: scale(64),
+        marginBottom: scale(20),
     },
     emptyTitle: {
-        fontSize: 24,
+        fontSize: normalizeFont(24),
         fontWeight: 'bold',
         color: '#7f8c8d',
-        marginBottom: 10,
+        marginBottom: scale(10),
     },
     emptyText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#95a5a6',
         textAlign: 'center',
-        paddingHorizontal: 40,
-        lineHeight: 22,
+        paddingHorizontal: scale(40),
+        lineHeight: scale(22),
     },
     modalOverlay: {
         flex: 1,
@@ -1714,44 +1717,44 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         backgroundColor: 'white',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: 20,
+        borderTopLeftRadius: scale(20),
+        borderTopRightRadius: scale(20),
+        padding: scale(20),
         maxHeight: '80%',
-        paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+        paddingBottom: Platform.OS === 'ios' ? scale(30) : scale(20),
     },
     modalTitle: {
-        fontSize: 20,
+        fontSize: normalizeFont(20),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginBottom: 20,
+        marginBottom: scale(20),
         textAlign: 'center',
     },
     modalSearchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#f8f9fa',
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        borderRadius: 10,
-        marginBottom: 15,
+        paddingHorizontal: scale(15),
+        paddingVertical: scale(2),
+        borderRadius: scale(25),
+        marginBottom: scale(10),
     },
     modalSearchInput: {
         flex: 1,
-        marginLeft: 10,
-        fontSize: 16,
+        marginLeft: scale(10),
+        fontSize: normalizeFont(16),
         color: '#2c3e50',
     },
     optionsList: {
-        maxHeight: 350,
-        marginTop: 10,
+        maxHeight: scale(350),
+        marginTop: scale(10),
     },
     optionItem: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 15,
-        paddingHorizontal: 10,
+        paddingVertical: scale(15),
+        paddingHorizontal: scale(10),
         borderBottomWidth: 1,
         borderBottomColor: '#ecf0f1',
     },
@@ -1761,10 +1764,10 @@ const styles = StyleSheet.create({
     optionLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: scale(12),
     },
     optionText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#2c3e50',
     },
     optionTextActive: {
@@ -1776,89 +1779,89 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         width: '100%',
-        gap: 20,
+        gap: scale(20),
     },
     flashcardSpeakerTop: {
         position: 'absolute',
         right: 0,
         top: '50%',
-        transform: [{ translateY: -20 }], // Half of button height
+        transform: [{ translateY: scale(-20) }], // Half of button height
         backgroundColor: 'rgba(52, 152, 219, 0.1)',
-        padding: 10,
-        borderRadius: 50,
+        padding: scale(10),
+        borderRadius: scale(50),
     },
     flashcardMeaning: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
-        marginBottom: 20,
+        marginBottom: scale(20),
         fontStyle: 'italic',
     },
     speakerLabel: {
         color: 'white',
-        fontSize: 14,
-        marginTop: 5,
+        fontSize: normalizeFont(14),
+        marginTop: scale(5),
     },
     flashcardWordContainer: {
         width: '100%',
         alignItems: 'center',
-        marginBottom: 15,
+        marginBottom: scale(15),
         position: 'relative',
     },
     noResultsContainer: {
-        padding: 40,
+        padding: scale(40),
         alignItems: 'center',
     },
     noResultsText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#95a5a6',
     },
     authRequiredContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 40,
+        padding: scale(40),
     },
     authRequiredTitle: {
-        fontSize: 24,
+        fontSize: normalizeFont(24),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginTop: 20,
-        marginBottom: 10,
+        marginTop: scale(20),
+        marginBottom: scale(10),
     },
     authRequiredText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
         textAlign: 'center',
-        marginBottom: 30,
-        lineHeight: 22,
+        marginBottom: scale(30),
+        lineHeight: scale(22),
     },
     loginButton: {
         backgroundColor: '#3498db',
-        paddingHorizontal: 30,
-        paddingVertical: 15,
-        borderRadius: 25,
+        paddingHorizontal: scale(30),
+        paddingVertical: scale(15),
+        borderRadius: scale(25),
     },
     loginButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
     },
     authRequiredSubtext: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#95a5a6',
         textAlign: 'center',
-        marginBottom: 20,
-        paddingHorizontal: 20,
-        lineHeight: 20,
+        marginBottom: scale(20),
+        paddingHorizontal: scale(20),
+        lineHeight: scale(20),
     },
     continueButton: {
-        marginTop: 15,
-        paddingHorizontal: 30,
-        paddingVertical: 12,
+        marginTop: scale(15),
+        paddingHorizontal: scale(30),
+        paddingVertical: scale(12),
     },
     continueButtonText: {
         color: '#3498db',
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '500',
     },
     keyboardAvoidingView: {

@@ -10,6 +10,7 @@ import Entypo from '@expo/vector-icons/Entypo';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { normalizeFont } from '@/utils/normalize';
 
 export default function CameraControls({
   facing,
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: normalizeFont(14),
     fontWeight: '500',
   },
 });

@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import { Platform, Image } from 'react-native';
+import { scale } from '../../utils/normalize';
 import Constants from 'expo-constants';
 import { manipulateAsync } from 'expo-image-manipulator';
 
@@ -129,7 +130,7 @@ class ObjectDetectionService {
       const { width, height } = imageInfo;
       
       // OPTIMIZATION: More aggressive size limits for faster processing
-      if (width <= maxDimension && height <= maxDimension) {
+  if (width <= maxDimension && height <= maxDimension) {
         // Still compress even if no resize needed
         const resizedImage = await manipulateAsync(
           imageUri,

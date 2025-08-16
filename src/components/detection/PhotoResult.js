@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   ActivityIndicator
 } from 'react-native';
+import { scale, normalizeFont } from '../../../utils/normalize';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Rect as SvgRect, Text as SvgText, Polyline, Circle } from 'react-native-svg';
@@ -139,47 +140,39 @@ export default function PhotoResult({
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Detection Results</Text>
-          <TouchableOpacity 
-            style={styles.languageButton} 
-            onPress={onLanguagePress}
-          >
+          <Text style={styles.headerTitle}>{'Detection Results'}</Text>
+          <TouchableOpacity style={styles.languageButton} onPress={onLanguagePress}>
             <Text style={styles.languageButtonText}>{languageName}</Text>
           </TouchableOpacity>
         </View>
       </View>
-
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Image Container */}
         <View style={{
           width: imageLayout.containerWidth,
           height: imageLayout.containerHeight,
           backgroundColor: '#f8f9fa',
-          alignSelf: 'center'
+          alignSelf: 'center',
         }}>
-          <Image 
-            source={{ uri: photoUri }} 
+          <Image
+            source={{ uri: photoUri }}
             style={{
               width: imageLayout.containerWidth,
-              height: imageLayout.containerHeight
+              height: imageLayout.containerHeight,
+              borderRadius: scale(12),
             }}
             resizeMode="contain"
           />
-          {/* SVG Boxes Overlay */}
           {!isProcessing && detections.length > 0 && renderSvgBoxes()}
           {isProcessing && (
             <View style={styles.processingOverlay}>
               <ActivityIndicator size="large" color="white" />
-              <Text style={styles.processingText}>Analyzing image</Text>
+              <Text style={styles.processingText}>{'Analyzing image'}</Text>
             </View>
           )}
           {!isProcessing && detections.length > 0 && (
             <View style={styles.scrollIndicator}>
-              <Text style={styles.scrollIndicatorText}>↓ Scroll for translations ↓</Text>
+              <Text style={styles.scrollIndicatorText}>{'↓ Scroll for translations ↓'}</Text>
             </View>
           )}
           {/* No Detection Blur Overlay */}
@@ -192,58 +185,47 @@ export default function PhotoResult({
                     <Ionicons name="camera-outline" size={48} color="#ffffff" />
                   </View>
                 </View>
-                
                 {/* Title Section */}
                 <View style={styles.titleContainer}>
-                  <Text style={styles.noDetectionTitle}>No Objects Found</Text>
-                  <Text style={styles.noDetectionSubtitle}>
-                    Let's try again with these helpful tips
-                  </Text>
+                  <Text style={styles.noDetectionTitle}>{'No Objects Found'}</Text>
+                  <Text style={styles.noDetectionSubtitle}>{`Let's try again with these helpful tips`}</Text>
                 </View>
-                
                 {/* Tips Cards */}
                 <View style={styles.tipsGrid}>
                   <View style={styles.tipCard}>
-                    <View style={[styles.tipIconContainer, { backgroundColor: '#FFF3CD' }]}>
+                    <View style={[styles.tipIconContainer, { backgroundColor: '#FFF9E5' }]}> 
                       <Ionicons name="sunny" size={24} color="#F39C12" />
                     </View>
-                    <Text style={styles.tipTitle}>Good Lighting</Text>
-                    <Text style={styles.tipDescription}>Use natural or bright light</Text>
+                    <Text style={styles.tipTitle}>{'Good Lighting'}</Text>
+                    <Text style={styles.tipDescription}>{'Use natural or bright light'}</Text>
                   </View>
-                  
                   <View style={styles.tipCard}>
-                    <View style={[styles.tipIconContainer, { backgroundColor: '#D1ECF1' }]}>
+                    <View style={[styles.tipIconContainer, { backgroundColor: '#D1ECF1' }]}> 
                       <Ionicons name="resize" size={24} color="#3498DB" />
                     </View>
-                    <Text style={styles.tipTitle}>Get Closer</Text>
-                    <Text style={styles.tipDescription}>Move object nearer to camera</Text>
+                    <Text style={styles.tipTitle}>{'Get Closer'}</Text>
+                    <Text style={styles.tipDescription}>{'Move object nearer to camera'}</Text>
                   </View>
-                  
                   <View style={styles.tipCard}>
-                    <View style={[styles.tipIconContainer, { backgroundColor: '#D4EDDA' }]}>
-                      <Ionicons name="layers" size={24} color="#27AE60" />
+                    <View style={[styles.tipIconContainer, { backgroundColor: '#F3E6E8' }]}> 
+                      <Ionicons name="layers-outline" size={24} color="#E67E22" />
                     </View>
-                    <Text style={styles.tipTitle}>Clear Background</Text>
-                    <Text style={styles.tipDescription}>Use simple, uncluttered backdrop</Text>
+                    <Text style={styles.tipTitle}>{'Clear Background'}</Text>
+                    <Text style={styles.tipDescription}>{'Use simple, uncluttered backdrop'}</Text>
                   </View>
-                  
                   <View style={styles.tipCard}>
-                    <View style={[styles.tipIconContainer, { backgroundColor: '#E2D9F3' }]}>
+                    <View style={[styles.tipIconContainer, { backgroundColor: '#E2D9F3' }]}> 
                       <Ionicons name="eye" size={24} color="#9B59B6" />
                     </View>
-                    <Text style={styles.tipTitle}>Clear View</Text>
-                    <Text style={styles.tipDescription}>Ensure object is fully visible</Text>
+                    <Text style={styles.tipTitle}>{'Clear View'}</Text>
+                    <Text style={styles.tipDescription}>{'Ensure object is fully visible'}</Text>
                   </View>
                 </View>
-
                 {/* Retry Button */}
-                <TouchableOpacity
-                  style={styles.modernRetryButton}
-                  onPress={onRetakePhoto}
-                >
+                <TouchableOpacity style={styles.retryButton} onPress={onRetakePhoto}>
                   <View style={styles.retryButtonContent}>
                     <Ionicons name="camera" size={22} color="white" />
-                    <Text style={styles.modernRetryButtonText}>Try Again</Text>
+                    <Text style={styles.modernRetryButtonText}>{'Try Again'}</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -256,6 +238,7 @@ export default function PhotoResult({
   );
 }
 
+// Styles follow here
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -266,18 +249,17 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 100,
     backgroundColor: 'white',
-    paddingTop: 50,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
+    paddingTop: scale(50),
+    paddingBottom: scale(15),
+    paddingHorizontal: scale(20),
+    borderBottomWidth: scale(1),
     borderBottomColor: '#ecf0f1',
     elevation: 5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: scale(2) },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowRadius: scale(3),
   },
   headerContent: {
     flexDirection: 'row',
@@ -285,27 +267,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: normalizeFont(24),
     fontWeight: 'bold',
     color: '#2c3e50',
   },
   languageButton: {
     backgroundColor: '#3498db',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: scale(15),
+    paddingVertical: scale(8),
+    borderRadius: scale(20),
   },
   languageButtonText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: normalizeFont(14),
     fontWeight: '600',
   },
   scrollView: {
     flex: 1,
-    marginTop: 95,
+    marginTop: scale(95),
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: scale(20),
   },
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -315,24 +297,24 @@ const styles = StyleSheet.create({
   },
   processingText: {
     color: 'white',
-    marginTop: 10,
-    fontSize: 16,
+    marginTop: scale(10),
+    fontSize: normalizeFont(16),
     fontWeight: '500',
   },
   scrollIndicator: {
     position: 'absolute',
-    bottom: 10,
+    bottom: scale(10),
     left: 0,
     right: 0,
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingVertical: 8,
-    marginHorizontal: 50,
-    borderRadius: 20,
+    paddingVertical: scale(8),
+    marginHorizontal: scale(50),
+    borderRadius: scale(20),
   },
   scrollIndicatorText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: normalizeFont(14),
     fontWeight: '600',
     textAlign: 'center',
   },
@@ -347,111 +329,111 @@ const styles = StyleSheet.create({
   },
   noDetectionContent: {
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: scale(24),
+    paddingVertical: scale(32),
     flex: 1,
     justifyContent: 'center',
   },
   iconContainer: {
-    marginTop: 40,
-    marginBottom: 15,
+    marginTop: scale(40),
+    marginBottom: scale(15),
   },
   iconGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: scale(80),
+    height: scale(80),
+    borderRadius: scale(40),
     backgroundColor: 'rgba(52, 152, 219, 0.2)',
-    borderWidth: 2,
+    borderWidth: scale(2),
     borderColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#3498db',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: scale(4) },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: scale(8),
     elevation: 8,
   },
   titleContainer: {
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: scale(15),
   },
   noDetectionTitle: {
-    fontSize: 28,
+    fontSize: normalizeFont(28),
     fontWeight: '700',
     color: '#ffffff',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: scale(8),
     textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    textShadowOffset: { width: 0, height: scale(2) },
+    textShadowRadius: scale(4),
   },
   noDetectionSubtitle: {
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: scale(22),
     fontWeight: '400',
     textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    textShadowOffset: { width: 0, height: scale(1) },
+    textShadowRadius: scale(2),
   },
   tipsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     width: '100%',
-    maxWidth: 340,
-    marginBottom: 10,
+    maxWidth: scale(340),
+    marginBottom: scale(10),
   },
   tipCard: {
     width: '48%',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: scale(16),
+    padding: scale(16),
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: scale(10),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: scale(4) },
     shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowRadius: scale(8),
     elevation: 6,
-    borderWidth: 1,
+    borderWidth: scale(1),
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   tipIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: scale(48),
+    height: scale(48),
+    borderRadius: scale(24),
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: scale(10),
   },
   tipTitle: {
-    fontSize: 14,
+    fontSize: normalizeFont(14),
     fontWeight: '600',
     color: '#2c3e50',
     textAlign: 'center',
-    marginBottom: 2,
+    marginBottom: scale(2),
   },
   tipDescription: {
-    fontSize: 12,
+    fontSize: normalizeFont(12),
     color: '#7f8c8d',
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: scale(16),
     fontWeight: '400',
   },
   modernRetryButton: {
     backgroundColor: '#3498db',
-    borderRadius: 28,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    borderRadius: scale(28),
+    paddingVertical: scale(16),
+    paddingHorizontal: scale(32),
     shadowColor: '#3498db',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: scale(6) },
     shadowOpacity: 0.4,
-    shadowRadius: 12,
+    shadowRadius: scale(12),
     elevation: 10,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: scale(2),
+    borderColor: 'rgba(116, 138, 245, 0.2)',
   },
   retryButtonContent: {
     flexDirection: 'row',
@@ -460,11 +442,11 @@ const styles = StyleSheet.create({
   },
   modernRetryButtonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: normalizeFont(18),
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: scale(8),
     textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    textShadowOffset: { width: 0, height: scale(1) },
+    textShadowRadius: scale(2),
   },
 });

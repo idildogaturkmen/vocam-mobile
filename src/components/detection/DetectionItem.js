@@ -8,6 +8,7 @@ import {
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { Ionicons } from '@expo/vector-icons';
+import { scale, normalizeFont } from '../../../utils/normalize';
 
 export default function DetectionItem({
   detection,
@@ -47,7 +48,7 @@ export default function DetectionItem({
           onPress={() => onToggleSelect(index)}
         >
           <Text style={styles.selectIcon}>
-            {isSelected ? <AntDesign name="checkcircle" size={20} color="white" /> : <Feather name="circle" size={20} color="red" />}
+            {isSelected ? <AntDesign name="checkcircle" size={14} color="white" /> : <Feather name="circle" size={14} color="red" />}
           </Text>
           <Text style={[
             styles.selectButtonText,
@@ -102,7 +103,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   detectionLabel: {
-    fontSize: 18,
+    fontSize: normalizeFont(18)*1.2,
     fontWeight: 'bold',
     color: '#2c3e50',
     textTransform: 'capitalize',
@@ -115,27 +116,27 @@ const styles = StyleSheet.create({
   },
   confidenceText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: normalizeFont(12),
     fontWeight: 'bold',
   },
   translationRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: scale(10),
   },
   translationTextContainer: {
     flex: 1,
-    marginRight: 10,
+    marginRight: scale(10),
   },
   translationLabel: {
-    fontSize: 20,
+    fontSize: normalizeFont(20)*1.2,
     color: '#27ae60',
     fontWeight: '600',
   },
   audioButton: {
-    padding: 8,
-    borderRadius: 20,
+    padding: scale(8),
+    borderRadius: scale(20),
     backgroundColor: '#ecf0f1',
   },
   selectButton: {
@@ -143,17 +144,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ecf0f1',
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 20,
-    marginTop: 10,
+    paddingVertical: scale(8),
+    paddingHorizontal: scale(15),
+    borderRadius: scale(20),
+    marginTop: scale(10),
   },
   selectButtonActive: {
     backgroundColor: '#3498db',
   },
   selectIcon: {
-    fontSize: 20,
-    marginRight: 5,
+    fontSize: normalizeFont(20),
+    marginRight: scale(5),
   },
   selectButtonText: {
     color: '#3498db',
@@ -163,42 +164,42 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   exampleContainer: {
-    marginTop: 15,
-    padding: 12,
+    marginTop: scale(15),
+    padding: scale(12),
     backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    borderLeftWidth: 3,
+    borderRadius: scale(8),
+    borderLeftWidth: scale(3),
     borderLeftColor: '#3498db',
   },
   exampleLabel: {
-    fontSize: 12,
+    fontSize: normalizeFont(12),
     color: '#7f8c8d',
     fontWeight: '600',
-    marginBottom: 5,
+    marginBottom: scale(5),
     textTransform: 'uppercase',
   },
   exampleTranslated: {
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     color: '#2c3e50',
     fontWeight: '600',
-    marginBottom: 4,
-    lineHeight: 22,
+    marginBottom: scale(4),
+    lineHeight: scale(22),
   },
   exampleEnglish: {
-    fontSize: 14,
+    fontSize: normalizeFont(14),
     color: '#7f8c8d',
-    marginBottom: 8,
+    marginBottom: scale(8),
     fontStyle: 'italic',
-    lineHeight: 20,
+    lineHeight: scale(20),
   },
   exampleAudioButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 5,
+    marginTop: scale(5),
   },
   exampleAudioText: {
     color: '#3498db',
-    marginLeft: 5,
-    fontSize: 14,
+    marginLeft: scale(5),
+    fontSize: normalizeFont(14),
   },
 });

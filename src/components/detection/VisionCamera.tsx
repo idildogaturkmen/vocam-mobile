@@ -1,5 +1,6 @@
 import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { View, StyleSheet, Platform, Alert } from 'react-native';
+import { scale } from '../../../utils/normalize';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 
 interface VisionCameraProps {
@@ -29,7 +30,6 @@ const VisionCamera = forwardRef<any, VisionCameraProps>(({ facing, isActive, onP
 
     try {
       setIsTakingPhoto(true);
-      console.log('📸 VisionCamera: Taking picture...');
       
       const photo = await camera.current.takePhoto({
         quality: Platform.OS === 'android' ? 80 : 70,
@@ -90,6 +90,8 @@ const VisionCamera = forwardRef<any, VisionCameraProps>(({ facing, isActive, onP
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: scale(0),
+    margin: scale(0),
   },
 });
 

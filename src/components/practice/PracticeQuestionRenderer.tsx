@@ -13,6 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { QuizQuestion } from '../../services/PracticeService';
 import SpeechService from '../../services/SpeechService';
+import { scale, normalizeFont } from '../../../utils/normalize';
 
 interface PracticeQuestionRendererProps {
     currentQuestion: QuizQuestion;
@@ -125,11 +126,11 @@ export default function PracticeQuestionRenderer({
                     activeOpacity={0.7}
                 >
                     <View style={styles.hintTitleContainer}>
-                        <FontAwesome name="key" size={16} color="#2980b9" />
+                        <FontAwesome name="key" size={scale(16)} color="#2980b9" />
                         <Text style={styles.hintTitle}>Hint</Text>
                     </View>
                     <Animated.View style={{ transform: [{ rotate: rotation }] }}>
-                        <Ionicons name="chevron-forward" size={20} color="#2980b9" />
+                        <Ionicons name="chevron-forward" size={scale(20)} color="#2980b9" />
                     </Animated.View>
                 </TouchableOpacity>
                 
@@ -150,7 +151,7 @@ export default function PracticeQuestionRenderer({
                                     handlePlayAudio(targetLanguageHint, currentQuestion.word.language);
                                 }}
                             >
-                                <Ionicons name="volume-medium" size={20} color="#2980b9" />
+                                <Ionicons name="volume-medium" size={scale(20)} color="#2980b9" />
                                 <Text style={styles.hintAudioText}>Listen to example</Text>
                             </TouchableOpacity>
                         )}
@@ -221,7 +222,7 @@ export default function PracticeQuestionRenderer({
                         >
                             <Ionicons 
                                 name={audioPlaying ? "volume-medium": "volume-medium"} 
-                                size={20} 
+                                size={scale(20)} 
                                 color="#3498db" 
                             />
                         </TouchableOpacity>
@@ -265,7 +266,7 @@ export default function PracticeQuestionRenderer({
                         >
                             <Ionicons 
                                 name={isRecording ? "stop" : "mic"} 
-                                size={48} 
+                                size={scale(48)} 
                                 color="white" 
                             />
                         </TouchableOpacity>
@@ -288,7 +289,7 @@ export default function PracticeQuestionRenderer({
                             disabled={audioLoading}
                         >
                             <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                                <Ionicons name="volume-high" size={25} color="#3498db" />
+                                <Ionicons name="volume-high" size={scale(25)} color="#3498db" />
                             </Animated.View>
                             <Text style={styles.playText}>Listen to correct pronunciation</Text>
                         </TouchableOpacity>
@@ -306,7 +307,7 @@ export default function PracticeQuestionRenderer({
                             >
                                 <Ionicons 
                                     name={isPlayingUserRecording ? "pause" : "play"} 
-                                    size={25} 
+                                    size={scale(25)} 
                                     color={isPlayingUserRecording ? "#27ae60" : "#27ae60"} 
                                 />
                                 <Text style={[
@@ -327,7 +328,7 @@ export default function PracticeQuestionRenderer({
                             <View style={styles.feedbackHeader}>
                                 <Ionicons 
                                     name={recordingResult.isCorrect ? "checkmark-circle" : "close-circle"} 
-                                    size={24} 
+                                    size={scale(24)} 
                                     color={recordingResult.isCorrect ? "#27ae60" : "#e74c3c"} 
                                 />
                                 <Text style={[
@@ -365,7 +366,7 @@ export default function PracticeQuestionRenderer({
                         disabled={audioLoading}
                     >
                         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                            <Ionicons name="volume-high" size={25} color="#3498db" />
+                            <Ionicons name="volume-high" size={scale(25)} color="#3498db" />
                         </Animated.View>
                         <Text style={styles.playText}>Play pronunciation</Text>
                     </TouchableOpacity>
@@ -423,7 +424,7 @@ export default function PracticeQuestionRenderer({
                                 handlePlayAudio(fullSentence, currentQuestion.word.language);
                             }}
                         >
-                            <Ionicons name="volume-high" size={24} color="#3498db" />
+                            <Ionicons name="volume-high" size={scale(24)} color="#3498db" />
                             <Text style={styles.contextAudioText}>Listen to complete sentence</Text>
                         </TouchableOpacity>
                     )}
@@ -475,7 +476,7 @@ export default function PracticeQuestionRenderer({
                         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
                             <Ionicons 
                                 name="volume-high" 
-                                size={48} 
+                                size={scale(48)} 
                                 color="white" 
                             />
                         </Animated.View>
@@ -569,7 +570,7 @@ export default function PracticeQuestionRenderer({
                                 <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
                                     <Ionicons 
                                         name="volume-medium" 
-                                        size={24} 
+                                        size={scale(24)} 
                                         color={selectedAnswer?.includes('__SKIPPED__') ? '#f39c12' : '#3498db'}
                                     />
                                 </Animated.View>
@@ -587,69 +588,69 @@ export default function PracticeQuestionRenderer({
 const styles = StyleSheet.create({
     questionContainer: {
         backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 20,
+        borderRadius: scale(16),
+        padding: scale(20),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 4,
     },
     typingQuestionContainer: {
         backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 24,
-        paddingBottom: 32,
+        borderRadius: scale(16),
+        padding: scale(24),
+        paddingBottom: scale(32),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 4,
-        minHeight: 300,
+        minHeight: scale(300),
     },
     questionText: {
-        fontSize: 18,
+        fontSize: normalizeFont(18),
         fontWeight: '600',
         color: '#2c3e50',
-        marginBottom: 16,
+        marginBottom: scale(16),
         textAlign: 'center',
-        lineHeight: 24,
+        lineHeight: normalizeFont(24),
     },
     hintContainer: {
-        marginBottom: 7,
+        marginBottom: scale(7),
     },
     hintHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: '#f0f8ff',
-        padding: 8,
-        borderRadius: 8,
+        padding: scale(8),
+        borderRadius: scale(8),
     },
     hintTitleContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: scale(10),
     },
     hintTitle: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '600',
         color: '#2980b9',
     },
     hintContent: {
         backgroundColor: '#f8fbff',
-        padding: 10,
-        borderRadius: 8,
-        marginTop: -1,
+        padding: scale(10),
+        borderRadius: scale(8),
+        marginTop: scale(-1),
     },
     hintText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#34495e',
         fontStyle: 'italic',
-        lineHeight: 20,
+        lineHeight: normalizeFont(20),
     },
     optionsContainer: {
-        gap: 4, // reduce gap for more compact look
+        gap: scale(4), // reduce gap for more compact look
         paddingHorizontal: 0, // ensure no extra horizontal padding
         paddingVertical: 0, // ensure no extra vertical padding
     },
@@ -657,10 +658,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 15, // less vertical padding
-        paddingHorizontal: 15, // less horizontal padding
-        borderRadius: 12,
-        borderWidth: 2,
+        paddingVertical: scale(15), // less vertical padding
+        paddingHorizontal: scale(15), // less horizontal padding
+        borderRadius: scale(12),
+        borderWidth: scale(2),
         borderColor: '#ecf0f1',
         backgroundColor: 'white',
     },
@@ -677,7 +678,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fadbd8',
     },
     optionText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#2c3e50',
         flex: 1,
     },
@@ -690,36 +691,36 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     optionSpeaker: {
-        padding: 4,
+        padding: scale(4),
     },
     playButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#ebf5fb',
-        padding: 10,
-        borderRadius: 15,
-        marginBottom: 20,
-        gap: 8,
+        padding: scale(10),
+        borderRadius: scale(15),
+        marginBottom: scale(20),
+        gap: scale(8),
     },
     playText: {
-        fontSize: 15,
+        fontSize: normalizeFont(15),
         color: '#3498db',
         fontWeight: '500',
     },
     bigPlayButton: {
         alignSelf: 'center',
         backgroundColor: '#3498db',
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+        width: scale(80),
+        height: scale(80),
+        borderRadius: scale(40),
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 20,
+        marginBottom: scale(20),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: scale(4) },
         shadowOpacity: 0.2,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 5,
     },
     bigPlayButtonActive: {
@@ -727,23 +728,23 @@ const styles = StyleSheet.create({
     },
     sentenceContainer: {
         backgroundColor: '#f8f9fa',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 20,
+        padding: scale(16),
+        borderRadius: scale(8),
+        marginBottom: scale(20),
     },
     sentenceText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#34495e',
-        lineHeight: 24,
+        lineHeight: normalizeFont(24),
         textAlign: 'center',
     },
     typingInput: {
-        borderWidth: 2,
+        borderWidth: scale(2),
         borderColor: '#ecf0f1',
-        borderRadius: 12,
-        padding: 16,
-        fontSize: 16,
-        marginBottom: 20,
+        borderRadius: scale(12),
+        padding: scale(16),
+        fontSize: normalizeFont(16),
+        marginBottom: scale(20),
         color: '#2c3e50',
     },
     correctInput: {
@@ -756,8 +757,8 @@ const styles = StyleSheet.create({
     },
     submitButton: {
         backgroundColor: '#3498db',
-        padding: 16,
-        borderRadius: 12,
+        padding: scale(16),
+        borderRadius: scale(12),
         alignItems: 'center',
     },
     disabledButton: {
@@ -765,63 +766,63 @@ const styles = StyleSheet.create({
     },
     submitButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
     },
     correctAnswerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#d5f4e6',
-        padding: 12,
-        borderRadius: 8,
-        marginTop: 16,
-        gap: 8,
+        padding: scale(12),
+        borderRadius: scale(8),
+        marginTop: scale(16),
+        gap: scale(8),
     },
     correctAnswerLabel: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#27ae60',
         fontWeight: '500',
     },
     correctAnswerText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#27ae60',
         fontWeight: '600',
         flex: 1,
     },
     recordingContainer: {
         alignItems: 'center',
-        marginVertical: 30,
+        marginVertical: scale(30),
     },
     bigRecordButton: {
         backgroundColor: '#e74c3c',
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+        width: scale(80),
+        height: scale(80),
+        borderRadius: scale(40),
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 16,
+        marginBottom: scale(16),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: scale(4) },
         shadowOpacity: 0.2,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 5,
     },
     recordingHint: {
-        fontSize: 15,
+        fontSize: normalizeFont(15),
         color: '#7f8c8d',
         textAlign: 'center',
     },
     recordingFeedback: {
         backgroundColor: '#f0f8ff',
-        padding: 16,
-        borderRadius: 8,
-        marginTop: 20,
+        padding: scale(16),
+        borderRadius: scale(8),
+        marginTop: scale(20),
     },
     recordingFeedbackText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#2980b9',
         textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: normalizeFont(20),
     },
     recordingActive: {
         backgroundColor: '#c0392b',
@@ -830,70 +831,70 @@ const styles = StyleSheet.create({
     correctFeedback: {
         backgroundColor: '#d5f4e6',
         borderColor: '#27ae60',
-        borderWidth: 1,
+        borderWidth: scale(1),
     },
     incorrectFeedback: {
         backgroundColor: '#fadbd8',
         borderColor: '#e74c3c',
-        borderWidth: 1,
+        borderWidth: scale(1),
     },
     feedbackHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginBottom: 8,
+        gap: scale(8),
+        marginBottom: scale(8),
     },
     feedbackTitle: {
-        fontSize: 18,
+        fontSize: normalizeFont(18),
         fontWeight: '600',
     },
     confidenceText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#7f8c8d',
-        marginBottom: 4,
+        marginBottom: scale(4),
     },
     hintAudioButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        marginTop: 8,
-        padding: 4,
+        gap: scale(6),
+        marginTop: scale(8),
+        padding: scale(4),
     },
     hintAudioText: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#2980b9',
         fontWeight: '500',
     },
     contextAudioButton: {
         position: 'absolute',
-        top: 8,
-        right: 8,
-        padding: 8,
+        top: scale(8),
+        right: scale(8),
+        padding: scale(8),
     },
     hintTranslation: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#7f8c8d',
         fontStyle: 'italic',
-        marginTop: 4,
+        marginTop: scale(4),
     },
     contextAudioButtonBelow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        padding: 12,
-        marginBottom: 16,
+        gap: scale(8),
+        padding: scale(12),
+        marginBottom: scale(16),
         backgroundColor: '#ebf5fb',
-        borderRadius: 8,
+        borderRadius: scale(8),
     },
     contextAudioText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#3498db',
         fontWeight: '500',
     },
     contextOptionsContainer: {
-        gap: 8,
-        marginTop: 18,
+        gap: scale(8),
+        marginTop: scale(18),
     },
     skippedOption: {
         borderColor: '#f39c12',
@@ -917,12 +918,12 @@ const styles = StyleSheet.create({
         color: '#f39c12',
     },
     audioButtonsContainer: {
-        gap: 12,
-        marginVertical: 8,
+        gap: scale(12),
+        marginVertical: scale(8),
     },
     replayButton: {
         backgroundColor: '#f8f9fa',
-        borderWidth: 1,
+        borderWidth: scale(1),
         borderColor: '#27ae60',
     },
     playingButton: {

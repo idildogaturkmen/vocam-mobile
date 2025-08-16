@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from 'react-native-elements';
 import { View, Alert } from 'react-native';
+import { scale, normalizeFont } from '../../utils/normalize';
 import { AccountService } from '../../src/services/AccountService';
 
 export default function DeleteAccountButton(): React.ReactElement {
@@ -29,11 +30,12 @@ export default function DeleteAccountButton(): React.ReactElement {
     };
 
     return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: scale(20) }}>
             <Button
                 title={isDeleting ? "Deleting..." : "Delete Account"}
                 onPress={handleDeleteAccount}
-                buttonStyle={{ backgroundColor: 'red', paddingHorizontal: 24 }}
+                buttonStyle={{ backgroundColor: 'red', paddingHorizontal: scale(24), paddingVertical: scale(12) }}
+                titleStyle={{ fontSize: normalizeFont(16) }}
                 disabled={isDeleting}
             />
         </View>

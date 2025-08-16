@@ -14,6 +14,7 @@ import {
     Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { scale, normalizeFont } from '../utils/normalize';
 import { useRouter, Stack } from 'expo-router';
 import { supabase } from '../database/config';
 import HumanAvatar, { 
@@ -60,7 +61,7 @@ const ColorOption = React.memo(({
                 onResponderGrant={handlePress}
             >
                 {isSelected && (
-                    <Ionicons name="checkmark" size={20} color={checkColor} />
+                    <Ionicons name="checkmark" size={scale(20)} color={checkColor} />
                 )}
             </View>
         );
@@ -79,7 +80,7 @@ const ColorOption = React.memo(({
             activeOpacity={0.8}
         >
             {isSelected && (
-                <Ionicons name="checkmark" size={20} color={checkColor} />
+                <Ionicons name="checkmark" size={scale(20)} color={checkColor} />
             )}
         </TouchableOpacity>
     );
@@ -351,6 +352,7 @@ export default function AvatarEditorScreen() {
         <SafeAreaView style={styles.container}>
             <Stack.Screen options={{ 
                 title: "Customize Avatar",
+                headerTitleStyle: { fontSize: normalizeFont(22) }, // Adjust 20 to your desired size
                 headerShown: true,
                 headerLeft: () => (
                     Platform.OS === 'android' ? (
@@ -372,7 +374,7 @@ export default function AvatarEditorScreen() {
                             }}
                             style={styles.headerButton}
                         >
-                            <Ionicons name="arrow-back" size={24} color="#2c3e50" />
+                            <Ionicons name="arrow-back" size={scale(24)} color="#2c3e50" />
                         </View>
                     ) : (
                         <TouchableOpacity 
@@ -387,7 +389,7 @@ export default function AvatarEditorScreen() {
                             activeOpacity={0.7}
                             hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                         >
-                            <Ionicons name="arrow-back" size={24} color="#2c3e50" />
+                            <Ionicons name="arrow-back" size={scale(24)} color="#2c3e50" />
                         </TouchableOpacity>
                     )
                 ),
@@ -631,7 +633,7 @@ export default function AvatarEditorScreen() {
                         onStartShouldSetResponder={() => true}
                         onResponderGrant={generateRandomAvatar}
                     >
-                        <Ionicons name="shuffle" size={20} color="#fff" />
+                        <Ionicons name="shuffle" size={scale(20)} color="#fff" />
                         <Text style={styles.randomButtonText}>Random</Text>
                     </View>
                 ) : (
@@ -641,7 +643,7 @@ export default function AvatarEditorScreen() {
                         hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                         activeOpacity={0.8}
                     >
-                        <Ionicons name="shuffle" size={20} color="#fff" />
+                        <Ionicons name="shuffle" size={scale(20)} color="#fff" />
                         <Text style={styles.randomButtonText}>Random</Text>
                     </TouchableOpacity>
                 )}
@@ -663,7 +665,7 @@ export default function AvatarEditorScreen() {
                             </>
                         ) : (
                             <>
-                                <Ionicons name="checkmark" size={20} color="#fff" />
+                                <Ionicons name="checkmark" size={scale(20)} color="#fff" />
                                 <Text style={styles.saveButtonText}>Save Avatar</Text>
                             </>
                         )}
@@ -683,7 +685,7 @@ export default function AvatarEditorScreen() {
                             </>
                         ) : (
                             <>
-                                <Ionicons name="checkmark" size={20} color="#fff" />
+                                <Ionicons name="checkmark" size={scale(20)} color="#fff" />
                                 <Text style={styles.saveButtonText}>Save Avatar</Text>
                             </>
                         )}
@@ -700,13 +702,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
     },
     headerButton: {
-        padding: 8,
+        padding: scale(8),
     },
     previewSection: {
         alignItems: 'center',
-        paddingVertical: isTablet ? 20 : 15,
+        paddingVertical: isTablet ? scale(20) : scale(15),
         backgroundColor: 'white',
-        marginBottom: 1,
+        marginBottom: scale(1),
         position: 'relative',
     },
     loadingOverlay: {
@@ -716,18 +718,18 @@ const styles = StyleSheet.create({
         transform: [{ translateX: -50 }, { translateY: -50 }],
         alignItems: 'center',
         backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        padding: 10,
-        borderRadius: 8,
+        padding: scale(10),
+        borderRadius: scale(8),
         elevation: 3,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
     },
     loadingText: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#3498db',
-        marginTop: 5,
+        marginTop: scale(5),
         fontWeight: '500',
     },
     loadingContainer: {
@@ -747,22 +749,22 @@ const styles = StyleSheet.create({
     tabContainer: {
         flexDirection: 'row',
         backgroundColor: 'white',
-        borderBottomWidth: 1,
+        borderBottomWidth: scale(1),
         borderBottomColor: '#f0f0f0',
-        paddingHorizontal: isTablet ? 40 : 20,
+        paddingHorizontal: isTablet ? scale(40) : scale(20),
         justifyContent: 'center',
     },
     tab: {
-        paddingHorizontal: isTablet ? 30 : 20,
-        paddingVertical: isTablet ? 15 : 12,
-        marginHorizontal: isTablet ? 10 : 5,
+        paddingHorizontal: isTablet ? scale(30) : scale(20),
+        paddingVertical: isTablet ? scale(15) : scale(12),
+        marginHorizontal: isTablet ? scale(10) : scale(5),
     },
     activeTab: {
-        borderBottomWidth: 3,
+        borderBottomWidth: scale(3),
         borderBottomColor: '#3498db',
     },
     tabText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#7f8c8d',
         fontWeight: '500',
     },
@@ -773,39 +775,39 @@ const styles = StyleSheet.create({
     optionsContainer: {
         flex: 1,
         backgroundColor: '#f8f9fa',
-        paddingHorizontal: isTablet ? 40 : 20,
-        paddingTop: isTablet ? 15 : 10,
+        paddingHorizontal: isTablet ? scale(40) : scale(20),
+        paddingTop: isTablet ? scale(15) : scale(10),
     },
     optionSection: {
-        paddingBottom: isTablet ? 20 : 15,
+        paddingBottom: isTablet ? scale(20) : scale(15),
     },
     optionSectionTitle: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
         color: '#2c3e50',
-        marginBottom: 15,
+        marginBottom: scale(15),
     },
     optionLabel: {
-        fontSize: isTablet ? 16 : 14,
+        fontSize: isTablet ? normalizeFont(16) : normalizeFont(14),
         fontWeight: '600',
         color: '#2c3e50',
-        marginBottom: isTablet ? 15 : 10,
-        marginTop: isTablet ? 20 : 15,
+        marginBottom: isTablet ? scale(15) : scale(10),
+        marginTop: isTablet ? scale(20) : scale(15),
     },
     colorGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        marginBottom: isTablet ? 20 : 10,
+        marginBottom: isTablet ? scale(20) : scale(10),
         justifyContent: isTablet ? 'flex-start' : 'flex-start',
     },
     colorOption: {
-        width: isTablet ? 60 : 45,
-        height: isTablet ? 60 : 45,
-        borderRadius: isTablet ? 30 : 22.5,
-        margin: isTablet ? 8 : 5,
+        width: isTablet ? scale(60) : scale(45),
+        height: isTablet ? scale(60) : scale(45),
+        borderRadius: isTablet ? scale(30) : scale(22.5),
+        margin: isTablet ? scale(8) : scale(5),
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 3,
+        borderWidth: scale(3),
         borderColor: 'transparent',
         // Android performance optimizations
         ...(Platform.OS === 'android' && {
@@ -817,10 +819,10 @@ const styles = StyleSheet.create({
         }),
     },
     colorOptionTablet: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        margin: 8,
+        width: scale(60),
+        height: scale(60),
+        borderRadius: scale(30),
+        margin: scale(8),
     },
     selectedColorOption: {
         borderColor: '#2c3e50',
@@ -828,19 +830,19 @@ const styles = StyleSheet.create({
     featureGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        marginBottom: isTablet ? 25 : 15,
+        marginBottom: isTablet ? scale(25) : scale(15),
         justifyContent: 'flex-start',
     },
     featureButton: {
         backgroundColor: '#f8f9fa',
-        borderRadius: isTablet ? 16 : 12,
-        paddingHorizontal: isTablet ? 16 : 12,
-        paddingVertical: isTablet ? 12 : 8,
-        marginRight: isTablet ? 12 : 8,
-        marginBottom: isTablet ? 12 : 8,
-        borderWidth: 2,
+        borderRadius: isTablet ? scale(16) : scale(12),
+        paddingHorizontal: isTablet ? scale(16) : scale(12),
+        paddingVertical: isTablet ? scale(12) : scale(8),
+        marginRight: isTablet ? scale(12) : scale(8),
+        marginBottom: isTablet ? scale(12) : scale(8),
+        borderWidth: scale(2),
         borderColor: 'transparent',
-        minWidth: isTablet ? 120 : 80,
+        minWidth: isTablet ? scale(120) : scale(80),
         // Android performance optimizations
         ...(Platform.OS === 'android' && {
             elevation: 0,
@@ -851,25 +853,25 @@ const styles = StyleSheet.create({
         }),
     },
     featureButtonTablet: {
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        marginRight: 12,
-        marginBottom: 12,
-        minWidth: 120,
+        borderRadius: scale(16),
+        paddingHorizontal: scale(16),
+        paddingVertical: scale(12),
+        marginRight: scale(12),
+        marginBottom: scale(12),
+        minWidth: scale(120),
     },
     selectedFeature: {
         backgroundColor: '#3498db',
         borderColor: '#2980b9',
     },
     featureText: {
-        fontSize: isTablet ? 15 : 13,
+        fontSize: isTablet ? normalizeFont(15) : normalizeFont(13),
         color: '#2c3e50',
         fontWeight: '500',
         textAlign: 'center',
     },
     featureTextTablet: {
-        fontSize: 15,
+        fontSize: normalizeFont(15),
     },
     selectedFeatureText: {
         color: 'white',
@@ -878,35 +880,37 @@ const styles = StyleSheet.create({
     actionButtons: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingHorizontal: isTablet ? 40 : 20,
-        paddingVertical: isTablet ? 30 : 20,
+        paddingHorizontal: isTablet ? scale(40) : scale(20),
+        paddingVertical: isTablet ? scale(30) : scale(20),
         backgroundColor: 'white',
-        borderTopWidth: 1,
+        borderTopWidth: scale(1),
         borderTopColor: '#f0f0f0',
+        paddingBottom: isTablet ? scale(60) : scale(50),
+        paddingTop: isTablet ? scale(20) : scale(15),
     },
     randomButton: {
         backgroundColor: '#9b59b6',
-        padding: isTablet ? 20 : 15,
-        borderRadius: isTablet ? 16 : 12,
+        padding: isTablet ? scale(20) : scale(15),
+        borderRadius: isTablet ? scale(16) : scale(12),
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         flex: 0.48,
     },
     randomButtonTablet: {
-        padding: 20,
-        borderRadius: 16,
+        padding: scale(20),
+        borderRadius: scale(16),
     },
     randomButtonText: {
         color: 'white',
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '600',
-        marginLeft: 6,
+        marginLeft: scale(6),
     },
     saveButton: {
         backgroundColor: '#27ae60',
-        padding: 15,
-        borderRadius: 12,
+        padding: scale(15),
+        borderRadius: scale(12),
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
@@ -917,8 +921,8 @@ const styles = StyleSheet.create({
     },
     saveButtonText: {
         color: 'white',
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '600',
-        marginLeft: 6,
+        marginLeft: scale(6),
     },
 });

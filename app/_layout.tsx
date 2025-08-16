@@ -81,8 +81,6 @@ export default function RootLayout() {
         const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!isMounted) return;
 
-            console.log('Auth state changed:', event, session?.user?.email);
-
             // Always update session and mark as initialized
             setSession(session);
             setAuthInitialized(true);
@@ -165,9 +163,6 @@ export default function RootLayout() {
             authListener.subscription?.unsubscribe();
         };
     }, []);
-
-    // Show splash screen for 2 seconds
-
 
     // Wait for auth to initialize
 

@@ -3,6 +3,7 @@ import Entypo from '@expo/vector-icons/Entypo';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { normalizeFont, scale } from '@/utils/normalize';
 
 export default function TabLayout() {
   return (
@@ -16,10 +17,10 @@ export default function TabLayout() {
           borderTopColor: '#e9ecef',
           height: 100,
           paddingBottom: 8,
-          paddingTop: 8,
+          paddingTop: scale(8),
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: normalizeFont(15),
           fontWeight: '500',
         },
       }}>
@@ -30,7 +31,7 @@ export default function TabLayout() {
         options={{
           title: 'Camera',
           tabBarIcon: ({ color }: { color: string }) => (
-            <Entypo name="camera" size={30} color={color} />
+            <Entypo name="camera" size={scale(30)*1.2} color={color} />
           ),
         }}
       />
@@ -41,7 +42,7 @@ export default function TabLayout() {
         options={{
           title: 'Vocabulary',
           tabBarIcon: ({ color }: { color: string }) => (
-            <MaterialCommunityIcons name="bookshelf" size={30} color={color} />
+            <MaterialCommunityIcons name="bookshelf" size={scale(30)*1.2} color={color} />
           ),
         }}
       />
@@ -52,7 +53,7 @@ export default function TabLayout() {
         options={{
           title: 'Practice',
           tabBarIcon: ({ color }: { color: string }) => (
-            <FontAwesome6 name="brain" size={30} color={color} />
+            <FontAwesome6 name="brain" size={scale(30)*1.2} color={color} />
           ),
         }}
       />
@@ -63,7 +64,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color }: { color: string }) => (
-            <Ionicons name="person-circle" size={30} color={color} />
+            <Ionicons name="person-circle" size={scale(30)*1.2} color={color} />
           ),
         }}
       />

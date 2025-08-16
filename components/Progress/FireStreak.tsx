@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import LottieView from 'lottie-react-native';
+import { scale, normalizeFont } from '../../utils/normalize';
 
 interface FireStreakProps {
     streak: number;
@@ -36,27 +37,27 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#ffffffff',
-        borderRadius: 20,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+        borderRadius: scale(20),
+        paddingHorizontal: scale(12),
+        paddingVertical: scale(6),
         shadowColor: '#ff6b35',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.3,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
         elevation: 6,
     },
     fireAnimation: {
-        width: 20,
-        height: 20,
-        marginRight: 6,
+        width: scale(20),
+        height: scale(20),
+        marginRight: scale(6),
     },
     lottie: {
-        width: 20,
-        height: 20,
+        width: scale(20),
+        height: scale(20),
     },
     streak: {
         color: '#ff6b35',
         fontWeight: 'bold',
-        fontSize: 14,
+        fontSize: normalizeFont(14),
     },
 });

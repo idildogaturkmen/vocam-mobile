@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     marginRight: scale(10),
   },
   translationLabel: {
-    fontSize: normalizeFont(20)*1.2,
+    fontSize: normalizeFont(19)*1.2,
     color: '#27ae60',
     fontWeight: '600',
   },

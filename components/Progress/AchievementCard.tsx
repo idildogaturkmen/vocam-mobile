@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { scale, normalizeFont } from '../../utils/normalize';
 
 export interface Achievement {
     id: string;
@@ -42,7 +43,7 @@ export default function AchievementCard({ achievement, onPress }: AchievementCar
             ]}>
                 <Ionicons 
                     name={achievement.icon_name as any}
-                    size={24}
+                    size={scale(24)}
                     color={isEarned ? achievement.icon_color : '#bdc3c7'}
                 />
             </View>
@@ -98,7 +99,7 @@ export default function AchievementCard({ achievement, onPress }: AchievementCar
             {/* Earned Badge */}
             {isEarned && (
                 <View style={styles.earnedBadge}>
-                    <Ionicons name="checkmark-circle" size={20} color="#27ae60" />
+                    <Ionicons name="checkmark-circle" size={scale(20)} color="#27ae60" />
                 </View>
             )}
         </TouchableOpacity>
@@ -108,33 +109,33 @@ export default function AchievementCard({ achievement, onPress }: AchievementCar
 const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 12,
+        padding: scale(16),
+        borderRadius: scale(12),
+        marginBottom: scale(12),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
         elevation: 3,
         position: 'relative',
     },
     earnedContainer: {
         backgroundColor: '#ffffff',
-        borderWidth: 2,
+        borderWidth: scale(2),
         borderColor: '#27ae60',
     },
     unEarnedContainer: {
         backgroundColor: '#f8f9fa',
-        borderWidth: 1,
+        borderWidth: scale(1),
         borderColor: '#ecf0f1',
     },
     iconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: scale(48),
+        height: scale(48),
+        borderRadius: scale(24),
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 16,
+        marginRight: scale(16),
     },
     unEarnedIconContainer: {
         backgroundColor: '#ecf0f1',
@@ -146,10 +147,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 4,
+        marginBottom: scale(4),
     },
     title: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
         flex: 1,
     },
@@ -160,20 +161,20 @@ const styles = StyleSheet.create({
         color: '#7f8c8d',
     },
     xpBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 8,
-        marginLeft: 8,
+        paddingHorizontal: scale(8),
+        paddingVertical: scale(2),
+        borderRadius: scale(8),
+        marginLeft: scale(8),
     },
     xpText: {
         color: 'white',
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         fontWeight: '600',
     },
     description: {
-        fontSize: 14,
-        marginBottom: 8,
-        lineHeight: 18,
+        fontSize: normalizeFont(14),
+        marginBottom: scale(8),
+        lineHeight: normalizeFont(18),
     },
     earnedDescription: {
         color: '#34495e',
@@ -184,39 +185,39 @@ const styles = StyleSheet.create({
     progressContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 4,
+        marginTop: scale(4),
     },
     progressBar: {
         flex: 1,
-        height: 4,
+        height: scale(4),
         backgroundColor: '#ecf0f1',
-        borderRadius: 2,
-        marginRight: 8,
+        borderRadius: scale(2),
+        marginRight: scale(8),
         overflow: 'hidden',
     },
     progressFill: {
         height: '100%',
-        borderRadius: 2,
+        borderRadius: scale(2),
     },
     progressText: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#7f8c8d',
         fontWeight: '500',
-        minWidth: 32,
+        minWidth: scale(32),
         textAlign: 'right',
     },
     achievedDate: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#27ae60',
-        marginTop: 4,
+        marginTop: scale(4),
         fontWeight: '500',
     },
     earnedBadge: {
         position: 'absolute',
-        top: -4,
-        right: -4,
+        top: scale(-4),
+        right: scale(-4),
         backgroundColor: 'white',
-        borderRadius: 12,
-        padding: 2,
+        borderRadius: scale(12),
+        padding: scale(2),
     },
 });

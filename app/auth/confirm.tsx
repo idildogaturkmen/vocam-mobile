@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { View, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { scale, normalizeFont } from '../../utils/normalize';
 import { supabase } from '../../database/config';
 import { writeUserData } from '../../database/crudOperations';
 import { UserProgressService } from '../../src/services/UserProgressService';
@@ -154,27 +155,27 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        padding: scale(20),
     },
     content: {
         alignItems: 'center',
-        maxWidth: 300,
+        maxWidth: scale(300),
     },
     title: {
-        fontSize: 24,
+        fontSize: normalizeFont(24),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginBottom: 20,
+        marginBottom: scale(20),
         textAlign: 'center',
     },
     status: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
         textAlign: 'center',
-        lineHeight: 24,
-        marginBottom: 30,
+        lineHeight: normalizeFont(24),
+        marginBottom: scale(30),
     },
     loader: {
-        marginTop: 20,
+        marginTop: scale(20),
     },
 });

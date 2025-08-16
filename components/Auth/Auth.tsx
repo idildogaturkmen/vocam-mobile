@@ -3,6 +3,7 @@ import { Alert, StyleSheet, TouchableOpacity, View, useColorScheme } from 'react
 import { Button, Input } from 'react-native-elements';
 import { createUser, login } from '@/database/login';
 import { Text } from 'react-native';
+import { scale, normalizeFont } from '../../utils/normalize';
 
 export default function Auth() {
     const colorScheme = useColorScheme();
@@ -68,7 +69,7 @@ export default function Auth() {
     };
 
     const getInputStyle = (hasError: boolean) => ({
-        borderWidth: hasError ? 1 : 0,
+        borderWidth: hasError ? scale(1) : 0,
         borderColor: hasError ? 'red' : (isDark ? '#555' : '#ccc'),
         color: isDark ? '#ffffff' : '#000000',
     });
@@ -108,16 +109,37 @@ export default function Auth() {
                 <View style={[styles.verticallySpaced, styles.mt20]}>
                     <Input
                         label="Username"
-                        labelStyle={{ color: isDark ? '#ffffff' : '#000000' }}
-                        leftIcon={{ type: 'font-awesome', name: 'user', color: isDark ? '#BDBDBD' : '#666666' }}
+                        labelStyle={{ 
+                            color: isDark ? '#ffffff' : '#000000',
+                            fontSize: normalizeFont(16),
+                            fontWeight: '600'
+                        }}
+                        leftIcon={{ 
+                            type: 'font-awesome', 
+                            name: 'user', 
+                            color: isDark ? '#BDBDBD' : '#666666',
+                            size: scale(18)
+                        }}
                         onChangeText={setUsername}
                         value={username}
                         placeholder="John Doe"
                         placeholderTextColor={isDark ? '#888888' : '#999999'}
-                        inputStyle={getInputStyle(errors.username)}
+                        inputStyle={{
+                            ...getInputStyle(errors.username),
+                            fontSize: normalizeFont(16),
+                            paddingHorizontal: scale(8),
+                            paddingVertical: scale(10)
+                        }}
+                        inputContainerStyle={{
+                            paddingHorizontal: scale(8),
+                            borderBottomWidth: scale(1)
+                        }}
                         autoCapitalize="words"
                         errorMessage={errors.username ? 'Username is required' : ''}
-                        errorStyle={{ color: 'red' }}
+                        errorStyle={{ 
+                            color: 'red',
+                            fontSize: normalizeFont(12)
+                        }}
                     />
                 </View>
             )}
@@ -126,16 +148,37 @@ export default function Auth() {
             <View style={[styles.verticallySpaced, activeTab === 'signin' && styles.mt20]}>
                 <Input
                     label="Email"
-                    labelStyle={{ color: isDark ? '#ffffff' : '#000000' }}
-                    leftIcon={{ type: 'font-awesome', name: 'envelope', color: isDark ? '#BDBDBD' : '#666666' }}
+                    labelStyle={{ 
+                        color: isDark ? '#ffffff' : '#000000',
+                        fontSize: normalizeFont(16),
+                        fontWeight: '600'
+                    }}
+                    leftIcon={{ 
+                        type: 'font-awesome', 
+                        name: 'envelope', 
+                        color: isDark ? '#BDBDBD' : '#666666',
+                        size: scale(18)
+                    }}
                     onChangeText={setEmail}
                     value={email}
                     placeholder="email@address.com"
                     placeholderTextColor={isDark ? '#888888' : '#999999'}
-                    inputStyle={getInputStyle(errors.email)}
+                    inputStyle={{
+                        ...getInputStyle(errors.email),
+                        fontSize: normalizeFont(16),
+                        paddingHorizontal: scale(8),
+                        paddingVertical: scale(10)
+                    }}
+                    inputContainerStyle={{
+                        paddingHorizontal: scale(8),
+                        borderBottomWidth: scale(1)
+                    }}
                     autoCapitalize="none"
                     errorMessage={errors.email ? 'Invalid email' : ''}
-                    errorStyle={{ color: 'red' }}
+                    errorStyle={{ 
+                        color: 'red',
+                        fontSize: normalizeFont(12)
+                    }}
                 />
             </View>
 
@@ -143,14 +186,32 @@ export default function Auth() {
             <View style={[styles.verticallySpaced]}>
                 <Input
                     label="Password"
-                    labelStyle={{ color: isDark ? '#ffffff' : '#000000' }}
-                    leftIcon={{ type: 'font-awesome', name: 'lock', color: isDark ? '#BDBDBD' : '#666666' }}
+                    labelStyle={{ 
+                        color: isDark ? '#ffffff' : '#000000',
+                        fontSize: normalizeFont(16),
+                        fontWeight: '600'
+                    }}
+                    leftIcon={{ 
+                        type: 'font-awesome', 
+                        name: 'lock', 
+                        color: isDark ? '#BDBDBD' : '#666666',
+                        size: scale(18)
+                    }}
                     onChangeText={setPassword}
                     value={password}
                     secureTextEntry
                     placeholder="Password"
                     placeholderTextColor={isDark ? '#888888' : '#999999'}
-                    inputStyle={getInputStyle(errors.password)}
+                    inputStyle={{
+                        ...getInputStyle(errors.password),
+                        fontSize: normalizeFont(16),
+                        paddingHorizontal: scale(8),
+                        paddingVertical: scale(10)
+                    }}
+                    inputContainerStyle={{
+                        paddingHorizontal: scale(8),
+                        borderBottomWidth: scale(1)
+                    }}
                     autoCapitalize="none"
                     errorMessage={
                         activeTab === 'signup'
@@ -163,7 +224,10 @@ export default function Auth() {
                                   : ''
                               : ''
                     }
-                    errorStyle={{ color: 'red' }}
+                    errorStyle={{ 
+                        color: 'red',
+                        fontSize: normalizeFont(12)
+                    }}
                 />
             </View>
 
@@ -175,7 +239,17 @@ export default function Auth() {
                     onPress={activeTab === 'signin' ? () => handleLogin() : () => handleSignup()}
                     buttonStyle={{ 
                         backgroundColor: isDark ? '#64B5F6' : '#007bff',
-                        borderRadius: 5 
+                        borderRadius: scale(8),
+                        paddingVertical: scale(15),
+                        paddingHorizontal: scale(20),
+                        marginHorizontal: scale(10)
+                    }}
+                    titleStyle={{ 
+                        fontSize: normalizeFont(18),
+                        fontWeight: '600'
+                    }}
+                    containerStyle={{
+                        marginTop: scale(10)
                     }}
                 />
             </View>
@@ -186,28 +260,28 @@ export default function Auth() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        marginTop: 40,
-        padding: 12,
+        marginTop: scale(40),
+        padding: scale(12),
     },
     verticallySpaced: {
-        paddingTop: 4,
-        paddingBottom: 4,
+        paddingTop: scale(4),
+        paddingBottom: scale(4),
     },
     mt20: {
-        marginTop: 20,
+        marginTop: scale(20),
     },
     tabContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginBottom: 20,
+        marginBottom: scale(20),
     },
     tabButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderBottomWidth: 2,
+        paddingVertical: scale(10),
+        paddingHorizontal: scale(20),
+        borderBottomWidth: scale(2),
         borderBottomColor: 'transparent',
     },
     tabText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
     },
 });

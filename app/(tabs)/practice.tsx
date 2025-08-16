@@ -12,6 +12,7 @@ import {
     Alert,
     RefreshControl
 } from 'react-native';
+import { scale, normalizeFont } from '../../utils/normalize';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { supabase } from '../../database/config';
@@ -21,7 +22,7 @@ import PracticeQuestionRenderer from '../../src/components/practice/PracticeQues
 import PracticeStartScreen from '../../src/components/practice/PracticeStartScreen';
 import RecordingService from '../../src/services/RecordingService';
 import AudioManager from '../../src/services/AudioManager';
-import { Audio } from 'expo-av';
+import { Audio } from 'expo-audio';
 import { useRouter } from 'expo-router';
 const useFocusEffect = require('@react-navigation/native').useFocusEffect;
 
@@ -571,7 +572,7 @@ export default function PracticeScreen() {
                     >
                         <View style={styles.resultsTitleContainer}>
                             <Text style={styles.resultsTitle}>Practice Complete!</Text>
-                            <MaterialIcons name="celebration" size={32} color="#f39c12" />
+                            <MaterialIcons name="celebration" size={scale(32)} color="#f39c12" />
                         </View>
                         
                         <View style={styles.scoreContainer}>
@@ -587,12 +588,12 @@ export default function PracticeScreen() {
 
                         <View style={styles.statsGrid}>
                             <View style={styles.statItem}>
-                                <Ionicons name="checkmark-circle" size={32} color="#27ae60" />
+                                <Ionicons name="checkmark-circle" size={scale(32)} color="#27ae60" />
                                 <Text style={styles.statValue}>{session.correctAnswers}</Text>
                                 <Text style={styles.statLabel}>Correct</Text>
                             </View>
                             <View style={styles.statItem}>
-                                <Ionicons name="close-circle" size={32} color="#e74c3c" />
+                                <Ionicons name="close-circle" size={scale(32)} color="#e74c3c" />
                                 <Text style={styles.statValue}>{session.totalQuestions - session.correctAnswers}</Text>
                                 <Text style={styles.statLabel}>Incorrect</Text>
                             </View>
@@ -620,7 +621,7 @@ export default function PracticeScreen() {
                     </View>
                 </View>
                 <View style={styles.authRequiredContainer}>
-                    <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
+                    <Ionicons name="information-circle-outline" size={scale(64)} color="#f39c12" />
                     <Text style={styles.authRequiredTitle}>Login Required</Text>
                     <Text style={styles.authRequiredText}>
                         You must be logged in to practice. Please log in to continue and unlock all features.
@@ -658,7 +659,7 @@ export default function PracticeScreen() {
                             loadInitialData();
                         }}
                     >
-                        <Ionicons name="refresh" size={24} color="#3498db" />
+                        <Ionicons name="refresh" size={scale(24)} color="#3498db" />
                     </TouchableOpacity>
                 </View>
 
@@ -701,7 +702,7 @@ export default function PracticeScreen() {
                     await SpeechService.stop();
                     setShowResults(true);
                 }}>
-                    <Ionicons name="close" size={28} color="#7f8c8d" />
+                    <Ionicons name="close" size={scale(28)} color="#7f8c8d" />
                 </TouchableOpacity>
             </View>
 
@@ -759,7 +760,7 @@ export default function PracticeScreen() {
                             <Text style={styles.nextButtonText}>
                                 {session.currentQuestion < session.totalQuestions - 1 ? 'Next Question' : 'Finish'}
                             </Text>
-                            <Ionicons name="arrow-forward" size={18} color="white" />
+                            <Ionicons name="arrow-forward" size={scale(18)} color="white" />
                         </TouchableOpacity>
                     </Animated.View>
                 )}
@@ -792,7 +793,7 @@ export default function PracticeScreen() {
                         }}
                     > 
                         <Text style={styles.skipQuestionButtonText}>Skip Question</Text>
-                        <Ionicons name="arrow-forward" size={18} color="white" />
+                        <Ionicons name="arrow-forward" size={scale(18)} color="white" />
                     </TouchableOpacity>
                 )}
             </ScrollView>
@@ -805,17 +806,17 @@ export default function PracticeScreen() {
                     animationType="fade"
                 >
                     <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' }}>
-                        <View style={{ backgroundColor: 'white', padding: 32, borderRadius: 16, alignItems: 'center' }}>
-                            <Animated.View style={{ marginBottom: 16, transform: [{
+                        <View style={{ backgroundColor: 'white', padding: scale(32), borderRadius: scale(16), alignItems: 'center' }}>
+                            <Animated.View style={{ marginBottom: scale(16), transform: [{
                                 rotate: spinnerAnim.interpolate({
                                     inputRange: [0, 1],
                                     outputRange: ['0deg', '360deg']
                                 })
                             }] }}>
-                                <Ionicons name="refresh" size={48} color="#3498db" />
+                                <Ionicons name="refresh" size={scale(48)} color="#3498db" />
                             </Animated.View>
-                            <Text style={{ fontSize: 18, color: '#3498db', fontWeight: '600', marginBottom: 4 }}>Processing...</Text>
-                            <Text style={{ fontSize: 14, color: '#7f8c8d', textAlign: 'center' }}>Please wait while we check your pronunciation.</Text>
+                            <Text style={{ fontSize: normalizeFont(18), color: '#3498db', fontWeight: '600', marginBottom: scale(4) }}>Processing...</Text>
+                            <Text style={{ fontSize: normalizeFont(14), color: '#7f8c8d', textAlign: 'center' }}>Please wait while we check your pronunciation.</Text>
                         </View>
                     </View>
                 </Modal>
@@ -835,39 +836,39 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 50,
-        paddingBottom: 20,
+        paddingHorizontal: scale(20),
+        paddingTop: scale(50),
+        paddingBottom: scale(20),
         backgroundColor: 'white',
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
+        borderBottomLeftRadius: scale(20),
+        borderBottomRightRadius: scale(20),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 3,
+        shadowRadius: scale(3),
         elevation: 5,
     },
     title: {
-        fontSize: 32,
+        fontSize: normalizeFont(32),
         fontWeight: 'bold',
         color: '#2c3e50',
     },
     subtitle: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
-        marginTop: 4,
+        marginTop: scale(4),
     },
     refreshButton: {
-        padding: 8,
-        borderRadius: 20,
+        padding: scale(8),
+        borderRadius: scale(20),
         backgroundColor: '#f0f8ff',
     },
     progressContainer: {
         position: 'absolute',
-        top: 87, // Position below the header
+        top: scale(87), // Position below the header
         left: 0,
         right: 0,
-        height: 10,
+        height: scale(10),
         backgroundColor: '#ffffffff',
         zIndex: 1000, // High z-index to stay on top
         elevation: 10, // For Android shadow/elevation
@@ -880,15 +881,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 50,
-        paddingBottom: 10,
+        paddingHorizontal: scale(20),
+        paddingTop: scale(50),
+        paddingBottom: scale(10),
         backgroundColor: 'white',
-        borderBottomWidth: 1,
+        borderBottomWidth: scale(1),
         borderBottomColor: '#ecf0f1',
     },
     questionCounter: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
         fontWeight: '500',
     },
@@ -896,37 +897,37 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     scrollContent: {
-        padding: 20,
-        paddingBottom: 100,
+        padding: scale(20),
+        paddingBottom: scale(100),
     },
     nextButton: {
         flexDirection: 'row',
         backgroundColor: '#27ae60',
-        padding: 13,
-        borderRadius: 15,
+        padding: scale(13),
+        borderRadius: scale(15),
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 16,
-        gap: 8,
+        marginTop: scale(16),
+        gap: scale(8),
     },
     nextButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
     },
     skipQuestionButton: {
         flexDirection: 'row',
         backgroundColor: '#f39c12',
-        padding: 13,
-        borderRadius: 15,
+        padding: scale(13),
+        borderRadius: scale(15),
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 16,
-        gap: 8,
+        marginTop: scale(16),
+        gap: scale(8),
     },
     skipQuestionButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
     },
     modalOverlay: {
@@ -937,45 +938,45 @@ const styles = StyleSheet.create({
     },
     resultsContainer: {
         backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 24,
+        borderRadius: scale(20),
+        padding: scale(24),
         width: width * 0.9,
         alignItems: 'center',
     },
     resultsTitle: {
-        fontSize: 28,
+        fontSize: normalizeFont(28),
         fontWeight: 'bold',
         color: '#2c3e50',
     },
     resultsTitleContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        marginBottom: 24,
+        gap: scale(10),
+        marginBottom: scale(24),
     },
     scoreContainer: {
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: scale(16),
     },
     scoreText: {
-        fontSize: 48,
+        fontSize: normalizeFont(48),
         fontWeight: 'bold',
         color: '#3498db',
     },
     accuracyText: {
-        fontSize: 20,
+        fontSize: normalizeFont(20),
         color: '#7f8c8d',
-        marginTop: 8,
+        marginTop: scale(8),
     },
     xpEarned: {
         backgroundColor: '#f39c12',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 20,
-        marginBottom: 24,
+        paddingHorizontal: scale(24),
+        paddingVertical: scale(12),
+        borderRadius: scale(20),
+        marginBottom: scale(24),
     },
     xpText: {
-        fontSize: 24,
+        fontSize: normalizeFont(24),
         fontWeight: 'bold',
         color: 'white',
     },
@@ -983,102 +984,102 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-around',
         width: '100%',
-        marginBottom: 24,
+        marginBottom: scale(24),
     },
     statItem: {
         alignItems: 'center',
     },
     statValue: {
-        fontSize: 24,
+        fontSize: normalizeFont(24),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginTop: 8,
+        marginTop: scale(8),
     },
     statLabel: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#7f8c8d',
-        marginTop: 4,
+        marginTop: scale(4),
     },
     continueButton: {
-        marginTop: 15,
-        paddingHorizontal: 30,
-        paddingVertical: 12,
+        marginTop: scale(15),
+        paddingHorizontal: scale(30),
+        paddingVertical: scale(12),
     },
     continueButtonText: {
         color: 'white',
-        fontSize: 20,
+        fontSize: normalizeFont(20),
         fontWeight: '600',
     },
     errorContainer: {
         backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 24,
+        borderRadius: scale(16),
+        padding: scale(24),
         alignItems: 'center',
     },
     errorText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#e74c3c',
-        marginBottom: 16,
+        marginBottom: scale(16),
     },
     skipButton: {
         backgroundColor: '#3498db',
-        padding: 12,
-        borderRadius: 8,
+        padding: scale(12),
+        borderRadius: scale(8),
     },
     skipButtonText: {
         color: 'white',
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '600',
     },
     authRequiredContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 40,
+        padding: scale(40),
     },
     authRequiredTitle: {
-        fontSize: 24,
+        fontSize: normalizeFont(24),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginTop: 20,
-        marginBottom: 10,
+        marginTop: scale(20),
+        marginBottom: scale(10),
     },
     authRequiredText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
         textAlign: 'center',
-        marginBottom: 30,
-        lineHeight: 22,
+        marginBottom: scale(30),
+        lineHeight: normalizeFont(22),
     },
     loginButton: {
         backgroundColor: '#3498db',
-        paddingHorizontal: 30,
-        paddingVertical: 15,
-        borderRadius: 25,
+        paddingHorizontal: scale(30),
+        paddingVertical: scale(15),
+        borderRadius: scale(25),
     },
     loginButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
     },
     authRequiredSubtext: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#95a5a6',
         textAlign: 'center',
-        marginBottom: 20,
-        paddingHorizontal: 20,
-        lineHeight: 20,
+        marginBottom: scale(20),
+        paddingHorizontal: scale(20),
+        lineHeight: normalizeFont(20),
     },
     authCard: {
         backgroundColor: 'white',
-        padding: 40,
-        borderRadius: 20,
+        padding: scale(40),
+        borderRadius: scale(20),
         alignItems: 'center',
-        margin: 20,
+        margin: scale(20),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowRadius: scale(8),
+        elevation: scale(4),
     },
 });

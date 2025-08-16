@@ -548,9 +548,7 @@ export default function DetectionScreen() {
         clearTimeout(safetyTimeout);
       }
       
-      // Always reset processing state
-      setIsProcessing(false);
-      console.log('Camera processing state reset');
+      console.log('Photo capture and processing complete');
     }
   };
 
@@ -574,6 +572,11 @@ export default function DetectionScreen() {
       if (!result.canceled && result.assets[0]) {
         const selectedImage = result.assets[0];
         
+        // Clear previous state and set processing
+        setDetections([]);
+        setSelectedWords(new Set<number>());
+        setIsProcessing(true);
+        
         //  OPTIMIZED: Use optimal image processing for uploads
         const processedUri = await getOptimalImage(selectedImage.uri, 'display');
 
@@ -584,12 +587,17 @@ export default function DetectionScreen() {
     } catch (error) {
       console.error('Image upload error:', error);
       Alert.alert('Error', 'Could not upload image. Please try again.');
+      setIsProcessing(false); // Reset processing state on error
     }
   };
 
   const detectObjectsWithAI = async (imageUri: string) => {
     try {
       // Note: isProcessing should already be true when this is called from takePicture
+      
+      // IMMEDIATE CLEAR: Clear previous detections to prevent lag/overlap
+      setDetections([]);
+      setSelectedWords(new Set<number>());
       
       // Higher confidence threshold for better accuracy  
       const results = await ObjectDetectionService.detectObjects(imageUri, 0.7);
@@ -640,6 +648,10 @@ export default function DetectionScreen() {
       console.error('❌ Detection error:', error);
       Alert.alert('Detection Failed', 'Unable to analyze the image. Please try again.');
       throw error; // Re-throw so takePicture can handle it
+    } finally {
+      // Always reset processing state when detection is complete
+      setIsProcessing(false);
+      console.log('AI detection processing complete');
     }
   };
 

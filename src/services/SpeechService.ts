@@ -1,6 +1,6 @@
 import * as Speech from 'expo-speech';
 import { Platform, Alert } from 'react-native';
-import { Audio } from 'expo-av';
+import { Audio } from 'expo-audio';
 import AudioManager from './AudioManager';
 
 interface VoiceInfo {

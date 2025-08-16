@@ -11,6 +11,7 @@ import {
     SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { scale, normalizeFont } from '../utils/normalize';
 import { supabase } from '../database/config';
 import { AchievementService } from '../src/services/AchievementService';
 import type { Achievement } from '../src/services/AchievementService';
@@ -99,7 +100,7 @@ export default function AchievementsScreen() {
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={24} color="#2c3e50" />
+                        <Ionicons name="arrow-back" size={scale(24)} color="#2c3e50" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Achievements</Text>
                     <View style={styles.placeholder} />
@@ -126,7 +127,7 @@ export default function AchievementsScreen() {
             <View style={styles.summaryContainer}>
                 <View style={styles.summaryCard}>
                     <View style={styles.trophyIcon}>
-                        <Ionicons name="trophy" size={32} color="#f39c12" />
+                        <Ionicons name="trophy" size={scale(32)} color="#f39c12" />
                     </View>
                     <View style={styles.summaryText}>
                         <Text style={styles.summaryTitle}>Progress</Text>
@@ -196,7 +197,7 @@ export default function AchievementsScreen() {
                     </View>
                 ) : (
                     <View style={styles.emptyState}>
-                        <Ionicons name="trophy-outline" size={64} color="#bdc3c7" />
+                        <Ionicons name="trophy-outline" size={scale(64)} color="#bdc3c7" />
                         <Text style={styles.emptyTitle}>No Achievements</Text>
                         <Text style={styles.emptySubtitle}>
                             {filter === 'earned' 
@@ -223,21 +224,22 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingVertical: 10,
         backgroundColor: '#ffffff',
         borderBottomWidth: 1,
         borderBottomColor: '#ecf0f1',
     },
     backButton: {
-        padding: 8,
+        paddingTop: 35, // Adjusted for header height
     },
     headerTitle: {
         fontSize: 20,
         fontWeight: 'bold',
         color: '#2c3e50',
+        paddingTop: 35
     },
     placeholder: {
-        width: 40,
+        width: scale(40),
     },
     loadingContainer: {
         flex: 1,
@@ -245,76 +247,76 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     loadingText: {
-        marginTop: 16,
-        fontSize: 16,
+        marginTop: scale(16),
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
     },
     summaryContainer: {
-        padding: 20,
+        padding: scale(20),
     },
     summaryCard: {
         backgroundColor: '#ffffff',
-        borderRadius: 16,
-        padding: 20,
+        borderRadius: scale(16),
+        padding: scale(20),
         flexDirection: 'row',
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 3,
     },
     trophyIcon: {
-        marginRight: 16,
+        marginRight: scale(16),
     },
     summaryText: {
         flex: 1,
     },
     summaryTitle: {
-        fontSize: 18,
+        fontSize: normalizeFont(18),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginBottom: 4,
+        marginBottom: scale(4),
     },
     summarySubtitle: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#7f8c8d',
     },
     progressContainer: {
         alignItems: 'flex-end',
-        minWidth: 80,
+        minWidth: scale(80),
     },
     progressBar: {
-        width: 80,
-        height: 8,
+        width: scale(80),
+        height: scale(8),
         backgroundColor: '#ecf0f1',
-        borderRadius: 4,
-        marginBottom: 8,
+        borderRadius: scale(4),
+        marginBottom: scale(8),
         overflow: 'hidden',
     },
     progressFill: {
         height: '100%',
         backgroundColor: '#3498db',
-        borderRadius: 4,
+        borderRadius: scale(4),
     },
     progressText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: 'bold',
         color: '#2c3e50',
     },
     filterContainer: {
         flexDirection: 'row',
-        paddingHorizontal: 20,
-        marginBottom: 16,
+        paddingHorizontal: scale(20),
+        marginBottom: scale(16),
     },
     filterButton: {
         flex: 1,
-        paddingVertical: 12,
-        paddingHorizontal: 12,
-        marginHorizontal: 4,
+        paddingVertical: scale(12),
+        paddingHorizontal: scale(12),
+        marginHorizontal: scale(4),
         backgroundColor: '#ffffff',
-        borderRadius: 12,
-        borderWidth: 1,
+        borderRadius: scale(12),
+        borderWidth: scale(1),
         borderColor: '#ecf0f1',
     },
     filterButtonActive: {
@@ -323,7 +325,7 @@ const styles = StyleSheet.create({
     },
     filterText: {
         textAlign: 'center',
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '600',
         color: '#7f8c8d',
     },
@@ -332,32 +334,32 @@ const styles = StyleSheet.create({
     },
     achievementsList: {
         flex: 1,
-        paddingHorizontal: 20,
+        paddingHorizontal: scale(20),
     },
     achievementsGrid: {
-        paddingBottom: 20,
+        paddingBottom: scale(20),
     },
     achievementWrapper: {
-        marginBottom: 16,
+        marginBottom: scale(16),
     },
     emptyState: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 60,
+        paddingVertical: scale(60),
     },
     emptyTitle: {
-        fontSize: 20,
+        fontSize: normalizeFont(20),
         fontWeight: 'bold',
         color: '#7f8c8d',
-        marginTop: 16,
-        marginBottom: 8,
+        marginTop: scale(16),
+        marginBottom: scale(8),
     },
     emptySubtitle: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#95a5a6',
         textAlign: 'center',
-        lineHeight: 24,
-        paddingHorizontal: 40,
+        lineHeight: normalizeFont(24),
+        paddingHorizontal: scale(40),
     },
 });

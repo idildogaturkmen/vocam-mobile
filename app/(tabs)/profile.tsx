@@ -13,6 +13,7 @@ import {
     RefreshControl,
     Dimensions,
 } from 'react-native';
+import { scale, normalizeFont } from '../../utils/normalize';
 import { Ionicons } from '@expo/vector-icons';
 import LogoutButton from '../../components/Auth/Logout';
 import DeleteAccountButton from '../../components/Auth/DeleteAccount';
@@ -547,7 +548,7 @@ const router = useRouter();
     if (loading || !allCriticalDataLoaded) {
         return (
             <View style={styles.loadingContainer}>
-                <Ionicons name="person-circle" size={60} color="#c7c7c7" />
+                <Ionicons name="person-circle" size={scale(60)} color="#c7c7c7" />
                 <Text style={styles.loadingText}>Loading profile...</Text>
             </View>
         );
@@ -562,7 +563,7 @@ const router = useRouter();
                     </View>
                 </View>
                 <View style={styles.authRequiredContainer}>
-                    <Ionicons name="information-circle-outline" size={64} color="#f39c12" />
+                    <Ionicons name="information-circle-outline" size={scale(64)} color="#f39c12" />
                     <Text style={styles.authRequiredTitle}>Login Required</Text>
                     <Text style={styles.authRequiredText}>
                         You must be logged in to view and manage your profile.
@@ -621,7 +622,7 @@ const router = useRouter();
                         </Text>
                         <Text style={styles.userEmail}>{user?.email}</Text>
                         <View style={styles.memberSince}>
-                            <Ionicons name="calendar" size={14} color="#7f8c8d" />
+                            <Ionicons name="calendar" size={scale(14)} color="#7f8c8d" />
                             <Text style={styles.memberSinceText}>
                                 Member since {new Date(user?.created_at).toLocaleDateString()}
                             </Text>
@@ -650,16 +651,19 @@ const router = useRouter();
                         label="Level"
                         value={level}
                         image={levelImageFn}
+                        style={{ flex: 1 }}
                     />
                     <StatBox
                         label="Trophies"
                         value={earnedAchievementCount !== null ? earnedAchievementCount : '...'}
                         image={trophyImageFn}
+                        style={{ flex: 1, marginHorizontal: scale(4) }}
                     />
                     <StatBox
                         label="Words Learned"
                         value={`${stats?.totalTranslations || 0}`}
                         image={wordImageFn}
+                        style={{ flex: 1 }}
                     />
                 </View>
                 
@@ -670,14 +674,14 @@ const router = useRouter();
                 
                 <View style={styles.statsGrid}>
                     <View style={styles.statCard}>
-                        <Ionicons name="book" size={24} color="#3498db" />
+                        <Ionicons name="book" size={scale(24)} color="#3498db" />
                         <Text style={styles.statNumber}>{stats?.uniqueWords || 0}</Text>
                         <Text style={styles.statLabel}>Unique Words</Text>
                         <Text style={styles.statSubLabel}>Distinct vocabulary</Text>
                     </View>
                     
                     <View style={styles.statCard}>
-                        <Ionicons name="language" size={24} color="#2ecc71" />
+                        <Ionicons name="language" size={scale(24)} color="#2ecc71" />
                         <Text style={styles.statNumber}>{stats?.totalTranslations || 0}</Text>
                         <Text style={styles.statLabel}>Total Learned</Text>
                         <Text style={styles.statSubLabel}>All languages</Text>
@@ -686,14 +690,14 @@ const router = useRouter();
                 
                 <View style={styles.statsGrid}>
                     <View style={styles.statCard}>
-                        <Ionicons name="trophy" size={24} color="#f39c12" />
+                        <Ionicons name="trophy" size={scale(24)} color="#f39c12" />
                         <Text style={styles.statNumber}>{stats?.masteredWords || 0}</Text>
                         <Text style={styles.statLabel}>Unique Mastered</Text>
                         <Text style={styles.statSubLabel}>80%+ proficiency</Text>
                     </View>
                     
                     <View style={styles.statCard}>
-                        <Ionicons name="medal" size={24} color="#e74c3c" />
+                        <Ionicons name="medal" size={scale(24)} color="#e74c3c" />
                         <Text style={styles.statNumber}>{(stats as any)?.totalMasteredTranslations || 0}</Text>
                         <Text style={styles.statLabel}>Total Mastered</Text>
                         <Text style={styles.statSubLabel}>All languages</Text>
@@ -702,7 +706,7 @@ const router = useRouter();
                 
                 <View style={styles.statsGrid}>
                     <View style={styles.statCard}>
-                        <Ionicons name="trending-up" size={24} color="#2ecc71" />
+                        <Ionicons name="trending-up" size={scale(24)} color="#2ecc71" />
                         <Text style={styles.statNumber}>{stats?.averageProficiency || 0}%</Text>
                         <Text style={styles.statLabel}>Avg Proficiency</Text>
                     </View>
@@ -794,12 +798,12 @@ const router = useRouter();
                             <Text style={styles.viewAllText}>
                                 View All Achievements ({achievements.filter(a => a.earned).length}/{achievements.length})
                             </Text>
-                            <Ionicons name="arrow-forward" size={18} color="#3498db" />
+                            <Ionicons name="arrow-forward" size={scale(18)} color="#3498db" />
                         </TouchableOpacity>
                     </>
                 ) : (
                     <View style={styles.noAchievements}>
-                        <Ionicons name="trophy" size={48} color="#bdc3c7" />
+                        <Ionicons name="trophy" size={scale(48)} color="#bdc3c7" />
                         <Text style={styles.noAchievementsText}>No achievements yet</Text>
                         <Text style={styles.noAchievementsSubtext}>Keep learning to unlock your first achievement!</Text>
                     </View>
@@ -830,7 +834,7 @@ const router = useRouter();
                     </View>
                 ) : (
                     <View style={styles.emptyLanguages}>
-                        <Ionicons name="camera" size={48} color="#bdc3c7" />
+                        <Ionicons name="camera" size={scale(48)} color="#bdc3c7" />
                         <Text style={styles.emptyText}>Start learning by taking photos!</Text>
                         <Text style={styles.emptySubtext}>
                             Use the camera tab to detect objects and learn new words
@@ -845,7 +849,7 @@ const router = useRouter();
 
                 <View style={styles.settingCard}>
                     <View style={styles.settingHeader}>
-                        <Ionicons name="mic" size={20} color="#3498db" />
+                        <Ionicons name="mic" size={scale(20)} color="#3498db" />
                         <Text style={styles.settingTitle}>Audio & Microphone</Text>
                     </View>
                     <Text style={styles.settingDescription}>
@@ -856,7 +860,7 @@ const router = useRouter();
 
                 <View style={styles.settingCard}>
                     <View style={styles.settingHeader}>
-                        <Ionicons name="person" size={20} color="#e74c3c" />
+                        <Ionicons name="person" size={scale(20)} color="#e74c3c" />
                         <Text style={styles.settingTitle}>Account</Text>
                     </View>
                     <Text style={styles.settingDescription}>
@@ -889,21 +893,21 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
     },
     loadingText: {
-        marginTop: 10,
-        fontSize: 16,
+        marginTop: scale(10),
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
     },
     header: {
         backgroundColor: 'white',
-        paddingTop: 60,
-        paddingBottom: 20,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
+        paddingTop: scale(60),
+        paddingBottom: scale(20),
+        paddingHorizontal: scale(20),
+        borderBottomLeftRadius: scale(30),
+        borderBottomRightRadius: scale(30),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: scale(4) },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 8,
     },
     profileSection: {
@@ -912,7 +916,7 @@ const styles = StyleSheet.create({
     },
     avatarContainer: {
         position: 'relative',
-        marginRight: 15,
+        marginRight: scale(15),
     },
     avatarBorder: {
         position: 'absolute',
@@ -923,6 +927,7 @@ const styles = StyleSheet.create({
         borderColor: '#5DEBD7',
         top: -4,
         left: -4,
+        zIndex: -1,
     },
     editAvatarButton: {
         position: 'absolute',
@@ -941,86 +946,87 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     userName: {
-        fontSize: 24,
+        fontSize: normalizeFont(24),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginBottom: 4,
+        marginBottom: scale(4),
     },
     userEmail: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
-        marginBottom: 8,
+        marginBottom: scale(8),
     },
     memberSince: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     memberSinceText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#7f8c8d',
-        marginLeft: 5,
+        marginLeft: scale(5),
     },
     streakDisplay: {
         flexDirection: 'row',
-        marginTop: 3,
-        paddingVertical: 6,
+        marginTop: scale(3),
+        paddingVertical: scale(6),
         alignSelf: 'flex-start'
     },
     streakNumber: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: 'bold',
         color: '#e74c3c',
-        marginLeft: 4,
-        marginRight: 4,
+        marginLeft: scale(4),
+        marginRight: scale(4),
     },
     streakText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#d63031',
         fontWeight: '500',
         alignContent: 'center',
-        padding: 1
+        padding: scale(1)
     },
     statsSection: {
-        padding: 20,
+        padding: scale(20),
     },
     sectionTitle: {
-        fontSize: 20,
+        fontSize: normalizeFont(20),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginBottom: 15,
+        marginBottom: scale(15),
     },
     statsGrid: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 15,
+        marginBottom: scale(15),
     },
     statCard: {
         backgroundColor: 'white',
         flex: 1,
-        marginHorizontal: 5,
-        padding: 20,
-        borderRadius: 15,
+        marginHorizontal: scale(5),
+        padding: scale(24),
+        borderRadius: scale(15),
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
         elevation: 3,
+        minHeight: scale(120),
     },
     statNumber: {
-        fontSize: 24,
+        fontSize: normalizeFont(24),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginTop: 8,
-        marginBottom: 4,
+        marginTop: scale(8),
+        marginBottom: scale(4),
     },
     statLabel: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#7f8c8d',
         textAlign: 'center',
     },
     languagesSection: {
-        padding: 20,
+        padding: scale(20),
         paddingTop: 0,
     },
     languagesGrid: {
@@ -1030,193 +1036,193 @@ const styles = StyleSheet.create({
     },
     languageCard: {
         backgroundColor: 'white',
-        width: (width - 50) / 3,
-        padding: 15,
-        borderRadius: 15,
+        width: (width - scale(50)) / 3,
+        padding: scale(15),
+        borderRadius: scale(15),
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: scale(10),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
         elevation: 3,
     },
     languageFlag: {
-        fontSize: 24,
-        marginBottom: 8,
+        fontSize: normalizeFont(24),
+        marginBottom: scale(8),
     },
     languageName: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         fontWeight: '600',
         color: '#2c3e50',
         textAlign: 'center',
-        marginBottom: 4,
+        marginBottom: scale(4),
     },
     languageCount: {
-        fontSize: 11,
+        fontSize: normalizeFont(11),
         color: '#7f8c8d',
     },
     emptyLanguages: {
         backgroundColor: 'white',
-        padding: 40,
-        borderRadius: 15,
+        padding: scale(40),
+        borderRadius: scale(15),
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
         elevation: 3,
     },
     emptyText: {
-        fontSize: 18,
+        fontSize: normalizeFont(18),
         fontWeight: '600',
         color: '#2c3e50',
-        marginTop: 15,
-        marginBottom: 8,
+        marginTop: scale(15),
+        marginBottom: scale(8),
     },
     emptySubtext: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#7f8c8d',
         textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: normalizeFont(20),
     },
     settingsSection: {
-        padding: 20,
+        padding: scale(20),
         paddingTop: 0,
     },
     settingCard: {
         backgroundColor: 'white',
-        padding: 20,
-        borderRadius: 15,
-        marginBottom: 15,
+        padding: scale(20),
+        borderRadius: scale(15),
+        marginBottom: scale(15),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
         elevation: 3,
     },
     settingHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: scale(8),
     },
     settingTitle: {
-        fontSize: 18,
+        fontSize: normalizeFont(18),
         fontWeight: '600',
         color: '#2c3e50',
-        marginLeft: 10,
+        marginLeft: scale(10),
     },
     settingDescription: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#7f8c8d',
-        lineHeight: 20,
-        marginBottom: 16,
+        lineHeight: normalizeFont(20),
+        marginBottom: scale(16),
     },
     micTest: {
-        marginTop: 8,
+        marginTop: scale(8),
     },
     footer: {
-        padding: 30,
+        padding: scale(30),
         alignItems: 'center',
     },
     footerText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
-        marginBottom: 5,
+        marginBottom: scale(5),
     },
     versionText: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#bdc3c7',
     },
     authRequiredContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 40,
+        padding: scale(40),
     },
     authRequiredTitle: {
-        fontSize: 24,
+        fontSize: normalizeFont(24),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginTop: 20,
-        marginBottom: 10,
+        marginTop: scale(20),
+        marginBottom: scale(10),
     },
     authRequiredText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#7f8c8d',
         textAlign: 'center',
-        marginBottom: 30,
-        lineHeight: 22,
+        marginBottom: scale(30),
+        lineHeight: normalizeFont(22),
     },
     authRequiredSubtext: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#95a5a6',
         textAlign: 'center',
-        marginBottom: 20,
-        paddingHorizontal: 20,
-        lineHeight: 20,
+        marginBottom: scale(20),
+        paddingHorizontal: scale(20),
+        lineHeight: normalizeFont(20),
     },
     loginButton: {
         backgroundColor: '#3498db',
-        paddingHorizontal: 30,
-        paddingVertical: 15,
-        borderRadius: 25,
+        paddingHorizontal: scale(30),
+        paddingVertical: scale(15),
+        borderRadius: scale(25),
     },
     loginButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
     },
     continueButton: {
-        marginTop: 15,
-        paddingHorizontal: 30,
-        paddingVertical: 12,
+        marginTop: scale(15),
+        paddingHorizontal: scale(30),
+        paddingVertical: scale(12),
     },
 authHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 50,
-        paddingBottom: 20,
+        paddingHorizontal: scale(20),
+        paddingTop: scale(50),
+        paddingBottom: scale(20),
         backgroundColor: 'white',
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
+        borderBottomLeftRadius: scale(20),
+        borderBottomRightRadius: scale(20),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 3,
+        shadowRadius: scale(3),
         elevation: 5,
     },
     authHeaderTitle: {
-        fontSize: 32,
+        fontSize: normalizeFont(32),
         fontWeight: 'bold',
         color: '#2c3e50',
     },
     statSubLabel: {
-        fontSize: 10,
+        fontSize: normalizeFont(10),
         color: '#7f8c8d',
         textAlign: 'center',
-        marginTop: 2,
+        marginTop: scale(2),
         fontStyle: 'italic',
     },
     // New styles for enhanced progress features
     quoteContainer: {
         backgroundColor: '#f8f9ff',
-        borderRadius: 16,
-        padding: 16,
-        marginHorizontal: 20,
-        marginTop: 20,
-        borderLeftWidth: 4,
+        borderRadius: scale(16),
+        padding: scale(16),
+        marginHorizontal: scale(20),
+        marginTop: scale(20),
+        borderLeftWidth: scale(4),
         borderLeftColor: '#3498db',
         shadowColor: '#3498db',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 3,
     },
     quote: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#2c3e50',
         fontStyle: 'italic',
         textAlign: 'center',
@@ -1225,97 +1231,98 @@ authHeader: {
     statsRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 15,
+        alignItems: 'stretch',
+        marginBottom: scale(15),
     },
     dailyGoalContainer: {
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 16,
-        marginTop: 15,
+        borderRadius: scale(16),
+        padding: scale(16),
+        marginTop: scale(15),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 3,
-        borderWidth: 1,
+        borderWidth: scale(1),
         borderColor: '#f0f0f0',
     },
     goalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: scale(12),
     },
     goalTitle: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
         color: '#2c3e50',
     },
     goalProgress: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '500',
         color: '#e74c3c',
     },
     goalBar: {
-        height: 8,
+        height: scale(8),
         backgroundColor: '#ecf0f1',
-        borderRadius: 4,
-        marginBottom: 8,
+        borderRadius: scale(4),
+        marginBottom: scale(8),
         overflow: 'hidden',
     },
     goalFill: {
         height: '100%',
         backgroundColor: '#e74c3c',
-        borderRadius: 4,
+        borderRadius: scale(4),
     },
     goalText: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#7f8c8d',
         textAlign: 'center',
         fontWeight: '500',
     },
     achievementsSection: {
-        padding: 20,
+        padding: scale(20),
         paddingTop: 0,
     },
 // Duplicate removed
     streakSection: {
-        padding: 20,
+        padding: scale(20),
         paddingTop: 0,
     },
     streakCalendar: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 16,
+        borderRadius: scale(16),
+        padding: scale(16),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 3,
     },
     streakDay: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: scale(40),
+        height: scale(40),
+        borderRadius: scale(20),
         alignItems: 'center',
         justifyContent: 'center',
-        marginHorizontal: 2,
+        marginHorizontal: scale(2),
     },
     streakDayActive: {
         backgroundColor: '#ff6b35',
         shadowColor: '#ff6b35',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.3,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
         elevation: 4,
     },
     streakDayInactive: {
         backgroundColor: '#ecf0f1',
     },
     streakDayText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: 'bold',
     },
     streakDayTextActive: {
@@ -1329,39 +1336,39 @@ authHeader: {
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#f8f9fa',
-        padding: 16,
-        borderRadius: 12,
-        marginTop: 12,
+        padding: scale(16),
+        borderRadius: scale(12),
+        marginTop: scale(12),
     },
     viewAllText: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         color: '#3498db',
         fontWeight: '600',
-        marginRight: 8,
+        marginRight: scale(8),
     },
     noAchievements: {
         backgroundColor: 'white',
-        padding: 40,
-        borderRadius: 15,
+        padding: scale(40),
+        borderRadius: scale(15),
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
         elevation: 3,
     },
     noAchievementsText: {
-        fontSize: 18,
+        fontSize: normalizeFont(18),
         fontWeight: '600',
         color: '#2c3e50',
-        marginTop: 15,
-        marginBottom: 8,
+        marginTop: scale(15),
+        marginBottom: scale(8),
     },
     noAchievementsSubtext: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#7f8c8d',
         textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: normalizeFont(20),
     },
 });
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ViewStyle } from 'react-native';
 import Animated, { 
     useAnimatedStyle, 
     useSharedValue, 
@@ -7,15 +7,17 @@ import Animated, {
     withSequence,
     runOnJS
 } from 'react-native-reanimated';
+import { scale, normalizeFont } from '../../utils/normalize';
 
 interface StatBoxProps {
     label: string;
     value: number | string;
     image: () => Promise<any> | any;
     showValueWhenImageLoading?: boolean; // Option to hide value until image loads
+    style?: ViewStyle; // Optional style prop
 }
 
-export function StatBox({ label, value, image, showValueWhenImageLoading = true }: StatBoxProps) {
+export function StatBox({ label, value, image, showValueWhenImageLoading = true, style }: StatBoxProps) {
     const [imageSource, setImageSource] = useState<any>(null);
     const [imageLoaded, setImageLoaded] = useState(false);
     const scale = useSharedValue(1);
@@ -56,7 +58,7 @@ export function StatBox({ label, value, image, showValueWhenImageLoading = true 
     }));
 
     return (
-        <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
+        <TouchableOpacity activeOpacity={0.7} onPress={handlePress} style={style}>
             <Animated.View style={[styles.container, animatedStyle]}>
                 <View style={styles.imageContainer}>
                     {imageSource && (
@@ -76,41 +78,40 @@ const styles = StyleSheet.create({
     container: {
         alignItems: 'center',
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 16,
-        minWidth: 100,
-        flex: 1,
-        marginHorizontal: 4,
+        borderRadius: scale(16),
+        padding: scale(20),
+        minWidth: scale(100),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: scale(4) },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 5,
-        borderWidth: 1,
+        borderWidth: scale(1),
         borderColor: '#f0f0f0',
+        minHeight: scale(140),
     },
     imageContainer: {
-        width: 50,
-        height: 50,
-        marginBottom: 12,
+        width: scale(60),
+        height: scale(60),
+        marginBottom: scale(15),
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#f8f9ff',
-        borderRadius: 25,
+        borderRadius: scale(30),
     },
     image: {
-        width: 35,
-        height: 35,
+        width: scale(42),
+        height: scale(42),
         resizeMode: 'contain',
     },
     value: {
-        fontSize: 24,
+        fontSize: normalizeFont(26),
         fontWeight: 'bold',
         color: '#2c3e50',
-        marginBottom: 4,
+        marginBottom: scale(6),
     },
     label: {
-        fontSize: 12,
+        fontSize: normalizeFont(13),
         color: '#7f8c8d',
         textAlign: 'center',
         fontWeight: '500',

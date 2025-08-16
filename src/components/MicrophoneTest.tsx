@@ -8,6 +8,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { scale, normalizeFont } from '../../utils/normalize';
 import RecordingService from '../services/RecordingService';
 
 interface MicrophoneTestProps {
@@ -84,7 +85,7 @@ const MicrophoneTest: React.FC<MicrophoneTestProps> = ({ onTestComplete, style }
                 ) : (
                     <Ionicons 
                         name={getStatusIcon()} 
-                        size={24} 
+                        size={scale(24)} 
                         color="white" 
                     />
                 )}
@@ -97,7 +98,7 @@ const MicrophoneTest: React.FC<MicrophoneTestProps> = ({ onTestComplete, style }
                 <View style={styles.resultContainer}>
                     <Ionicons 
                         name={testResult.success ? 'checkmark-circle' : 'alert-circle'} 
-                        size={16} 
+                        size={scale(16)} 
                         color={getStatusColor()} 
                     />
                     <Text style={[styles.resultText, { color: getStatusColor() }]}>
@@ -116,18 +117,18 @@ const MicrophoneTest: React.FC<MicrophoneTestProps> = ({ onTestComplete, style }
 const styles = StyleSheet.create({
     container: {
         alignItems: 'center',
-        padding: 16,
+        padding: scale(16),
     },
     testButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#2196F3',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 8,
-        minWidth: 160,
-        gap: 8,
+        paddingHorizontal: scale(20),
+        paddingVertical: scale(12),
+        borderRadius: scale(8),
+        minWidth: scale(160),
+        gap: scale(8),
     },
     testButtonActive: {
         backgroundColor: '#FF9800',
@@ -140,26 +141,26 @@ const styles = StyleSheet.create({
     },
     testButtonText: {
         color: 'white',
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
     },
     resultContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 12,
-        gap: 6,
+        marginTop: scale(12),
+        gap: scale(6),
     },
     resultText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         fontWeight: '500',
     },
     helpText: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#666',
         textAlign: 'center',
-        marginTop: 8,
-        maxWidth: 280,
-        lineHeight: 16,
+        marginTop: scale(8),
+        maxWidth: scale(280),
+        lineHeight: normalizeFont(16),
     },
 });
 

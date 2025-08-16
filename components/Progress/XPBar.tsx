@@ -7,6 +7,7 @@ import Animated, {
     withDelay,
     Easing
 } from 'react-native-reanimated';
+import { scale, normalizeFont } from '../../utils/normalize';
 
 interface XPBarProps {
     currentXP: number;
@@ -62,36 +63,36 @@ export default function XPBar({ currentXP, xpToNextLevel }: XPBarProps) {
 
 const styles = StyleSheet.create({
     container: {
-        marginVertical: 20,
+        marginVertical: scale(20),
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 16,
+        borderRadius: scale(16),
+        padding: scale(16),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowRadius: scale(8),
         elevation: 3,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: scale(12),
     },
     label: {
-        fontSize: 16,
+        fontSize: normalizeFont(16),
         fontWeight: '600',
         color: '#2c3e50',
     },
     xpText: {
-        fontSize: 14,
+        fontSize: normalizeFont(14),
         color: '#3498db',
         fontWeight: '500',
     },
     progressBarContainer: {
-        height: 12,
+        height: scale(12),
         position: 'relative',
-        borderRadius: 6,
+        borderRadius: scale(6),
         overflow: 'hidden',
     },
     progressBarBackground: {
@@ -106,20 +107,20 @@ const styles = StyleSheet.create({
     progressBar: {
         height: '100%',
         backgroundColor: '#3498db',
-        borderRadius: 6,
+        borderRadius: scale(6),
         position: 'absolute',
         top: 0,
         left: 0,
         shadowColor: '#3498db',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: scale(2) },
         shadowOpacity: 0.3,
-        shadowRadius: 4,
+        shadowRadius: scale(4),
         zIndex: 2,
     },
     remainingText: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#7f8c8d',
-        marginTop: 8,
+        marginTop: scale(8),
         textAlign: 'center',
         fontWeight: '500',
     },

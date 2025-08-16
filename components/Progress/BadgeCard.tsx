@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
+import { scale, normalizeFont } from '../../utils/normalize';
 
 interface BadgeCardProps {
     imageSource: () => Promise<any>;
@@ -43,33 +44,33 @@ export function BadgeCard({ imageSource, description, date }: BadgeCardProps) {
 const styles = StyleSheet.create({
     container: {
         backgroundColor: '#f8f9fa',
-        borderRadius: 12,
-        padding: 16,
-        marginRight: 12,
+        borderRadius: scale(12),
+        padding: scale(16),
+        marginRight: scale(12),
         alignItems: 'center',
-        minWidth: 120,
-        maxWidth: 150,
+        minWidth: scale(120),
+        maxWidth: scale(150),
     },
     imageContainer: {
-        width: 50,
-        height: 50,
-        marginBottom: 8,
+        width: scale(50),
+        height: scale(50),
+        marginBottom: scale(8),
         alignItems: 'center',
         justifyContent: 'center',
     },
     image: {
-        width: 50,
-        height: 50,
+        width: scale(50),
+        height: scale(50),
         resizeMode: 'contain',
     },
     description: {
-        fontSize: 12,
+        fontSize: normalizeFont(12),
         color: '#2c3e50',
         textAlign: 'center',
-        marginBottom: 4,
+        marginBottom: scale(4),
     },
     date: {
-        fontSize: 10,
+        fontSize: normalizeFont(10),
         color: '#666',
         textAlign: 'center',
     },

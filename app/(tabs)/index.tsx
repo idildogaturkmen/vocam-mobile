@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { scale, normalizeFont } from '../../utils/normalize';
 
 export default function IndexScreen() {
   const router = useRouter();
@@ -32,7 +33,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   text: {
-    fontSize: 16,
+    fontSize: normalizeFont(16),
     color: '#666'
   }
 });

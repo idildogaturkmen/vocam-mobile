@@ -10,7 +10,7 @@ export async function getDailyGoal(): Promise<DailyGoal> {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-            return { current: 0, target: 10, percentage: 0 };
+            return { current: 0, target: 5, percentage: 0 };
         }
 
         // Get today's date in YYYY-MM-DD format
@@ -54,7 +54,7 @@ export async function getDailyGoal(): Promise<DailyGoal> {
             }
         }
 
-        const target = 10;
+        const target = 5;
         const percentage = Math.min((current / target) * 100, 100);
 
         return {
@@ -64,31 +64,15 @@ export async function getDailyGoal(): Promise<DailyGoal> {
         };
     } catch (error) {
         console.error('Error in getDailyGoal:', error);
-        return { current: 0, target: 10, percentage: 0 };
+        return { current: 0, target: 5, percentage: 0 };
     }
 }
 
 // Enhanced function to record learning activity with timestamp
 export async function recordLearningActivity(userId: string, wordId: string, translationCount: number = 1): Promise<void> {
     try {
-        const today = new Date().toISOString().split('T')[0];
-        const now = new Date().toISOString();
-
-        // Insert into daily_learning_log table for detailed tracking
-        const { error: logError } = await supabase
-            .from('daily_learning_log')
-            .insert({
-                user_id: userId,
-                word_id: wordId,
-                translations_learned: translationCount,
-                learned_at: now,
-                date: today
-            });
-
-        if (logError) {
-            // Expected: daily_learning_log table doesn't exist, using fallback
-            await incrementDailyGoal(userId, translationCount);
-        }
+        // Use the daily_progress table directly since daily_learning_log doesn't exist
+        await incrementDailyGoal(userId, translationCount);
     } catch (error) {
         console.error('Error recording learning activity:', error);
         // Fallback to old system
@@ -141,30 +125,32 @@ export async function incrementDailyGoal(userId: string, increment: number = 1):
     }
 }
 
-// Get daily goal based on learning log (more accurate)
+// Get daily goal based on daily_progress table (more accurate)
 export async function getDailyGoalFromLog(): Promise<DailyGoal> {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-            return { current: 0, target: 10, percentage: 0 };
+            return { current: 0, target: 5, percentage: 0 };
         }
 
         const today = new Date().toISOString().split('T')[0];
 
-        // Sum up today's learning activities
-        const { data: todaysLog, error: logError } = await supabase
-            .from('daily_learning_log')
-            .select('translations_learned')
+        // Get today's progress from daily_progress table
+        const { data: todaysProgress, error: progressError } = await supabase
+            .from('daily_progress')
+            .select('words_learned_today')
             .eq('user_id', user.id)
-            .eq('date', today);
+            .eq('date', today)
+            .single();
 
-        if (logError) {
-            // Fallback to original method
+        if (progressError && progressError.code !== 'PGRST116') {
+            // If there's an error other than "no rows found", fallback to original method
+            console.warn('Error getting daily progress:', progressError);
             return await getDailyGoal();
         }
 
-        const current = todaysLog?.reduce((sum, log) => sum + (log.translations_learned || 1), 0) || 0;
-        const target = 10;
+        const current = todaysProgress?.words_learned_today || 0;
+        const target = 5; // Set to 5 to match the default from the profile page
         const percentage = Math.min((current / target) * 100, 100);
 
         return {

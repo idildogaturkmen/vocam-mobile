@@ -1129,7 +1129,7 @@ export default function DetectionScreen() {
           facing={facing}
           isActive={isCameraActive && isTabFocused && permission?.granted && isAuthenticated === true}
           ref={cameraRef}
-          onPhotoTaken={(photoPath) => {
+          onPhotoTaken={(photoPath: string) => {
             console.log('VisionCamera photo taken:', photoPath);
           }}
         />
